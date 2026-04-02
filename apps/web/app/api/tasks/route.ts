@@ -1,10 +1,37 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { saveUploadedRules } from "@/lib/storage";
-import { startExtraction } from "@/lib/ingestion";
+import { startExtractionWithPagePlan } from "@/lib/ingestion";
 
 export const runtime = "nodejs";
+
+function parsePageIndices(raw: unknown): number[] {
+  if (raw == null || raw === "") {
+    return [];
+  }
+  if (typeof raw !== "string") {
+    return [];
+  }
+  const s = raw.trim();
+  if (!s) {
+    return [];
+  }
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s) as unknown;
+      if (!Array.isArray(arr)) {
+        return [];
+      }
+      return arr.filter((x): x is number => typeof x === "number" && Number.isInteger(x));
+    } catch {
+      return [];
+    }
+  }
+  return s
+    .split(/[\s,]+/)
+    .map((x) => parseInt(x, 10))
+    .filter((n) => !Number.isNaN(n));
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -28,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   const gameId = form.get("gameId");
-  const file = form.get("file");
+  const pageJobId = form.get("pageJobId");
   const terminologyContext =
     typeof form.get("terminologyContext") === "string"
       ? (form.get("terminologyContext") as string)
@@ -37,35 +64,38 @@ export async function POST(req: Request) {
   if (typeof gameId !== "string" || !gameId) {
     return NextResponse.json({ error: "gameId is required" }, { status: 400 });
   }
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "file is required" }, { status: 400 });
+  if (typeof pageJobId !== "string" || !pageJobId.trim()) {
+    return NextResponse.json(
+      { error: "pageJobId is required — call POST /api/extract/pages first to rasterize the rulebook" },
+      { status: 400 },
+    );
   }
+
+  const tocPageIndices = parsePageIndices(form.get("tocPageIndices"));
+  const excludePageIndices = parsePageIndices(form.get("excludePageIndices"));
 
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  await saveUploadedRules(gameId, file.name, buf);
-
   const task = await prisma.task.create({
     data: {
       gameId,
       status: "PENDING",
       type: "EXTRACTION",
-      progressJson: JSON.stringify({ stage: "queued", detail: "已上传，正在提交规则引擎" }),
+      progressJson: JSON.stringify({ stage: "queued", detail: "已提交规则抽取（视觉管线）" }),
     },
   });
 
   try {
-    const engineBlob = new Blob([buf], { type: file.type || "application/pdf" });
-    const start = await startExtraction({
+    const start = await startExtractionWithPagePlan({
       gameId,
       gameName: game.name,
       terminologyContext,
-      fileBody: engineBlob,
-      filename: file.name || "rules.pdf",
+      pageJobId: pageJobId.trim(),
+      tocPageIndices,
+      excludePageIndices,
     });
 
     await prisma.task.update({
@@ -75,7 +105,7 @@ export async function POST(req: Request) {
         status: "PROCESSING",
         progressJson: JSON.stringify({
           stage: start.status,
-          detail: "规则引擎已接收任务",
+          detail: "规则引擎已接收抽取任务",
           extractionJobId: start.job_id,
         }),
       },

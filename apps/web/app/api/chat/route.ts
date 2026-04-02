@@ -30,6 +30,12 @@ export async function POST(req: Request) {
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
+  if (!game.indexId && !game.vectorStoreId) {
+    return NextResponse.json(
+      { error: "尚未建立规则索引。请在游戏详情页提取完成后点击「建立索引」。" },
+      { status: 409 },
+    );
+  }
 
   const messages = Array.isArray(body.messages) ? body.messages : undefined;
   if (messages) {

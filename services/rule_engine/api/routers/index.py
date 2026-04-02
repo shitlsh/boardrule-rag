@@ -6,17 +6,32 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from llama_index.core import Document
+from pydantic import BaseModel, Field, model_validator
 
 from ingestion.index_builder import build_and_persist_index, load_hybrid_reranked_nodes, load_manifest
 
 router = APIRouter(tags=["index"])
 
 
+class DocumentIn(BaseModel):
+    text: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class BuildIndexRequest(BaseModel):
     game_id: str = Field(..., min_length=1)
-    merged_markdown: str = Field(..., min_length=1)
+    merged_markdown: str | None = None
+    documents: list[DocumentIn] | None = None
     source_file: str | None = None
+
+    @model_validator(mode="after")
+    def _md_or_docs(self) -> "BuildIndexRequest":
+        has_md = bool((self.merged_markdown or "").strip())
+        has_docs = bool(self.documents)
+        if not has_md and not has_docs:
+            raise ValueError("Provide merged_markdown or documents")
+        return self
 
 
 class BuildIndexResponse(BaseModel):
@@ -36,9 +51,15 @@ async def build_index(body: BuildIndexRequest) -> BuildIndexResponse:
     if not os.environ.get("GOOGLE_API_KEY"):
         raise HTTPException(status_code=503, detail="GOOGLE_API_KEY is not configured")
     try:
+        docs = (
+            [Document(text=d.text, metadata=d.metadata) for d in body.documents]
+            if body.documents
+            else None
+        )
         manifest = build_and_persist_index(
             game_id=body.game_id,
             merged_markdown=body.merged_markdown,
+            documents=docs,
             source_file=body.source_file or "",
         )
     except ValueError as e:

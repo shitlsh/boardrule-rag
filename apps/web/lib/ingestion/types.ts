@@ -8,12 +8,20 @@ export type ExtractStartResponse = {
   game_id: string;
 };
 
+export type ExtractPagesResponse = {
+  job_id: string;
+  game_id: string;
+  total_pages: number;
+  pages: { page: number; url: string }[];
+};
+
 export type ExtractPollResponse = {
   job_id: string;
   status: ExtractJobStatus;
   game_id: string;
   error: string | null;
   merged_markdown: string | null;
+  structured_chapters: { text: string; metadata: Record<string, unknown> }[];
   quick_start: string | null;
   suggested_questions: string[];
   errors: string[];
