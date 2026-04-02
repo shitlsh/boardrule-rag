@@ -2,36 +2,9 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { startExtractionWithPagePlan } from "@/lib/ingestion";
+import { parsePageIndices } from "@/lib/page-indices";
 
 export const runtime = "nodejs";
-
-function parsePageIndices(raw: unknown): number[] {
-  if (raw == null || raw === "") {
-    return [];
-  }
-  if (typeof raw !== "string") {
-    return [];
-  }
-  const s = raw.trim();
-  if (!s) {
-    return [];
-  }
-  if (s.startsWith("[")) {
-    try {
-      const arr = JSON.parse(s) as unknown;
-      if (!Array.isArray(arr)) {
-        return [];
-      }
-      return arr.filter((x): x is number => typeof x === "number" && Number.isInteger(x));
-    } catch {
-      return [];
-    }
-  }
-  return s
-    .split(/[\s,]+/)
-    .map((x) => parseInt(x, 10))
-    .filter((n) => !Number.isNaN(n));
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

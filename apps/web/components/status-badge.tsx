@@ -1,47 +1,57 @@
-import { Badge } from "@/components/ui/badge";
-import { EXTRACTION_STATUS_LABEL, labelForStatus, TASK_STATUS_LABEL } from "@/lib/labels";
-import { cn } from "@/lib/utils";
+import { Badge } from '@/components/ui/badge'
+import type { ExtractionStatus, TaskStatus } from '@/lib/types'
 
-type Variant = "default" | "secondary" | "outline" | "destructive" | "muted";
-
-function variantForTaskStatus(status: string): Variant {
-  switch (status) {
-    case "COMPLETED":
-      return "secondary";
-    case "FAILED":
-      return "destructive";
-    case "PROCESSING":
-      return "default";
-    default:
-      return "muted";
-  }
+const extractionStatusConfig: Record<ExtractionStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  pending: { label: '待处理', variant: 'secondary' },
+  processing: { label: '处理中', variant: 'outline' },
+  completed: { label: '已完成', variant: 'default' },
+  failed: { label: '失败', variant: 'destructive' },
 }
 
-function variantForExtractionStatus(status: string | null | undefined): Variant {
-  if (!status) return "outline";
-  return variantForTaskStatus(status);
+const taskStatusConfig: Record<TaskStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  pending: { label: '等待中', variant: 'secondary' },
+  running: { label: '执行中', variant: 'outline' },
+  completed: { label: '已完成', variant: 'default' },
+  failed: { label: '失败', variant: 'destructive' },
 }
 
-export function TaskStatusBadge({ status, className }: { status: string; className?: string }) {
+interface ExtractionStatusBadgeProps {
+  status: ExtractionStatus
+}
+
+export function ExtractionStatusBadge({ status }: ExtractionStatusBadgeProps) {
+  const config = extractionStatusConfig[status]
   return (
-    <Badge variant={variantForTaskStatus(status)} className={cn(className)}>
-      <span className="sr-only">任务状态：</span>
-      {labelForStatus(TASK_STATUS_LABEL, status)}
+    <Badge variant={config.variant} aria-label={`提取状态: ${config.label}`}>
+      {config.label}
     </Badge>
-  );
+  )
 }
 
-export function ExtractionStatusBadge({
-  status,
-  className,
-}: {
-  status: string | null | undefined;
-  className?: string;
-}) {
+interface TaskStatusBadgeProps {
+  status: TaskStatus
+}
+
+export function TaskStatusBadge({ status }: TaskStatusBadgeProps) {
+  const config = taskStatusConfig[status]
   return (
-    <Badge variant={variantForExtractionStatus(status)} className={cn(className)}>
-      <span className="sr-only">提取状态：</span>
-      {labelForStatus(EXTRACTION_STATUS_LABEL, status)}
+    <Badge variant={config.variant} aria-label={`任务状态: ${config.label}`}>
+      {config.label}
     </Badge>
-  );
+  )
+}
+
+interface IndexStatusBadgeProps {
+  isIndexed: boolean
+}
+
+export function IndexStatusBadge({ isIndexed }: IndexStatusBadgeProps) {
+  return (
+    <Badge 
+      variant={isIndexed ? 'default' : 'secondary'}
+      aria-label={isIndexed ? '已建索引' : '未建索引'}
+    >
+      {isIndexed ? '已索引' : '未索引'}
+    </Badge>
+  )
 }

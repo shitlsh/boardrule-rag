@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 
-import { SiteHeader } from "@/components/site-header";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
 
@@ -17,7 +18,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "boardrule-rag 管理",
+  title: "boardrule-rag 管理端",
   description: "桌游规则提取与任务管理",
 };
 
@@ -27,15 +28,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen font-sans antialiased`}>
         <a href="#main-content" className="skip-link">
           跳到主要内容
         </a>
-        <SiteHeader />
-        <main id="main-content" className="min-h-[calc(100vh-3.5rem)]">
-          {children}
-        </main>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <main id="main-content" className="min-h-screen">
+            {children}
+          </main>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

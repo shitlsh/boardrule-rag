@@ -12,10 +12,10 @@ export const runtime = "nodejs";
 /**
  * Reads merged rules Markdown from storage and calls the rule engine `POST /build-index`.
  */
-type RouteParams = { params: { gameId: string } };
+type RouteParams = { params: Promise<{ gameId: string }> };
 
 export async function POST(_req: Request, { params }: RouteParams) {
-  const { gameId } = params;
+  const { gameId } = await params;
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
