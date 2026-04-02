@@ -1,4 +1,4 @@
-import type { ExtractPollResponse, ExtractStartResponse } from "./types";
+import type { ChatResponse, ExtractPollResponse, ExtractStartResponse } from "./types";
 
 export function getRuleEngineBaseUrl(): string {
   const raw = process.env.RULE_ENGINE_URL?.trim();
@@ -49,4 +49,27 @@ export async function getExtractJob(jobId: string): Promise<ExtractPollResponse>
     throw new Error(text || `Poll failed: ${res.status}`);
   }
   return (await res.json()) as ExtractPollResponse;
+}
+
+export async function chatRules(params: {
+  gameId: string;
+  message: string;
+  /** Prior turns only (exclude the current message). */
+  messages?: { role: "user" | "assistant"; content: string }[];
+}): Promise<ChatResponse> {
+  const base = getRuleEngineBaseUrl();
+  const res = await fetch(`${base}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      game_id: params.gameId,
+      message: params.message,
+      messages: params.messages ?? [],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Chat failed: ${res.status}`);
+  }
+  return (await res.json()) as ChatResponse;
 }

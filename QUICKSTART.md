@@ -108,6 +108,7 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
 5. **索引（Phase 2）**：对合并结果调用 `POST /build-index`（JSON：`game_id`、`merged_markdown`、`source_file` 可选），再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…` 验证 hybrid + rerank 与 metadata（`pages`、`source_file` 等）。详细示例见 `services/rule_engine/eval/README.md`。
 6. Confirm the web app shows task status and `extractionJobId` / `extractionStatus` as designed.
+7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，可调用规则引擎 `POST /chat`（JSON：`game_id`、`message`，可选 `messages` 历史）或 Next.js `POST /api/chat`（JSON：`gameId`、`message`，可选 `messages`）。无索引时返回 404。
 
 ## 5. Common issues
 

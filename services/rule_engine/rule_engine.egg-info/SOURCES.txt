@@ -3,6 +3,7 @@ pyproject.toml
 api/__init__.py
 api/main.py
 api/routers/__init__.py
+api/routers/chat.py
 api/routers/extract.py
 api/routers/health.py
 api/routers/index.py
@@ -21,12 +22,14 @@ ingestion/hybrid_retriever.py
 ingestion/index_builder.py
 ingestion/llamaparse_loader.py
 ingestion/node_builders.py
+ingestion/rulebook_query.py
 ingestion/vector_stores.py
 rule_engine.egg-info/PKG-INFO
 rule_engine.egg-info/SOURCES.txt
 rule_engine.egg-info/dependency_links.txt
 rule_engine.egg-info/requires.txt
 rule_engine.egg-info/top_level.txt
+tests/test_node_builders.py
 utils/__init__.py
 utils/gemini.py
 utils/json_extract.py

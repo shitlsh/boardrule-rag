@@ -23,6 +23,7 @@ dependencies = [
   "llama-index-core>=0.11.0",
   "llama-index-retrievers-bm25>=0.2.0",
   "llama-index-embeddings-google-genai>=0.1.0",
+  "llama-index-llms-google-genai>=0.1.0",
   "sentence-transformers>=2.2.0",
 ]
 

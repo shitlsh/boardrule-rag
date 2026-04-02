@@ -1,3 +1,9 @@
-export { getExtractJob, getRuleEngineBaseUrl, startExtraction } from "./client";
+export { chatRules, getExtractJob, getRuleEngineBaseUrl, startExtraction } from "./client";
 export { syncTaskFromRuleEngine } from "./sync";
-export type { ExtractJobStatus, ExtractPollResponse, ExtractStartResponse } from "./types";
+export type {
+  ChatResponse,
+  ChatSourceRef,
+  ExtractJobStatus,
+  ExtractPollResponse,
+  ExtractStartResponse,
+} from "./types";
