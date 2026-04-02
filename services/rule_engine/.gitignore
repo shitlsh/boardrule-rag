@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 checkpoints.sqlite
 checkpoints.sqlite-*
+data/indexes/
+eval/fixtures/*.pdf
