@@ -15,10 +15,8 @@
     "db:push": "prisma db push"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.6.0",
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",
-    "better-sqlite3": "^12.8.0",
     "pg": "^8.14.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.0",
