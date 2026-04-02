@@ -9,27 +9,32 @@ class ExtractionState(TypedDict, total=False):
     """State carried through the six-node extraction graph."""
 
     game_id: str
-    # Human-readable name for prompts (defaults to game_id if omitted)
     game_name: str
-    # Optional glossary / 术语快查 text (e.g. from knowledge retrieval or admin paste)
     terminology_context: str
     source_file: str
     source_url: str | None
-    # Full markdown from LlamaParse (with page markers when available)
+    # Legacy text path (empty when using vision pipeline)
     parsed_text: str
     parsed_metadata: dict[str, Any]
+    # Vision pipeline: rasterized pages (1-based page numbers, absolute paths as str)
+    page_rows: list[dict[str, Any]]
+    toc_page_indices: list[int]
+    exclude_page_indices: list[int]
+    # Pages to extract rules from (excludes TOC + exclude sets)
+    body_page_indices: list[int]
+    # Each inner list is one Gemini batch: [{ "page": int, "path": str }, ...]
+    vision_batches: list[list[dict[str, Any]]]
     # TOC analyzer (Flash) — structured outline
     toc: dict[str, Any]
-    # "simple" | "complex" — from route node
     complexity: str
-    # Text segments to run chapter extraction on
+    # Text batches (legacy); prefer vision_batches for chapter_extract
     batches: list[str]
-    # One structured markdown chunk per batch (with page anchors)
     chapter_outputs: list[str]
     merged_markdown: str
+    # Optional structured chunks for Phase 2 (list of {text, metadata})
+    structured_chapters: list[dict[str, Any]]
     quick_start: str
     suggested_questions: list[str]
     errors: list[str]
     retry_count: int
-    # Last checkpoint id for clients that poll / resume (LangGraph thread id is separate)
     last_checkpoint_id: str | None

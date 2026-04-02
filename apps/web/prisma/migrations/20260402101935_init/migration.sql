@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Game" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "coverUrl" TEXT,
@@ -16,22 +16,25 @@ CREATE TABLE "Game" (
     "extractionJobId" TEXT,
     "pageMetadataEnabled" BOOLEAN NOT NULL DEFAULT true,
     "lastCheckpointId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Game_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Task" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "gameId" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "type" TEXT NOT NULL DEFAULT 'EXTRACTION',
     "errorMsg" TEXT,
     "progressJson" TEXT,
     "jobId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Task_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "Game" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -39,3 +42,6 @@ CREATE UNIQUE INDEX "Game_slug_key" ON "Game"("slug");
 
 -- CreateIndex
 CREATE INDEX "Task_gameId_idx" ON "Task"("gameId");
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_gameId_fkey" FOREIGN KEY ("gameId") REFERENCES "Game"("id") ON DELETE CASCADE ON UPDATE CASCADE;

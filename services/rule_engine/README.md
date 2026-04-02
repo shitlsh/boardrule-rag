@@ -1,10 +1,11 @@
 # Rule engine service
 
-Python service for board-game rule extraction: **LlamaParse** ingestion, **LangGraph** orchestration (TOC → routing → batching → chapter extraction → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind `POST /build-index` (dense `VectorStoreIndex` + **BM25**, **RRF fusion**, **cross-encoder rerank**).
+Python service for board-game rule extraction: **PDF → per-page images** (`pdf2image` + poppler) or ordered images, **Gemini vision** chapter extraction, **LangGraph** orchestration (TOC → routing → batching → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind `POST /build-index` (dense vectors in **PostgreSQL + pgvector** when configured, else on-disk `VectorStoreIndex`, plus **BM25**, **RRF fusion**, **cross-encoder rerank**).
 
 ## Requirements
 
 - **Python 3.11+**
+- **poppler** (system) for `pdf2image` when rasterizing PDFs.
 - Virtual environment recommended (`.venv` in this directory or managed by `uv`).
 
 ## Environment variables
@@ -17,18 +18,20 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| `LLAMA_CLOUD_API_KEY` | LlamaParse / Llama Cloud (document parsing, layout, page anchors). |
-| `GOOGLE_API_KEY` | Gemini API for Flash/Pro calls (temperature and max tokens configured in code). |
+| `GOOGLE_API_KEY` | Gemini API for Flash/Pro (vision + text). |
+| `DATABASE_URL` | Optional `postgresql://` — **PostgresSaver** for LangGraph and **pgvector** for `POST /build-index` (set `USE_PGVECTOR=false` to keep vectors on disk). |
+| `CHECKPOINT_DB_PATH` | SQLite path for LangGraph when `DATABASE_URL` is not PostgreSQL. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
-| `CHECKPOINT_DB_PATH` | SQLite path for LangGraph checkpoints (development). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
-| `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro. |
+| `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | PDF rasterization for `/extract/pages`. |
+| `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro (Pro must support images). |
 | `GEMINI_CHAT_MODEL` / `GEMINI_CHAT_TEMPERATURE` / `GEMINI_CHAT_MAX_TOKENS` | Phase 3 `POST /chat` synthesis (defaults: chat model follows `GEMINI_FLASH_MODEL` or `gemini-2.0-flash`, temperature `0.2`, max tokens `8192`). |
-| `INDEX_STORAGE_ROOT` | Optional directory for per-game indexes (default `data/indexes/` under this service). |
-| `GEMINI_EMBEDDING_MODEL` | Gemini embedding id for LlamaIndex (default `gemini-embedding-001`). |
+| `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
+| `GEMINI_EMBEDDING_MODEL` / `EMBEDDING_DIM` | Gemini embedding id and dimension for pgvector / indexing. |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
+| `LLAMA_CLOUD_API_KEY` | Optional legacy LlamaParse (`pip install -e ".[llamaparse]"`). |
 
 Prefer **`.env.example`** as the authoritative list when in doubt.
 
@@ -83,8 +86,9 @@ Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/health` | Liveness. |
-| `POST` | `/extract` | Multipart: `game_id`；可选 `game_name`（展示用）、`terminology_context`（术语/知识库片段，对齐 Dify 中术语检索）；`file` 或 `file_url` 二选一；可选 `resume`、`job_id`。返回 `job_id` / `thread_id`；轮询 `GET /extract/{job_id}`。 |
-| `POST` | `/build-index` | JSON: `game_id`, `merged_markdown`, optional `source_file`。写入每游戏独立目录（向量 + BM25 + `manifest.json`）。 |
+| `POST` | `/extract/pages` | Multipart: `game_id`, `file` or `file_url` or multiple `files` — rasterize to PNGs; returns `job_id` and per-page `url` under `/page-assets/...`。 |
+| `POST` | `/extract` | Multipart: `game_id`, `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON array strings), optional `game_name`, `terminology_context`; optional `resume` + `job_id`。轮询 `GET /extract/{job_id}`。 |
+| `POST` | `/build-index` | JSON: `game_id`, and **`merged_markdown` or `documents[]`**, optional `source_file`。BM25 + manifest on disk; vectors in pgvector or disk per `DATABASE_URL` / `USE_PGVECTOR`。 |
 | `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
 | `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
 | `POST` | `/chat` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）。需已 `POST /build-index`；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + Gemini）。 |
@@ -108,7 +112,7 @@ Request/response models live in `api/routers/extract.py`, `api/routers/index.py`
 services/rule_engine/
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
-  ingestion/        # LlamaParse loaders, node builders, index_builder, rulebook_query (Phase 3 Q&A)
+  ingestion/        # Page raster, optional LlamaParse, node builders, index_builder, rulebook_query (Phase 3 Q&A)
   prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
   utils/            # Gemini client, pagination, retries, progress
   eval/             # Fixtures and evaluation notes
@@ -117,7 +121,8 @@ services/rule_engine/
 ## Troubleshooting
 
 - **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
-- **LlamaParse failures**: Verify `LLAMA_CLOUD_API_KEY` and file size / format limits in Llama Cloud.
+- **PDF rasterization**: Ensure poppler is installed; check `PAGE_RASTER_DPI` if pages fail to render.
+- **Optional LlamaParse**: Only if you installed `.[llamaparse]` and set `LLAMA_CLOUD_API_KEY`.
 - **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
 
 For full-stack local setup (web + engine), see the repository root **[QUICKSTART.md](../../QUICKSTART.md)**.

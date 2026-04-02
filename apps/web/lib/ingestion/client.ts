@@ -1,4 +1,9 @@
-import type { ChatResponse, ExtractPollResponse, ExtractStartResponse } from "./types";
+import type {
+  ChatResponse,
+  ExtractPagesResponse,
+  ExtractPollResponse,
+  ExtractStartResponse,
+} from "./types";
 
 export function getRuleEngineBaseUrl(): string {
   const raw = process.env.RULE_ENGINE_URL?.trim();
@@ -8,17 +13,43 @@ export function getRuleEngineBaseUrl(): string {
   return raw.replace(/\/$/, "");
 }
 
-export async function startExtraction(params: {
+export async function prepareRulebookPages(params: {
+  gameId: string;
+  fileBody: Blob;
+  filename: string;
+}): Promise<ExtractPagesResponse> {
+  const base = getRuleEngineBaseUrl();
+  const form = new FormData();
+  form.append("game_id", params.gameId);
+  form.append("file", params.fileBody, params.filename);
+
+  const res = await fetch(`${base}/extract/pages`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Prepare pages failed: ${res.status}`);
+  }
+
+  return (await res.json()) as ExtractPagesResponse;
+}
+
+export async function startExtractionWithPagePlan(params: {
   gameId: string;
   gameName?: string;
   terminologyContext?: string;
-  /** Raw rulebook bytes (PDF / image) as sent to the rule engine. */
-  fileBody: Blob;
-  filename: string;
+  pageJobId: string;
+  tocPageIndices: number[];
+  excludePageIndices: number[];
 }): Promise<ExtractStartResponse> {
   const base = getRuleEngineBaseUrl();
   const form = new FormData();
   form.append("game_id", params.gameId);
+  form.append("page_job_id", params.pageJobId);
+  form.append("toc_page_indices", JSON.stringify(params.tocPageIndices));
+  form.append("exclude_page_indices", JSON.stringify(params.excludePageIndices));
   if (params.gameName) {
     form.append("game_name", params.gameName);
   }
@@ -26,7 +57,6 @@ export async function startExtraction(params: {
     form.append("terminology_context", params.terminologyContext);
   }
   form.append("resume", "false");
-  form.append("file", params.fileBody, params.filename);
 
   const res = await fetch(`${base}/extract`, {
     method: "POST",

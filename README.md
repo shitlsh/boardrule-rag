@@ -1,6 +1,6 @@
 # boardrule-rag
 
-Board-game rule extraction and RAG: ingest rule books (PDF/images), parse with LlamaParse, extract structured Markdown via LangGraph, and (in later phases) build per-game indexes for grounded Q&A with page references.
+Board-game rule extraction and RAG: ingest rule books (PDF/images), rasterize pages for **Gemini vision** extraction via LangGraph, optional human TOC/exclude confirmation in the web UI, then build per-game indexes (PostgreSQL + pgvector when configured, else on-disk vectors) for grounded Q&A with page references.
 
 This repository is the **single** codebase and product surface: a monorepo with **`apps/web`** (Next.js 14, App Router, TypeScript) and **`services/rule_engine`** (Python 3.11+, FastAPI, LangGraph, LlamaIndex).
 
@@ -13,7 +13,7 @@ The **`dify-boardgame-rule-agent`** project is **not** integrated here. Treat it
 ```text
 boardrule-rag/
   apps/web/                 # Next.js admin UI, Prisma, task APIs
-  services/rule_engine/     # FastAPI, LangGraph extraction, LlamaParse, LlamaIndex
+  services/rule_engine/     # FastAPI, LangGraph extraction, LlamaIndex, Gemini vision
   docs/                     # Optional extra docs (see QUICKSTART.md at repo root)
 ```
 
@@ -24,15 +24,15 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 | Area | Role |
 |------|------|
 | **apps/web** | Game metadata, rule uploads, task polling, extraction status; calls the rule engine via `RULE_ENGINE_URL` only. |
-| **services/rule_engine** | `POST /extract` (async + checkpoints), `POST /build-index` (per-game dense + BM25 + rerank), `POST /chat` (RAG Q&A), `GET /health`. |
+| **services/rule_engine** | `POST /extract/pages` (rasterize), `POST /extract` (vision pipeline + checkpoints), `POST /build-index`, `POST /chat`, `GET /health`. |
 
 ## Tech stack (fixed)
 
 - **Runtime**: Python **3.11+** (`services/rule_engine`).
 - **Web**: **Next.js 14** App Router, **TypeScript** (`apps/web`).
-- **Data**: **Prisma ORM 7** (`prisma.config.ts`, SQLite via `better-sqlite3` adapter in dev); PostgreSQL recommended in production.
-- **Parsing**: **LlamaParse** (`LLAMA_CLOUD_API_KEY`).
-- **Orchestration**: **LangGraph** with checkpointing (SQLite in dev, Postgres in production).
+- **Data**: **Prisma ORM 7** (`prisma.config.ts`); **PostgreSQL + pgvector** recommended (`docker-compose.yml`); SQLite still supported for quick experiments.
+- **Ingestion**: **pdf2image** + **poppler** (system) for PDF page renders; ordered images also supported.
+- **Orchestration**: **LangGraph** with checkpointing (**SQLite** or **PostgreSQL** via `DATABASE_URL`).
 - **RAG**: **LlamaIndex** (Phase 2: hybrid retrieval + rerank).
 - **LLM**: **Gemini** (Flash / Pro roles as configured in the service).
 - **Observability**: **LangSmith** (optional tracing).

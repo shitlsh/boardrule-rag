@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from llama_index.core import Settings, StorageContext, load_index_from_storage
+from llama_index.core import Settings
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.prompts import PromptTemplate
@@ -15,9 +15,8 @@ from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.retrievers.bm25 import BM25Retriever
 
 from ingestion.hybrid_retriever import HybridFusionRetriever
-from ingestion.index_builder import _rerank_model_name, configure_embedding_settings, game_index_dir
+from ingestion.index_builder import _rerank_model_name, configure_embedding_settings, game_index_dir, load_vector_index
 
-_VECTOR_SUBDIR = "vector_storage"
 _BM25_SUBDIR = "bm25"
 
 
@@ -89,15 +88,15 @@ def build_rulebook_query_engine(
     Settings.llm = llm
 
     root = game_index_dir(game_id)
-    vec_dir = root / _VECTOR_SUBDIR
     bm25_dir = root / _BM25_SUBDIR
-    if not vec_dir.is_dir():
-        raise FileNotFoundError(f"No vector index at {vec_dir}")
     if not bm25_dir.is_dir():
         raise FileNotFoundError(f"Missing BM25 persist dir at {bm25_dir}")
 
-    storage_context = StorageContext.from_defaults(persist_dir=str(vec_dir))
-    index = load_index_from_storage(storage_context)
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"No index manifest for game_id={game_id}")
+
+    index = load_vector_index(game_id)
     bm25 = BM25Retriever.from_persist_dir(str(bm25_dir))
     vector_retriever = index.as_retriever(similarity_top_k=similarity_top_k)
     hybrid = HybridFusionRetriever(

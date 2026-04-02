@@ -1,5 +1,7 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
+import pg from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
@@ -8,11 +10,17 @@ function createClient(): PrismaClient {
   if (!url) {
     throw new Error("DATABASE_URL is not set");
   }
+  const log =
+    process.env.NODE_ENV === "development" ? (["error", "warn"] as const) : (["error"] as const);
+
+  if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
+    const pool = new pg.Pool({ connectionString: url });
+    const adapter = new PrismaPg(pool);
+    return new PrismaClient({ adapter, log: [...log] });
+  }
+
   const adapter = new PrismaBetterSqlite3({ url });
-  return new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+  return new PrismaClient({ adapter, log: [...log] });
 }
 
 export const prisma = globalForPrisma.prisma ?? createClient();

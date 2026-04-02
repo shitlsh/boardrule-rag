@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
+from ingestion.node_builders import merged_markdown_to_documents
 from utils.gemini import generate_pro
 from utils.paths import load_prompt
 from utils.prompt_context import fill_prompt_placeholders
 from utils.retry import retry
+
+
+def _structured_from_md(state: ExtractionState, md: str) -> list[dict]:
+    game_id = state.get("game_id") or ""
+    source_file = state.get("source_file") or ""
+    docs = merged_markdown_to_documents(
+        md.strip(),
+        game_id=game_id,
+        source_file=source_file or "unknown",
+    )
+    return [{"text": d.text, "metadata": dict(d.metadata or {})} for d in docs]
 
 
 def run(state: ExtractionState) -> dict:
@@ -16,6 +28,7 @@ def run(state: ExtractionState) -> dict:
     if not chunks:
         return {
             "merged_markdown": "",
+            "structured_chapters": [],
             "errors": (state.get("errors") or []) + ["merge_and_refine: no chapter_outputs"],
         }
     joined = "\n\n---\n\n".join(chunks)
@@ -40,8 +53,10 @@ def run(state: ExtractionState) -> dict:
             part_b = retry(_merge_b, attempts=2)
             body = part_a + "\n\n" + part_b
         except Exception as e:  # noqa: BLE001
+            md = joined[:200_000]
             return {
-                "merged_markdown": joined[:200_000],
+                "merged_markdown": md,
+                "structured_chapters": _structured_from_md(state, md),
                 "errors": (state.get("errors") or []) + [f"merge_and_refine split: {e}"],
             }
 
@@ -53,8 +68,11 @@ def run(state: ExtractionState) -> dict:
 
         merged_md = retry(_final, attempts=3)
     except Exception as e:  # noqa: BLE001
+        md = body[:200_000]
         return {
-            "merged_markdown": body[:200_000],
+            "merged_markdown": md,
+            "structured_chapters": _structured_from_md(state, md),
             "errors": (state.get("errors") or []) + [f"merge_and_refine: {e}"],
         }
-    return {"merged_markdown": merged_md.strip()}
+    merged_md = merged_md.strip()
+    return {"merged_markdown": merged_md, "structured_chapters": _structured_from_md(state, merged_md)}

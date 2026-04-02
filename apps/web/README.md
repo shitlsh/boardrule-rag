@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# boardrule-rag — Web (`apps/web`)
 
-## Getting Started
+Next.js 14（App Router）管理端：游戏元数据、规则书上传、任务与提取状态轮询。仅通过环境变量 **`RULE_ENGINE_URL`** 调用 `services/rule_engine`，无其他 AI 后端。
 
-First, run the development server:
+## 环境变量
+
+复制示例并填写：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| 变量 | 说明 |
+|------|------|
+| `RULE_ENGINE_URL` | 规则引擎根地址，如 `http://127.0.0.1:8000` |
+| `DATABASE_URL` | Prisma 连接串；本地 SQLite 示例见 `.env.example` |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+数据库 URL 同时用于 **`prisma.config.ts`**（Prisma ORM 7）。客户端生成到 `generated/prisma/`（`postinstall` / `build` 时生成）。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 常用命令
 
-## Learn More
+```bash
+npm install
+npx prisma migrate dev   # 首次或 schema 变更后
+npm run dev               # 默认 http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 与规则引擎的衔接
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **上传 / 任务**：`POST /api/tasks`（multipart：`gameId`、`file`，可选 `terminologyContext`）→ 调用规则引擎 `POST /extract`。
+- **轮询**：任务详情 `GET /api/tasks/[taskId]` 会同步规则引擎任务状态并写回导出文件路径。
+- **问答**：`POST /api/chat` 代理规则引擎 `POST /chat`；**需先**对该 `game_id` 在引擎侧执行 `POST /build-index`（见仓库根目录 **QUICKSTART.md** 与 `services/rule_engine/eval/README.md`）。当前 Web **不会**在提取完成后自动建索引。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 存储
 
-## Deploy on Vercel
+上传与导出的规则/快读/问题默认在 `apps/web/storage/`（见 `.gitignore`），路径写入 `Game` 表。
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+更完整的本地启动说明见仓库根目录 **[../QUICKSTART.md](../QUICKSTART.md)**。

@@ -22,3 +22,9 @@ storage/
 
 .DS_Store
 *.tsbuildinfo
+
+# IntelliJ IDEA
+.idea/
+
+# Local note
+NOTE.md

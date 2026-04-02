@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: boardrule
+      POSTGRES_PASSWORD: boardrule
+      POSTGRES_DB: boardrule
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  postgres_data:

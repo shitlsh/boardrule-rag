@@ -22,6 +22,8 @@ ingestion/hybrid_retriever.py
 ingestion/index_builder.py
 ingestion/llamaparse_loader.py
 ingestion/node_builders.py
+ingestion/page_jobs.py
+ingestion/page_raster.py
 ingestion/rulebook_query.py
 ingestion/vector_stores.py
 rule_engine.egg-info/PKG-INFO
