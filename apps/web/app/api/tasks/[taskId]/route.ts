@@ -1,0 +1,26 @@
+import { NextResponse } from "next/server";
+
+import { prisma } from "@/lib/prisma";
+import { syncTaskFromRuleEngine } from "@/lib/ingestion";
+
+export const runtime = "nodejs";
+
+type RouteParams = { params: { taskId: string } };
+
+export async function GET(_req: Request, { params }: RouteParams) {
+  const { taskId } = params;
+  const before = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { game: true },
+  });
+  if (!before) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
+
+  const task = await syncTaskFromRuleEngine(taskId);
+  if (!task) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ task });
+}

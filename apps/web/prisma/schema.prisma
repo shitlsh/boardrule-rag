@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Board game metadata and extraction artifacts (paths relative to storage root when set).
+model Game {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  coverUrl            String?
+  version             Int      @default(0)
+  rulesMarkdownPath   String?
+  quickStartGuidePath String?
+  startQuestionsPath  String?
+  quickStartGuide     String?
+  /// JSON array of suggested questions (string column for SQLite portability).
+  startQuestions      String?
+  indexId             String?
+  vectorStoreId       String?
+  extractionStatus    String?
+  extractionJobId     String?
+  pageMetadataEnabled Boolean  @default(true)
+  lastCheckpointId    String?
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id           String @id @default(cuid())
+  gameId       String
+  game         Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  status       String
+  type         String @default("EXTRACTION")
+  errorMsg     String?
+  progressJson String?
+  jobId        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gameId])
+}
