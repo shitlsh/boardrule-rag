@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rule-engine"
+version = "0.1.0"
+description = "Board game rule extraction: LlamaParse + LangGraph + Gemini"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "python-multipart>=0.0.9",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "httpx>=0.27",
+  "python-dotenv>=1.0",
+  "google-generativeai>=0.8",
+  "llama-parse>=0.5",
+  "langgraph>=0.2.40",
+  "langgraph-checkpoint-sqlite>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.4",
+  "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["api*", "graphs*", "ingestion*", "utils*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

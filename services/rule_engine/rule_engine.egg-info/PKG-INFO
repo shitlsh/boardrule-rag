@@ -1,0 +1,123 @@
+Metadata-Version: 2.4
+Name: rule-engine
+Version: 0.1.0
+Summary: Board game rule extraction: LlamaParse + LangGraph + Gemini
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: pydantic>=2.6
+Requires-Dist: pydantic-settings>=2.2
+Requires-Dist: httpx>=0.27
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: google-generativeai>=0.8
+Requires-Dist: llama-parse>=0.5
+Requires-Dist: langgraph>=0.2.40
+Requires-Dist: langgraph-checkpoint-sqlite>=2.0
+Provides-Extra: dev
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: pytest>=8.0; extra == "dev"
+
+# Rule engine service
+
+Python service for board-game rule extraction: **LlamaParse** ingestion, **LangGraph** orchestration (TOC → routing → batching → chapter extraction → merge/refine → quick start and suggested questions), and (Phase 2) **LlamaIndex** indexing behind `POST /build-index`.
+
+## Requirements
+
+- **Python 3.11+**
+- Virtual environment recommended (`.venv` in this directory or managed by `uv`).
+
+## Environment variables
+
+Copy the example file and edit values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `LLAMA_CLOUD_API_KEY` | LlamaParse / Llama Cloud (document parsing, layout, page anchors). |
+| `GOOGLE_API_KEY` | Gemini API for Flash/Pro calls (temperature and max tokens configured in code). |
+| `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
+| `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
+| `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
+
+Additional keys (checkpoint database URL, server host/port, etc.) will be listed in **`.env.example`** as they are added—prefer that file as the authoritative list.
+
+## Install
+
+From `services/rule_engine` (once `pyproject.toml` exists):
+
+**pip / venv**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+**uv** (if the project standardizes on it)
+
+```bash
+uv sync
+```
+
+Use whatever install command your `pyproject.toml` documents; the repo root **QUICKSTART.md** mirrors high-level steps.
+
+## Run the API
+
+Typical development command (adjust module path if your package layout differs):
+
+```bash
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+## LangSmith
+
+Enable tracing for debugging and regression:
+
+```bash
+export LANGCHAIN_TRACING_V2=true
+export LANGCHAIN_API_KEY=your-langsmith-key
+export LANGCHAIN_PROJECT=boardrule-rag
+```
+
+Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
+
+## API surface (planned)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/health` | Liveness. |
+| `POST` | `/extract` | Async extraction; optional `resume` / checkpoint; poll `GET /extract/{job_id}`. |
+| `POST` | `/build-index` | Phase 2: may return `202` + job id while indexing is stubbed or async. |
+
+Exact request/response shapes live next to the FastAPI routers once implemented.
+
+## Layout (target)
+
+```text
+services/rule_engine/
+  api/              # FastAPI app and routers
+  graphs/           # LangGraph state and nodes
+  ingestion/        # LlamaParse loaders, node builders, vector stores
+  prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
+  utils/            # Gemini client, pagination, retries, progress
+  eval/             # Fixtures and evaluation notes
+```
+
+## Troubleshooting
+
+- **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
+- **LlamaParse failures**: Verify `LLAMA_CLOUD_API_KEY` and file size / format limits in Llama Cloud.
+- **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
+
+For full-stack local setup (web + engine), see the repository root **[QUICKSTART.md](../../QUICKSTART.md)**.

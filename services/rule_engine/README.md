@@ -1,0 +1,116 @@
+# Rule engine service
+
+Python service for board-game rule extraction: **LlamaParse** ingestion, **LangGraph** orchestration (TOC → routing → batching → chapter extraction → merge/refine → quick start and suggested questions), and (Phase 2) **LlamaIndex** indexing behind `POST /build-index`.
+
+## Requirements
+
+- **Python 3.11+**
+- Virtual environment recommended (`.venv` in this directory or managed by `uv`).
+
+## Environment variables
+
+Copy the example file and edit values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `LLAMA_CLOUD_API_KEY` | LlamaParse / Llama Cloud (document parsing, layout, page anchors). |
+| `GOOGLE_API_KEY` | Gemini API for Flash/Pro calls (temperature and max tokens configured in code). |
+| `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
+| `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
+| `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
+| `CHECKPOINT_DB_PATH` | SQLite path for LangGraph checkpoints (development). |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
+| `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro. |
+
+Prefer **`.env.example`** as the authoritative list when in doubt.
+
+## Install
+
+From `services/rule_engine`:
+
+**pip / venv**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+**uv** (if the project standardizes on it)
+
+```bash
+uv sync
+```
+
+Use whatever install command your `pyproject.toml` documents; the repo root **QUICKSTART.md** mirrors high-level steps.
+
+## Run the API
+
+Typical development command (adjust module path if your package layout differs):
+
+```bash
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+## LangSmith
+
+Enable tracing for debugging and regression:
+
+```bash
+export LANGCHAIN_TRACING_V2=true
+export LANGCHAIN_API_KEY=your-langsmith-key
+export LANGCHAIN_PROJECT=boardrule-rag
+```
+
+Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
+
+## API surface
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/health` | Liveness. |
+| `POST` | `/extract` | Multipart: `game_id`；可选 `game_name`（展示用）、`terminology_context`（术语/知识库片段，对齐 Dify 中术语检索）；`file` 或 `file_url` 二选一；可选 `resume`、`job_id`。返回 `job_id` / `thread_id`；轮询 `GET /extract/{job_id}`。 |
+| `POST` | `/build-index` | Phase 2 (not implemented in this service yet). |
+
+Request/response models live in `api/routers/extract.py`.
+
+### Prompt placeholders（`{{GAME_NAME}}` / `{{TERM_CONTEXT}}`）
+
+模板里的占位符由 `utils/prompt_context.fill_prompt_placeholders()` 根据 `ExtractionState` 在运行时替换。
+
+| Placeholder | 含义 | 来源 |
+|-------------|------|------|
+| `{{GAME_NAME}}` | 展示用游戏名 | `POST /extract` 表单字段 `game_name`；未传则用 `game_id`。 |
+| `{{TERM_CONTEXT}}` | 注入到 `rule_style_core` 的「术语规范」正文 | `POST /extract` 表单字段 **`terminology_context`**（由调用方传入，例如 `apps/web` 在请求前从知识库检索、或运营粘贴《桌游通用术语》等片段）。**未传或仅空白**时，使用 `utils/prompt_context.terminology_block()` 中的默认说明字符串，而不是留空。 |
+
+本服务 **不会**在引擎内部自动做类似 Dify「知识检索」节点的 RAG；若需要术语库，应在 **`POST /extract` 调用链上游** 拼好 `terminology_context` 再提交。
+
+## Layout
+
+```text
+services/rule_engine/
+  api/              # FastAPI app and routers
+  graphs/           # LangGraph state and nodes
+  ingestion/        # LlamaParse loaders, node builders, vector stores
+  prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
+  utils/            # Gemini client, pagination, retries, progress
+  eval/             # Fixtures and evaluation notes
+```
+
+## Troubleshooting
+
+- **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
+- **LlamaParse failures**: Verify `LLAMA_CLOUD_API_KEY` and file size / format limits in Llama Cloud.
+- **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
+
+For full-stack local setup (web + engine), see the repository root **[QUICKSTART.md](../../QUICKSTART.md)**.
