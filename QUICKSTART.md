@@ -6,7 +6,7 @@ Follow these steps after cloning **`boardrule-rag`** to run the stack locally. K
 
 - **Git**
 - **Python 3.11+** (for `services/rule_engine`)
-- **Node.js 18+** (LTS recommended; for `apps/web` when present)
+- **Node.js 20.19+** (required for `apps/web`: Prisma ORM 7; 22.x recommended upstream)
 - **pnpm**, **npm**, or **yarn** (match whatever the `apps/web` package manager ends up using once `package.json` exists)
 
 Optional:
@@ -76,20 +76,22 @@ When `apps/web` is present:
 
 ### 3.1 Environment variables (web)
 
-Create `apps/web/.env` (or `.env.local`) from any `.env.example` in that app.
+Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RULE_ENGINE_URL` | Yes | Base URL of the rule engine, e.g. `http://localhost:8000`. The frontend must call **only** this backend (no Dify keys). |
-| Database URL | Yes | Prisma `DATABASE_URL` (e.g. SQLite file for dev). |
-| Storage | As implemented | Paths or object-storage keys for uploaded rules and exported artifacts—follow `apps/web` docs when added. |
+| `DATABASE_URL` | Yes | Prisma connection string (e.g. `file:./prisma/dev.db` for SQLite relative to `apps/web`). Used from **`prisma.config.ts`** (Prisma ORM 7). |
+| Storage | No | Uploads and exports default to `apps/web/storage/` (gitignored); paths are also stored on `Game` rows. |
+
+**Prisma ORM 7 notes:** The database URL is configured in `apps/web/prisma.config.ts` (with `dotenv` for CLI). The client is generated into `apps/web/generated/prisma/` (gitignored). `npm install` runs `prisma generate` via `postinstall`; `npm run build` also runs `generate` before `next build`. SQLite at runtime uses `@prisma/adapter-better-sqlite3` and `better-sqlite3`.
 
 ### 3.2 Install and run
 
 ```bash
 cd apps/web
 npm install          # or pnpm install / yarn
-npx prisma migrate dev   # when schema exists
+npx prisma migrate dev   # applies migrations (DATABASE_URL must be set, e.g. in .env)
 npm run dev          # default Next.js port is usually 3000
 ```
 

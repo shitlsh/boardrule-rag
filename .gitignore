@@ -1,0 +1,24 @@
+# Monorepo
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+
+# Env & local data
+.env
+.env.local
+*.pem
+
+# Prisma / SQLite
+**/prisma/dev.db
+**/prisma/dev.db-journal
+**/prisma/*.db
+**/prisma/*.db-journal
+
+# Local artifact storage (rule uploads & exports)
+storage/
+
+.DS_Store
+*.tsbuildinfo

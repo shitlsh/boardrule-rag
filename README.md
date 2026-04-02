@@ -30,7 +30,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 
 - **Runtime**: Python **3.11+** (`services/rule_engine`).
 - **Web**: **Next.js 14** App Router, **TypeScript** (`apps/web`).
-- **Data**: **Prisma**; SQLite in development, PostgreSQL recommended in production.
+- **Data**: **Prisma ORM 7** (`prisma.config.ts`, SQLite via `better-sqlite3` adapter in dev); PostgreSQL recommended in production.
 - **Parsing**: **LlamaParse** (`LLAMA_CLOUD_API_KEY`).
 - **Orchestration**: **LangGraph** with checkpointing (SQLite in dev, Postgres in production).
 - **RAG**: **LlamaIndex** (Phase 2: hybrid retrieval + rerank).
