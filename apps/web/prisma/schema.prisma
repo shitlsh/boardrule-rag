@@ -24,6 +24,10 @@ model Game {
   vectorStoreId       String?
   extractionStatus    String?
   extractionJobId     String?
+  /// Rule engine job id from POST /extract/pages (page rasterization).
+  pageRasterJobId     String?
+  /// JSON string: [{ "pageNumber": n, "url": "...", "label": "Pn" }, ...]
+  pagePreviewJson     String?
   pageMetadataEnabled Boolean  @default(true)
   lastCheckpointId    String?
 

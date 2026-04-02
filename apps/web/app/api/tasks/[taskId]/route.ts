@@ -5,10 +5,10 @@ import { syncTaskFromRuleEngine } from "@/lib/ingestion";
 
 export const runtime = "nodejs";
 
-type RouteParams = { params: { taskId: string } };
+type RouteParams = { params: Promise<{ taskId: string }> };
 
 export async function GET(_req: Request, { params }: RouteParams) {
-  const { taskId } = params;
+  const { taskId } = await params;
   const before = await prisma.task.findUnique({
     where: { id: taskId },
     include: { game: true },

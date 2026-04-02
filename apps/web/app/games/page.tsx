@@ -1,123 +1,101 @@
+"use client";
+
 import Link from "next/link";
+import { ExternalLink, Gamepad2, Plus } from "lucide-react";
 
-import { ExtractionStatusBadge } from "@/components/status-badge";
+import { ExtractionStatusBadge, IndexStatusBadge } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { prisma } from "@/lib/prisma";
-import { cn } from "@/lib/utils";
+import { useGames } from "@/hooks/use-game";
 
-export default async function GamesPage() {
-  const games = await prisma.game.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { tasks: true } } },
-  });
+export default function GamesPage() {
+  const { games, isLoading, isError } = useGames();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">游戏</h1>
-          <p className="text-sm text-muted-foreground">管理元数据、规则上传与异步提取任务。</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">游戏列表</h1>
+          <p className="text-muted-foreground">管理桌游规则书提取与索引</p>
         </div>
-        <Link
-          href="/games/new"
-          className={cn(
-            "inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground",
-            "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          )}
-        >
-          新建游戏
-        </Link>
+        <Button asChild>
+          <Link href="/games/new">
+            <Plus className="mr-2 h-4 w-4" />
+            新建游戏
+          </Link>
+        </Button>
       </div>
 
-      <section aria-labelledby="games-table-heading">
-        <h2 id="games-table-heading" className="sr-only">
-          游戏列表
-        </h2>
-
-        <div className="md:hidden space-y-3" role="list">
-          {games.length === 0 ? (
-            <p className="text-sm text-muted-foreground">暂无游戏，请先新建。</p>
+      <Card>
+        <CardHeader>
+          <CardTitle>所有游戏</CardTitle>
+          <CardDescription>查看和管理已添加的桌游</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="py-8 text-center text-destructive">加载失败，请刷新页面重试</div>
+          ) : games.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Gamepad2 />
+                </EmptyMedia>
+                <EmptyTitle>暂无游戏</EmptyTitle>
+                <EmptyDescription>点击右上角按钮添加你的第一个桌游</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            games.map((g) => (
-              <article
-                key={g.id}
-                role="listitem"
-                className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-foreground">{g.name}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{g.slug}</p>
-                  </div>
-                  <ExtractionStatusBadge status={g.extractionStatus} />
-                </div>
-                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div>
-                    <dt>版本</dt>
-                    <dd className="font-mono text-foreground">{g.version}</dd>
-                  </div>
-                  <div>
-                    <dt>任务数</dt>
-                    <dd className="font-mono text-foreground">{g._count.tasks}</dd>
-                  </div>
-                </dl>
-                <div className="mt-4">
-                  <Link
-                    href={`/games/${g.id}`}
-                    className="text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                  >
-                    打开详情
-                  </Link>
-                </div>
-              </article>
-            ))
-          )}
-        </div>
-
-        <div className="hidden md:block">
-          <Table aria-label="游戏列表">
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">名称</TableHead>
-                <TableHead scope="col">Slug</TableHead>
-                <TableHead scope="col">规则版本</TableHead>
-                <TableHead scope="col">提取状态</TableHead>
-                <TableHead scope="col">任务数</TableHead>
-                <TableHead scope="col">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {games.length === 0 ? (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
-                    暂无游戏，请先新建。
-                  </TableCell>
+                  <TableHead>名称</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead>提取状态</TableHead>
+                  <TableHead>索引状态</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
-              ) : (
-                games.map((g) => (
-                  <TableRow key={g.id}>
-                    <TableCell className="font-medium">{g.name}</TableCell>
-                    <TableCell className="font-mono text-xs break-all">{g.slug}</TableCell>
-                    <TableCell className="font-mono text-sm">{g.version}</TableCell>
+              </TableHeader>
+              <TableBody>
+                {games.map((game) => (
+                  <TableRow key={game.id}>
+                    <TableCell className="font-medium">{game.name}</TableCell>
+                    <TableCell className="font-mono text-sm text-muted-foreground">{game.slug}</TableCell>
                     <TableCell>
-                      <ExtractionStatusBadge status={g.extractionStatus} />
+                      <ExtractionStatusBadge status={game.extractionStatus} />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{g._count.tasks}</TableCell>
                     <TableCell>
-                      <Link
-                        href={`/games/${g.id}`}
-                        className="text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm text-sm font-medium"
-                      >
-                        详情
-                      </Link>
+                      <IndexStatusBadge isIndexed={game.isIndexed} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/games/${game.id}`}>
+                          查看详情
+                          <ExternalLink className="ml-2 h-3 w-3" />
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

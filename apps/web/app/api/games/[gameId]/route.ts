@@ -1,34 +1,33 @@
 import { NextResponse } from "next/server";
 
+import { prismaGameToDetailDto, prismaGameToDto } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
 
-type RouteParams = { params: { gameId: string } };
+type RouteParams = { params: Promise<{ gameId: string }> };
 
 export async function GET(_req: Request, { params }: RouteParams) {
-  const { gameId } = params;
+  const { gameId } = await params;
   const game = await prisma.game.findUnique({
     where: { id: gameId },
-    include: {
-      tasks: { orderBy: { createdAt: "desc" }, take: 50 },
-    },
   });
   if (!game) {
-    return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
   }
-  return NextResponse.json({ game });
+  const dto = await prismaGameToDetailDto(game);
+  return NextResponse.json(dto);
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
-  const { gameId } = params;
+  const { gameId } = await params;
   const existing = await prisma.game.findUnique({ where: { id: gameId } });
   if (!existing) {
-    return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
   }
   let body: { name?: string; coverUrl?: string | null; pageMetadataEnabled?: boolean };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
   }
   const game = await prisma.game.update({
     where: { id: gameId },
@@ -40,5 +39,5 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         : {}),
     },
   });
-  return NextResponse.json({ game });
+  return NextResponse.json(prismaGameToDto(game));
 }

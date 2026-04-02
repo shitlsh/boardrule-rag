@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
-import { saveUploadedRules } from "@/lib/storage";
+import { prepareRulebookPages } from "@/lib/prepare-rulebook-pages";
 
 export const runtime = "nodejs";
 
@@ -27,31 +26,12 @@ export async function POST(req: Request) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  await saveUploadedRules(gameId, file.name, buf);
 
-  const base = getRuleEngineBaseUrl();
-  const engineForm = new FormData();
-  engineForm.append("game_id", gameId);
-  engineForm.append("file", new Blob([buf], { type: file.type || "application/pdf" }), file.name || "rules.pdf");
-
-  const res = await fetch(`${base}/extract/pages`, { method: "POST", body: engineForm });
-  const text = await res.text();
-  if (!res.ok) {
-    return NextResponse.json({ error: text || `Prepare failed: ${res.status}` }, { status: res.status });
+  try {
+    const data = await prepareRulebookPages({ gameId, file, buffer: buf });
+    return NextResponse.json({ ...data, pages: data.pages });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
-
-  const data = JSON.parse(text) as {
-    job_id: string;
-    game_id: string;
-    total_pages: number;
-    pages: { page: number; url: string }[];
-  };
-
-  const origin = base.replace(/\/$/, "");
-  const pages = data.pages.map((p) => ({
-    ...p,
-    url: p.url.startsWith("http") ? p.url : `${origin}${p.url.startsWith("/") ? "" : "/"}${p.url}`,
-  }));
-
-  return NextResponse.json({ ...data, pages });
 }

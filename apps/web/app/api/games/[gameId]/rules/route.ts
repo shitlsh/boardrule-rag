@@ -8,10 +8,11 @@ import { getStorageRoot } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-type RouteParams = { params: { gameId: string } };
+type RouteParams = { params: Promise<{ gameId: string }> };
 
 export async function GET(_req: Request, { params }: RouteParams) {
-  const game = await prisma.game.findUnique({ where: { id: params.gameId } });
+  const { gameId } = await params;
+  const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
