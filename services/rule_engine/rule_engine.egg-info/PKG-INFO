@@ -15,6 +15,10 @@ Requires-Dist: google-generativeai>=0.8
 Requires-Dist: llama-parse>=0.5
 Requires-Dist: langgraph>=0.2.40
 Requires-Dist: langgraph-checkpoint-sqlite>=2.0
+Requires-Dist: llama-index-core>=0.11.0
+Requires-Dist: llama-index-retrievers-bm25>=0.2.0
+Requires-Dist: llama-index-embeddings-google-genai>=0.1.0
+Requires-Dist: sentence-transformers>=2.2.0
 Provides-Extra: dev
 Requires-Dist: ruff>=0.4; extra == "dev"
 Requires-Dist: pytest>=8.0; extra == "dev"
@@ -43,12 +47,15 @@ cp .env.example .env
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
+| `CHECKPOINT_DB_PATH` | SQLite path for LangGraph checkpoints (development). |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
+| `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro. |
 
-Additional keys (checkpoint database URL, server host/port, etc.) will be listed in **`.env.example`** as they are added—prefer that file as the authoritative list.
+Prefer **`.env.example`** as the authoritative list when in doubt.
 
 ## Install
 
-From `services/rule_engine` (once `pyproject.toml` exists):
+From `services/rule_engine`:
 
 **pip / venv**
 
@@ -92,17 +99,28 @@ export LANGCHAIN_PROJECT=boardrule-rag
 
 Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
 
-## API surface (planned)
+## API surface
 
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/health` | Liveness. |
-| `POST` | `/extract` | Async extraction; optional `resume` / checkpoint; poll `GET /extract/{job_id}`. |
-| `POST` | `/build-index` | Phase 2: may return `202` + job id while indexing is stubbed or async. |
+| `POST` | `/extract` | Multipart: `game_id`；可选 `game_name`（展示用）、`terminology_context`（术语/知识库片段，对齐 Dify 中术语检索）；`file` 或 `file_url` 二选一；可选 `resume`、`job_id`。返回 `job_id` / `thread_id`；轮询 `GET /extract/{job_id}`。 |
+| `POST` | `/build-index` | Phase 2 (not implemented in this service yet). |
 
-Exact request/response shapes live next to the FastAPI routers once implemented.
+Request/response models live in `api/routers/extract.py`.
 
-## Layout (target)
+### Prompt placeholders（`{{GAME_NAME}}` / `{{TERM_CONTEXT}}`）
+
+模板里的占位符由 `utils/prompt_context.fill_prompt_placeholders()` 根据 `ExtractionState` 在运行时替换。
+
+| Placeholder | 含义 | 来源 |
+|-------------|------|------|
+| `{{GAME_NAME}}` | 展示用游戏名 | `POST /extract` 表单字段 `game_name`；未传则用 `game_id`。 |
+| `{{TERM_CONTEXT}}` | 注入到 `rule_style_core` 的「术语规范」正文 | `POST /extract` 表单字段 **`terminology_context`**（由调用方传入，例如 `apps/web` 在请求前从知识库检索、或运营粘贴《桌游通用术语》等片段）。**未传或仅空白**时，使用 `utils/prompt_context.terminology_block()` 中的默认说明字符串，而不是留空。 |
+
+本服务 **不会**在引擎内部自动做类似 Dify「知识检索」节点的 RAG；若需要术语库，应在 **`POST /extract` 调用链上游** 拼好 `terminology_context` 再提交。
+
+## Layout
 
 ```text
 services/rule_engine/

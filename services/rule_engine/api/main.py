@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from api.routers import extract, health
+from api.routers import index as index_api
 from graphs.extraction_graph import build_extraction_graph
 from utils.paths import service_root
 
@@ -54,3 +55,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(extract.router)
+app.include_router(index_api.router)

@@ -1,6 +1,6 @@
 # Rule engine service
 
-Python service for board-game rule extraction: **LlamaParse** ingestion, **LangGraph** orchestration (TOC → routing → batching → chapter extraction → merge/refine → quick start and suggested questions), and (Phase 2) **LlamaIndex** indexing behind `POST /build-index`.
+Python service for board-game rule extraction: **LlamaParse** ingestion, **LangGraph** orchestration (TOC → routing → batching → chapter extraction → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind `POST /build-index` (dense `VectorStoreIndex` + **BM25**, **RRF fusion**, **cross-encoder rerank**).
 
 ## Requirements
 
@@ -25,6 +25,9 @@ cp .env.example .env
 | `CHECKPOINT_DB_PATH` | SQLite path for LangGraph checkpoints (development). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro. |
+| `INDEX_STORAGE_ROOT` | Optional directory for per-game indexes (default `data/indexes/` under this service). |
+| `GEMINI_EMBEDDING_MODEL` | Gemini embedding id for LlamaIndex (default `gemini-embedding-001`). |
+| `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
 
 Prefer **`.env.example`** as the authoritative list when in doubt.
 
@@ -80,7 +83,9 @@ Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
 |--------|------|--------|
 | `GET` | `/health` | Liveness. |
 | `POST` | `/extract` | Multipart: `game_id`；可选 `game_name`（展示用）、`terminology_context`（术语/知识库片段，对齐 Dify 中术语检索）；`file` 或 `file_url` 二选一；可选 `resume`、`job_id`。返回 `job_id` / `thread_id`；轮询 `GET /extract/{job_id}`。 |
-| `POST` | `/build-index` | Phase 2 (not implemented in this service yet). |
+| `POST` | `/build-index` | JSON: `game_id`, `merged_markdown`, optional `source_file`。写入每游戏独立目录（向量 + BM25 + `manifest.json`）。 |
+| `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
+| `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
 
 Request/response models live in `api/routers/extract.py`.
 
@@ -101,7 +106,7 @@ Request/response models live in `api/routers/extract.py`.
 services/rule_engine/
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
-  ingestion/        # LlamaParse loaders, node builders, vector stores
+  ingestion/        # LlamaParse loaders, node builders, index_builder (VectorStore + BM25 + hybrid + rerank)
   prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
   utils/            # Gemini client, pagination, retries, progress
   eval/             # Fixtures and evaluation notes

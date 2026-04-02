@@ -24,7 +24,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 | Area | Role |
 |------|------|
 | **apps/web** | Game metadata, rule uploads, task polling, extraction status; calls the rule engine via `RULE_ENGINE_URL` only. |
-| **services/rule_engine** | `POST /extract` (async + checkpoints), `GET /health`; Phase 2 adds `POST /build-index`; Phase 3 optional chat APIs. |
+| **services/rule_engine** | `POST /extract` (async + checkpoints), `POST /build-index` (per-game dense + BM25 + rerank), `GET /health`; Phase 3 optional chat APIs. |
 
 ## Tech stack (fixed)
 

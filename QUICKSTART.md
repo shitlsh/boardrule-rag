@@ -42,6 +42,9 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
 | `LANGCHAIN_ENDPOINT` | No | Override only if your LangSmith deployment requires it. |
+| `INDEX_STORAGE_ROOT` | No | Where per-game vector + BM25 indexes are stored (defaults under `services/rule_engine/data/indexes/`). |
+| `GEMINI_EMBEDDING_MODEL` | No | Gemini embedding model id for `POST /build-index` (default `gemini-embedding-001`). |
+| `RERANK_MODEL` | No | Cross-encoder name for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`; first run may download weights). |
 
 Add any service-specific variables introduced in `services/rule_engine/.env.example` (for example host/port or checkpoint DSN) as the codebase grows.
 
@@ -100,8 +103,11 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 ## 4. End-to-end smoke test
 
 1. Rule engine responds on `GET /health`.
-2. With keys set, trigger `POST /extract` (or the admin UI upload flow) using a small PDF once the route is implemented.
-3. Confirm the web app shows task status and `extractionJobId` / `extractionStatus` as designed.
+2. With `LLAMA_CLOUD_API_KEY` and `GOOGLE_API_KEY` set, run `POST /extract` on a PDF (or use `eval/fixtures/` 本地 PDF，见 `services/rule_engine/eval/README.md`)，轮询 `GET /extract/{job_id}` 至完成。
+3. **验收辅助**：将合并后的 Markdown 存盘，运行 `python services/rule_engine/eval/check_extraction_output.py merged.md --min-words 3000 --min-page-markers 5` 检查字数与 `<!-- pages: -->` 锚点数量。
+4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
+5. **索引（Phase 2）**：对合并结果调用 `POST /build-index`（JSON：`game_id`、`merged_markdown`、`source_file` 可选），再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…` 验证 hybrid + rerank 与 metadata（`pages`、`source_file` 等）。详细示例见 `services/rule_engine/eval/README.md`。
+6. Confirm the web app shows task status and `extractionJobId` / `extractionStatus` as designed.
 
 ## 5. Common issues
 
