@@ -19,3 +19,21 @@ export type ExtractPollResponse = {
   errors: string[];
   last_checkpoint_id: string | null;
 };
+
+/** Mirrors `POST /chat` on the rule engine (snake_case JSON). */
+export type ChatSourceRef = {
+  game_id: string | null;
+  source_file: string | null;
+  pages: string | null;
+  original_page_range: string | null;
+  page_start: number | null;
+  page_end: number | null;
+  text_preview: string | null;
+  score: number | null;
+};
+
+export type ChatResponse = {
+  answer: string;
+  game_id: string;
+  sources: ChatSourceRef[];
+};

@@ -25,6 +25,7 @@ cp .env.example .env
 | `CHECKPOINT_DB_PATH` | SQLite path for LangGraph checkpoints (development). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro. |
+| `GEMINI_CHAT_MODEL` / `GEMINI_CHAT_TEMPERATURE` / `GEMINI_CHAT_MAX_TOKENS` | Phase 3 `POST /chat` synthesis (defaults: chat model follows `GEMINI_FLASH_MODEL` or `gemini-2.0-flash`, temperature `0.2`, max tokens `8192`). |
 | `INDEX_STORAGE_ROOT` | Optional directory for per-game indexes (default `data/indexes/` under this service). |
 | `GEMINI_EMBEDDING_MODEL` | Gemini embedding id for LlamaIndex (default `gemini-embedding-001`). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
@@ -86,8 +87,9 @@ Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
 | `POST` | `/build-index` | JSON: `game_id`, `merged_markdown`, optional `source_file`。写入每游戏独立目录（向量 + BM25 + `manifest.json`）。 |
 | `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
 | `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
+| `POST` | `/chat` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）。需已 `POST /build-index`；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + Gemini）。 |
 
-Request/response models live in `api/routers/extract.py`.
+Request/response models live in `api/routers/extract.py`, `api/routers/index.py`, and `api/routers/chat.py`.
 
 ### Prompt placeholders（`{{GAME_NAME}}` / `{{TERM_CONTEXT}}`）
 
@@ -106,7 +108,7 @@ Request/response models live in `api/routers/extract.py`.
 services/rule_engine/
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
-  ingestion/        # LlamaParse loaders, node builders, index_builder (VectorStore + BM25 + hybrid + rerank)
+  ingestion/        # LlamaParse loaders, node builders, index_builder, rulebook_query (Phase 3 Q&A)
   prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
   utils/            # Gemini client, pagination, retries, progress
   eval/             # Fixtures and evaluation notes
