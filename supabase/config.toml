@@ -111,7 +111,7 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Storage buckets are created in supabase/migrations (game-assets). S3-compatible API: [storage.s3_protocol]
+# Storage buckets: see supabase/migrations (rulebook-raw, game-exports). S3-compatible API: [storage.s3_protocol]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]

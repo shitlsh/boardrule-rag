@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+
+import { prisma } from "@/lib/prisma";
+import { fetchGstoneRuleImageUrls } from "@/lib/gstone";
+
+export const runtime = "nodejs";
+
+type RouteParams = { params: Promise<{ gameId: string }> };
+
+export async function POST(req: Request, { params }: RouteParams) {
+  const { gameId } = await params;
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { id: true } });
+  if (!game) {
+    return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "请求体需为 JSON" }, { status: 400 });
+  }
+
+  const sourceUrl =
+    typeof body === "object" && body !== null && "sourceUrl" in body
+      ? String((body as { sourceUrl?: unknown }).sourceUrl ?? "").trim()
+      : "";
+
+  if (!sourceUrl) {
+    return NextResponse.json({ error: "请提供集石页面 URL（sourceUrl）" }, { status: 400 });
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch {
+    return NextResponse.json({ error: "URL 格式无效" }, { status: 400 });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return NextResponse.json({ error: "仅支持 http 或 https 链接" }, { status: 400 });
+  }
+
+  try {
+    const urls = await fetchGstoneRuleImageUrls(sourceUrl);
+    return NextResponse.json({ urls });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "解析规则图片失败";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
