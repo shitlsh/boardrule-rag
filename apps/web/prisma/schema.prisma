@@ -50,3 +50,19 @@ model Task {
 
   @@index([gameId])
 }
+
+/// Singleton row (`id = "default"`): ingestion limits and page raster hints for the rule engine.
+model AppSettings {
+  id String @id @default("default")
+
+  maxImageBytes      Int @default(10485760) // 10 MiB
+  maxPdfBytes        Int @default(52428800) // 50 MiB
+  maxMultiImageFiles Int @default(60)
+  maxPdfPages        Int @default(80)
+  maxGstoneImageUrls Int @default(80)
+  pageRasterDpi      Int @default(150)
+  pageRasterMaxSide  Int @default(2048)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -44,7 +44,9 @@ export type DownloadedImage = { name: string; buffer: Buffer };
 export async function downloadRuleImagesFromUrls(
   imageUrls: string[],
   refererUrl: string,
+  opts?: { maxBytesPerImage: number },
 ): Promise<DownloadedImage[]> {
+  const maxB = opts?.maxBytesPerImage;
   const results: DownloadedImage[] = [];
   for (let i = 0; i < imageUrls.length; i++) {
     const link = imageUrls[i];
@@ -55,6 +57,11 @@ export async function downloadRuleImagesFromUrls(
       throw new Error(`下载规则图片失败：${imgRes.status} ${link}`);
     }
     const arr = Buffer.from(await imgRes.arrayBuffer());
+    if (maxB !== undefined && arr.length > maxB) {
+      throw new Error(
+        `第 ${i + 1} 张规则图超过单张上限 ${maxB} 字节（约 ${(maxB / (1024 * 1024)).toFixed(1)} MiB）`,
+      );
+    }
     results.push({ name: `${String(i + 1).padStart(3, "0")}_page`, buffer: arr });
   }
   return results;

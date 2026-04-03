@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAppSettings } from "@/lib/app-settings";
 import { buildPagePreviewJson } from "@/lib/game-dto";
 import {
   prepareRulebookPages,
@@ -30,6 +31,7 @@ function parseExcludedIndices(raw: string | null): number[] {
 
 export async function POST(req: Request, { params }: RouteParams) {
   const { gameId } = await params;
+  const limits = await getAppSettings();
 
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
@@ -68,6 +70,12 @@ export async function POST(req: Request, { params }: RouteParams) {
         const keys = Array.isArray(body.storageKeys) ? body.storageKeys.filter((k) => typeof k === "string") : [];
         if (keys.length === 0) {
           return NextResponse.json({ message: "storageKeys required for mode=images" }, { status: 400 });
+        }
+        if (keys.length > limits.maxMultiImageFiles) {
+          return NextResponse.json(
+            { message: `一次最多 ${limits.maxMultiImageFiles} 张图片，当前 ${keys.length} 张` },
+            { status: 400 },
+          );
         }
         const data = await prepareRulebookPagesFromStorageImageKeys({ gameId, keys });
         return finalizePagination(gameId, data);
@@ -115,11 +123,23 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (files.length === 0) {
         return NextResponse.json({ message: "请至少选择一张图片" }, { status: 400 });
       }
+      if (files.length > limits.maxMultiImageFiles) {
+        return NextResponse.json(
+          { message: `一次最多 ${limits.maxMultiImageFiles} 张图片，当前 ${files.length} 张` },
+          { status: 400 },
+        );
+      }
       const images: { name: string; buffer: Buffer; contentType?: string }[] = [];
       for (const f of files) {
         const mime = f.type || "application/octet-stream";
         if (!allowedImage.has(mime)) {
           return NextResponse.json({ message: `不支持的图片类型: ${mime}` }, { status: 400 });
+        }
+        if (f.size > limits.maxImageBytes) {
+          return NextResponse.json(
+            { message: `图片 ${f.name || "未命名"} 超过单张上限 ${limits.maxImageBytes} 字节` },
+            { status: 400 },
+          );
         }
         const buf = Buffer.from(await f.arrayBuffer());
         images.push({ name: f.name || `page_${images.length}.png`, buffer: buf, contentType: mime });
@@ -136,6 +156,21 @@ export async function POST(req: Request, { params }: RouteParams) {
     const mime = file.type || "application/octet-stream";
     if (!allowedPdf.has(mime) && !allowedImage.has(mime)) {
       return NextResponse.json({ message: "仅支持 PDF 或图片文件" }, { status: 400 });
+    }
+
+    const name = (file.name || "").toLowerCase();
+    const treatAsPdf = allowedPdf.has(mime) || name.endsWith(".pdf");
+    if (treatAsPdf && file.size > limits.maxPdfBytes) {
+      return NextResponse.json(
+        { message: `PDF 超过单文件上限 ${limits.maxPdfBytes} 字节` },
+        { status: 400 },
+      );
+    }
+    if (!treatAsPdf && file.size > limits.maxImageBytes) {
+      return NextResponse.json(
+        { message: `图片超过单文件上限 ${limits.maxImageBytes} 字节` },
+        { status: 400 },
+      );
     }
 
     const buf = Buffer.from(await file.arrayBuffer());

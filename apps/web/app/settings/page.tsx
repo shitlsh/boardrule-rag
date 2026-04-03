@@ -1,5 +1,6 @@
 import { Cpu, Database, Info, Server, Settings } from "lucide-react";
 
+import { SettingsLimitsForm } from "@/components/settings-limits-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -79,18 +80,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle className="text-muted-foreground">更多设置</CardTitle>
-            <CardDescription>更多系统配置选项将在后续版本中添加</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="py-8 text-center text-muted-foreground">
-              <Settings className="mx-auto mb-4 h-12 w-12 opacity-30" />
-              <p className="text-sm">敬请期待</p>
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsLimitsForm />
       </div>
     </div>
   );
