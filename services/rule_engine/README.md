@@ -19,8 +19,7 @@ cp .env.example .env
 | Variable | Purpose |
 |----------|---------|
 | `GOOGLE_API_KEY` | Gemini API for Flash/Pro (vision + text). |
-| `DATABASE_URL` | Optional `postgresql://` — **PostgresSaver** for LangGraph and **pgvector** for `POST /build-index` (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. |
-| `CHECKPOINT_DB_PATH` | SQLite path for LangGraph when `DATABASE_URL` is not PostgreSQL. |
+| `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for `POST /build-index` when enabled (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. Optional: `RULE_ENGINE_CHECKPOINT_URL` if checkpoints should use a different URL. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
@@ -31,7 +30,6 @@ cp .env.example .env
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `GEMINI_EMBEDDING_MODEL` / `EMBEDDING_DIM` | Gemini embedding id and dimension for pgvector / indexing. |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
-| `LLAMA_CLOUD_API_KEY` | Optional legacy LlamaParse (`pip install -e ".[llamaparse]"`). |
 
 Prefer **`.env.example`** as the authoritative list when in doubt.
 
@@ -112,7 +110,7 @@ Request/response models live in `api/routers/extract.py`, `api/routers/index.py`
 services/rule_engine/
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
-  ingestion/        # Page raster, optional LlamaParse, node builders, index_builder, rulebook_query (Phase 3 Q&A)
+  ingestion/        # Page raster, node builders, index_builder, rulebook_query (Phase 3 Q&A)
   prompts/          # Markdown prompts (e.g. rule_style_core, toc_analyzer, chapter_extract_strict)
   utils/            # Gemini client, pagination, retries, progress
   eval/             # Fixtures and evaluation notes
@@ -122,7 +120,7 @@ services/rule_engine/
 
 - **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
 - **PDF rasterization**: Ensure poppler is installed; check `PAGE_RASTER_DPI` if pages fail to render.
-- **Optional LlamaParse**: Only if you installed `.[llamaparse]` and set `LLAMA_CLOUD_API_KEY`.
 - **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
+- **PostgreSQL required**: The API does not start without `DATABASE_URL` (or `RULE_ENGINE_CHECKPOINT_URL`) pointing at PostgreSQL; local SQLite checkpoints were removed.
 
 For full-stack local setup (web + engine), see the repository root **[QUICKSTART.md](../../QUICKSTART.md)**.

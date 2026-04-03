@@ -1,1 +1,1 @@
-"""Ingestion helpers: page rasterization, node builders, indexing, optional LlamaParse."""
+"""Ingestion helpers: page rasterization, node builders, indexing, RAG query."""

@@ -1,4 +1,4 @@
-"""FastAPI entrypoint: health, extraction, CORS, LangGraph compile + checkpoint backend."""
+"""FastAPI entrypoint: health, extraction, CORS, LangGraph compile + Postgres checkpoint backend."""
 
 from __future__ import annotations
 
@@ -10,12 +10,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from langgraph.checkpoint.sqlite import SqliteSaver
 
 from api.routers import chat, extract, health
 from api.routers import index as index_api
 from graphs.extraction_graph import build_extraction_graph
-from utils.paths import page_assets_root, service_root
+from utils.paths import page_assets_root
 
 load_dotenv()
 
@@ -41,19 +40,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _compiled_graph
     page_assets_root().mkdir(parents=True, exist_ok=True)
     pg_uri = _postgres_checkpoint_uri()
-    if pg_uri:
-        from langgraph.checkpoint.postgres import PostgresSaver
+    if not pg_uri:
+        raise RuntimeError(
+            "LangGraph checkpoints require PostgreSQL. Set DATABASE_URL or RULE_ENGINE_CHECKPOINT_URL "
+            "to a postgresql:// connection string (e.g. the same DATABASE_URL as apps/web: "
+            "postgresql://postgres:postgres@127.0.0.1:54322/postgres from `supabase status`). "
+            "Local SQLite checkpoints are no longer supported."
+        )
+    from langgraph.checkpoint.postgres import PostgresSaver
 
-        with PostgresSaver.from_conn_string(pg_uri) as checkpointer:
-            checkpointer.setup()
-            _compiled_graph = build_extraction_graph(checkpointer)
-            yield
-    else:
-        db_path = os.environ.get("CHECKPOINT_DB_PATH", str(service_root() / "checkpoints.sqlite"))
-        with SqliteSaver.from_conn_string(db_path) as checkpointer:
-            checkpointer.setup()
-            _compiled_graph = build_extraction_graph(checkpointer)
-            yield
+    with PostgresSaver.from_conn_string(pg_uri) as checkpointer:
+        checkpointer.setup()
+        _compiled_graph = build_extraction_graph(checkpointer)
+        yield
     _compiled_graph = None
 
 
