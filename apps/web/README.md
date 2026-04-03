@@ -13,7 +13,9 @@ cp .env.example .env
 | 变量 | 说明 |
 |------|------|
 | `RULE_ENGINE_URL` | 规则引擎根地址，如 `http://127.0.0.1:8000` |
-| `DATABASE_URL` | Prisma 连接串；本地 SQLite 示例见 `.env.example` |
+| `DATABASE_URL` | Prisma 连接串：**Supabase 本地**（`postgres`@`54322`，见 `supabase status`）或托管项目 |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 建议配置；上传与导出写入 **Supabase Storage**（默认桶 `game-assets`），且分页请求对规则引擎使用 **`file_url`** 而非重复传文件；未设置时使用本地 `storage/` |
+| `SUPABASE_STORAGE_BUCKET` | 可选；覆盖默认桶名 `game-assets` |
 
 数据库 URL 同时用于 **`prisma.config.ts`**（Prisma ORM 7）。客户端生成到 `generated/prisma/`（`postinstall` / `build` 时生成）。
 
@@ -33,6 +35,6 @@ npm run dev               # 默认 http://localhost:3000
 
 ## 存储
 
-上传与导出的规则/快读/问题默认在 `apps/web/storage/`（见 `.gitignore`），路径写入 `Game` 表。
+`Game` 表只保存 **对象键 / 相对路径**（如 `games/<id>/exports/rules.md`），不保存正文。若配置了 `SUPABASE_URL` 与 `SUPABASE_SERVICE_ROLE_KEY`，文件写入 Supabase Storage；否则使用 `apps/web/storage/`（见 `.gitignore`）。
 
 更完整的本地启动说明见仓库根目录 **[../QUICKSTART.md](../QUICKSTART.md)**。

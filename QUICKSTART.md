@@ -11,7 +11,7 @@ Follow these steps after cloning **`boardrule-rag`** to run the stack locally. K
 
 Recommended for the full stack:
 
-- **Docker** (for `docker compose` — PostgreSQL + **pgvector** at repo root).
+- [**Supabase CLI**](https://supabase.com/docs/guides/cli) — local Postgres (**pgvector**), Storage (S3-compatible API), Studio (`supabase start`).
 - **poppler** (for `pdf2image`; e.g. `brew install poppler` on macOS) on the machine running the rule engine.
 
 ## 1. Clone the repository
@@ -21,15 +21,38 @@ git clone <your-fork-or-upstream-url> boardrule-rag
 cd boardrule-rag
 ```
 
-## 2. Database (PostgreSQL + pgvector)
+## 2. Database & Storage (Supabase local)
 
-From the repository root:
+From the repository root (requires [Supabase CLI](https://supabase.com/docs/guides/cli)):
 
 ```bash
-docker compose up -d
+supabase start
 ```
 
-This starts Postgres with the **vector** extension (`infra/init/01-pgvector.sql`). Use a single `DATABASE_URL` for **`apps/web` (Prisma)** and optionally **`services/rule_engine`** (LangGraph Postgres checkpointer + LlamaIndex pgvector when `USE_PGVECTOR` is not disabled).
+- **Postgres**: typically `postgresql://postgres:postgres@127.0.0.1:54322/postgres` — confirm with `supabase status`.
+- **Studio**: `http://127.0.0.1:54323`
+- **Storage (S3-compatible)**: e.g. `http://127.0.0.1:54321/storage/v1/s3` — bucket **`game-assets`** is created by `supabase/migrations/`.
+
+**Migrations (two layers):**
+
+1. **Supabase SQL** (`supabase/migrations/`) — applied when the local stack starts or on `supabase db reset`: enables **pgvector**, creates the **`game-assets`** storage bucket.
+2. **Prisma** (`apps/web/prisma/`) — application tables (`Game`, `Task`). Apply after the DB is up:
+
+   ```bash
+   cd apps/web
+   cp .env.example .env   # set DATABASE_URL from `supabase status`
+   npx prisma migrate deploy   # or: prisma migrate dev — when iterating on schema
+   ```
+
+Production: point `DATABASE_URL` at your hosted Supabase project’s connection string; run `prisma migrate deploy` in CI or release. Set **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** so **`apps/web`** uses **Supabase Storage** for uploads and exports (recommended). Without them, files fall back to `apps/web/storage/` on disk. The database stores **paths/keys only**, not file bodies.
+
+Use one `DATABASE_URL` for **`apps/web` (Prisma)** and **`services/rule_engine`** when you want LangGraph **PostgresSaver** + **pgvector** in the same database (set `DATABASE_URL` / `PGVECTOR_DATABASE_URL` in the rule engine `.env`).
+
+### Rulebook upload and the rule engine
+
+When **`SUPABASE_URL`** and **`SUPABASE_SERVICE_ROLE_KEY`** are set, the web app uploads the PDF to Storage, then calls the rule engine **`POST /extract/pages`** with **`file_url`** (a short-lived signed HTTPS URL) instead of sending the file again in multipart form data. That shrinks the **Next.js → rule engine** request to a small form post. The engine already supports `file_url` (see `services/rule_engine/api/routers/extract.py`).
+
+**Vercel / serverless note:** the browser still uploads the full file to your Next route first, which can hit **request body size limits** on serverless. A further step is **presigned upload**: the client obtains a **PUT** URL from an API route, uploads **directly to Supabase Storage**, then notifies the app with the object key so the server only calls `/extract/pages` with `file_url`. That avoids large bodies on Vercel entirely; not implemented yet, but Storage + signed URLs are the intended foundation.
 
 ## 3. Rule engine (`services/rule_engine`)
 
@@ -48,7 +71,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | Yes | Google AI / Gemini API key (vision + text). |
-| `DATABASE_URL` | No | If set to a `postgresql://` URL, LangGraph uses **PostgresSaver** and `POST /build-index` can store vectors in **pgvector** (unless `USE_PGVECTOR=false`). |
+| `DATABASE_URL` | No | If set to a `postgresql://` URL, LangGraph uses **PostgresSaver** and `POST /build-index` can store vectors in **pgvector** (unless `USE_PGVECTOR=false`). Use the same URL as **`apps/web`** (Supabase local or hosted). |
 | `CHECKPOINT_DB_PATH` | No | SQLite checkpoints when `DATABASE_URL` is not PostgreSQL (default `checkpoints.sqlite`). |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
@@ -98,8 +121,9 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `RULE_ENGINE_URL` | Yes | Base URL of the rule engine, e.g. `http://localhost:8000`. The frontend must call **only** this backend (no Dify keys). |
-| `DATABASE_URL` | Yes | Prisma connection string. Use the same PostgreSQL as Docker Compose for a single-DB setup, or `file:./prisma/dev.db` for SQLite-only experiments. |
-| Storage | No | Uploads and exports default to `apps/web/storage/` (gitignored); paths are also stored on `Game` rows. |
+| `DATABASE_URL` | Yes | Prisma connection string: Supabase local (`postgres` on **54322**) or hosted project URL from the dashboard. |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Strongly recommended | Uploads and exports use **Supabase Storage** (bucket `game-assets` by default). Also enables **`file_url`** to the rule engine after upload (smaller server-to-engine requests). Without these, files use `apps/web/storage/` (gitignored) and the engine receives multipart `file` again. |
+| Storage | No | Defaults to `apps/web/storage/` if Supabase env vars are unset. |
 
 **Prisma ORM 7 notes:** The database URL is configured in `apps/web/prisma.config.ts` (with `dotenv` for CLI). The client is generated into `apps/web/generated/prisma/` (gitignored). `npm install` runs `prisma generate` via `postinstall`. At runtime, **`postgresql://`** URLs use `@prisma/adapter-pg` + `pg`; **`file:`** URLs use `@prisma/adapter-better-sqlite3` + `better-sqlite3`.
 
@@ -117,7 +141,7 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 ## 5. End-to-end smoke test
 
 1. Rule engine responds on `GET /health`.
-2. With `GOOGLE_API_KEY` set, call **`POST /extract/pages`** (multipart: `game_id`, `file`) to rasterize a PDF, then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI performs the same steps: upload → thumbnails → TOC/exclude → extract.)
+2. With `GOOGLE_API_KEY` set, call **`POST /extract/pages`** with `game_id` and either **`file`** (multipart) or **`file_url`** (form field) to rasterize a PDF, then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
 3. **验收辅助**：将合并后的 Markdown 存盘，运行 `python services/rule_engine/eval/check_extraction_output.py merged.md --min-words 3000 --min-page-markers 5` 检查字数与 `<!-- pages: -->` 锚点数量。
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
 5. **索引（Phase 2）**：调用 `POST /build-index`（JSON：`game_id` 与 `merged_markdown` **或** `documents[]`）。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
@@ -131,7 +155,7 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 | **Connection refused** to rule engine | Rule engine running; `RULE_ENGINE_URL` matches host/port (e.g. `http://127.0.0.1:8000`). |
 | **CORS errors** | Rule engine should allow the web origin only; ensure FastAPI CORS includes your Next dev origin (e.g. `http://localhost:3000`). |
 | **poppler / pdf2image errors** | Install poppler (`brew install poppler` on macOS); ensure `PAGE_RASTER_DPI` is reasonable. |
-| **PostgreSQL / migrate** | `docker compose up -d`; `DATABASE_URL` matches compose credentials; run `npx prisma migrate dev` in `apps/web`. |
+| **PostgreSQL / migrate** | `supabase start`; `DATABASE_URL` matches `supabase status`; run `npx prisma migrate deploy` (or `migrate dev`) in `apps/web`. |
 | **Gemini / `GOOGLE_API_KEY` errors** | Billing and API enablement for the Generative Language API in Google Cloud. |
 | **Port already in use** | Change `--port` for uvicorn or Next’s port via `-p` / `PORT`. |
 | **Prisma / DB errors** | `DATABASE_URL` correct; run `prisma migrate dev` after schema changes. |

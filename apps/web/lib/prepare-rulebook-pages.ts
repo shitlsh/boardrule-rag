@@ -1,5 +1,5 @@
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
-import { saveUploadedRules } from "@/lib/storage";
+import { createSignedReadUrl, saveUploadedRules, useSupabaseStorage } from "@/lib/storage";
 
 export type PreparedPagesResult = {
   job_id: string;
@@ -13,17 +13,26 @@ export async function prepareRulebookPages(params: {
   file: File;
   buffer: Buffer;
 }): Promise<PreparedPagesResult> {
-  await saveUploadedRules(params.gameId, params.file.name, params.buffer);
+  const { relativePath } = await saveUploadedRules(params.gameId, params.file.name, params.buffer);
 
   const base = getRuleEngineBaseUrl();
   const engineForm = new FormData();
   engineForm.append("game_id", params.gameId);
-  const bytes = new Uint8Array(params.buffer);
-  engineForm.append(
-    "file",
-    new Blob([bytes], { type: params.file.type || "application/pdf" }),
-    params.file.name || "rules.pdf",
-  );
+
+  if (useSupabaseStorage()) {
+    const signed = await createSignedReadUrl(relativePath, 3600);
+    if (!signed) {
+      throw new Error("Could not create signed URL for uploaded rulebook (check Supabase Storage)");
+    }
+    engineForm.append("file_url", signed);
+  } else {
+    const bytes = new Uint8Array(params.buffer);
+    engineForm.append(
+      "file",
+      new Blob([bytes], { type: params.file.type || "application/pdf" }),
+      params.file.name || "rules.pdf",
+    );
+  }
 
   const res = await fetch(`${base}/extract/pages`, { method: "POST", body: engineForm });
   const text = await res.text();

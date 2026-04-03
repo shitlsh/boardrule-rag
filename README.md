@@ -30,7 +30,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 
 - **Runtime**: Python **3.11+** (`services/rule_engine`).
 - **Web**: **Next.js 14** App Router, **TypeScript** (`apps/web`).
-- **Data**: **Prisma ORM 7** (`prisma.config.ts`); **PostgreSQL + pgvector** recommended (`docker-compose.yml`); SQLite still supported for quick experiments.
+- **Data**: **Prisma ORM 7** (`prisma.config.ts`); **PostgreSQL + pgvector** via **Supabase** (local `supabase start` or hosted). **Supabase Storage** (S3-compatible) for rule uploads and exports when configured — see **QUICKSTART.md**.
 - **Ingestion**: **pdf2image** + **poppler** (system) for PDF page renders; ordered images also supported.
 - **Orchestration**: **LangGraph** with checkpointing (**SQLite** or **PostgreSQL** via `DATABASE_URL`).
 - **RAG**: **LlamaIndex** (Phase 2: hybrid retrieval + rerank).
