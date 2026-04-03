@@ -6,7 +6,7 @@ Python service for board-game rule extraction: **PDF → per-page images** (`pdf
 
 - **Python 3.11+**
 - **poppler** (system) for `pdf2image` when rasterizing PDFs.
-- Virtual environment recommended (`.venv` in this directory or managed by `uv`).
+- Virtual environment recommended: **prefer a single `.venv` here** (`services/rule_engine/.venv`) and activate it before running this service. A second `.venv` at the monorepo root is a *different* environment unless you only use one of them — see **QUICKSTART.md** §3.2.5.
 
 ## Environment variables
 
@@ -83,9 +83,24 @@ Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
 
 Use the official CLI to run the extraction graph against the **LangGraph dev API** and open **Studio** for a visual graph and step debugging. Configuration lives in **`langgraph.json`**; the exported graph is **`langgraph_studio.py`** (same `StateGraph` as production, compiled **without** `PostgresSaver` so Studio does not require a running database for the graph definition itself).
 
-From `services/rule_engine` with dev dependencies installed:
+**Prerequisite:** `langgraph dev` imports `langgraph_studio.py`, which pulls in the full node stack (including `utils/gemini.py` and `google.generativeai`). The **same Python environment** that runs `langgraph` must have the rule engine installed in editable mode, not only `langgraph-cli`.
+
+From the repository root (with your venv activated), either:
 
 ```bash
+pip install -e "services/rule_engine/[dev]"
+```
+
+or from `services/rule_engine`:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Then start Studio:
+
+```bash
+cd services/rule_engine
 langgraph dev --config langgraph.json
 ```
 
@@ -134,6 +149,7 @@ services/rule_engine/
 
 ## Troubleshooting
 
+- **`ModuleNotFoundError: No module named 'google.generativeai'`** (when running `langgraph dev`): The interpreter used by `langgraph` does not have the rule engine’s dependencies. Install the package into that venv: `pip install -e "services/rule_engine/[dev]"` from the repo root, or `pip install -e ".[dev]"` from `services/rule_engine`. Confirm with `python -c "import google.generativeai"` using the same `python` as `which langgraph` points to (or `python -m langgraph dev ...` to force the venv’s Python).
 - **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
 - **PDF rasterization**: Ensure poppler is installed; check `PAGE_RASTER_DPI` if pages fail to render.
 - **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.

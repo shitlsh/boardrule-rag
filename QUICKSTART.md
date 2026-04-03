@@ -84,9 +84,23 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 
 See `services/rule_engine/.env.example` for the full list.
 
+### 3.2.5 Python: use one virtual environment
+
+A **virtual environment** (`.venv`) is just a folder with its own Python and `pip` installs. If you create **both** `<repo>/.venv` (at the monorepo root) and **`services/rule_engine/.venv`**, they are **two separate worlds** — installing packages in one does not affect the other. That is why commands like `langgraph` or `uvicorn` could fail with “module not found”: the shell was using a different `python` than you thought.
+
+**Recommendation for rule engine work:** use **only** `services/rule_engine/.venv`. Always:
+
+1. `cd services/rule_engine`
+2. `source .venv/bin/activate` (Windows: `.venv\Scripts\activate`)
+3. Run `uvicorn`, `langgraph`, `pytest`, etc.
+
+If you no longer need a stray **root** `.venv`, close any terminal using it and delete the `<repo>/.venv` folder to avoid confusion (you can always recreate it).
+
+**Optional:** one shared venv at the **repo root** is fine *instead* — create it at the root and run `pip install -e "services/rule_engine/[dev]"` once. Then every Python tool should use that same activated venv. Do not rely on two different `.venv` folders unless you know which terminal uses which.
+
 ### 3.3 Install and run
 
-After `pyproject.toml` is added to this service, from the repo root:
+From the repo root:
 
 ```bash
 cd services/rule_engine
@@ -109,7 +123,7 @@ curl -s http://127.0.0.1:8000/health
 
 ### 3.4 LangGraph Studio (optional)
 
-To inspect the extraction **LangGraph** in **Studio** (graph view and debugging), install dev dependencies as above, then from `services/rule_engine`:
+To inspect the extraction **LangGraph** in **Studio** (graph view and debugging), use the **same** venv as in §3.2.5 / §3.3 (`pip install -e ".[dev]"` must have succeeded in that environment). Then from `services/rule_engine`:
 
 ```bash
 langgraph dev --config langgraph.json
