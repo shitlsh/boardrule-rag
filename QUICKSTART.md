@@ -92,7 +92,7 @@ After `pyproject.toml` is added to this service, from the repo root:
 cd services/rule_engine
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"     # or: uv sync — see services/rule_engine/README.md
+pip install -e ".[dev]"     # or: uv sync --extra dev — see services/rule_engine/README.md
 ```
 
 Start the API (default dev port **8000**; exact module path follows the implemented package layout):
@@ -106,6 +106,16 @@ uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 curl -s http://127.0.0.1:8000/health
 ```
+
+### 3.4 LangGraph Studio (optional)
+
+To inspect the extraction **LangGraph** in **Studio** (graph view and debugging), install dev dependencies as above, then from `services/rule_engine`:
+
+```bash
+langgraph dev --config langgraph.json
+```
+
+This starts the LangGraph dev API (another port, often **2024**) and is separate from `uvicorn` on **8000**. Details: **[services/rule_engine/README.md](./services/rule_engine/README.md)** (section **LangGraph Studio**).
 
 ## 4. Web app (`apps/web`)
 

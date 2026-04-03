@@ -48,10 +48,10 @@ pip install -e ".[dev]"
 **uv** (if the project standardizes on it)
 
 ```bash
-uv sync
+uv sync --extra dev
 ```
 
-Use whatever install command your `pyproject.toml` documents; the repo root **QUICKSTART.md** mirrors high-level steps.
+The `dev` extra includes **`langgraph-cli[inmem]`** for local LangGraph Studio (see below). Use whatever install command your `pyproject.toml` documents; the repo root **QUICKSTART.md** mirrors high-level steps.
 
 ## Run the API
 
@@ -78,6 +78,20 @@ export LANGCHAIN_PROJECT=boardrule-rag
 ```
 
 Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
+
+## LangGraph Studio (CLI)
+
+Use the official CLI to run the extraction graph against the **LangGraph dev API** and open **Studio** for a visual graph and step debugging. Configuration lives in **`langgraph.json`**; the exported graph is **`langgraph_studio.py`** (same `StateGraph` as production, compiled **without** `PostgresSaver` so Studio does not require a running database for the graph definition itself).
+
+From `services/rule_engine` with dev dependencies installed:
+
+```bash
+langgraph dev --config langgraph.json
+```
+
+The process prints a local API base URL (often `http://127.0.0.1:2024`). Open **LangGraph Studio** in the browser (the CLI may offer a link; default Studio host is documented in `langgraph dev --help` via `--studio-url`). If your browser or network blocks `localhost`, run with `--tunnel`.
+
+This is **in addition to** the FastAPI server (`uvicorn api.main:app`, port **8000** by default). Studio uses its own port (commonly **2024**); they do not conflict.
 
 ## API surface
 
@@ -108,6 +122,8 @@ Request/response models live in `api/routers/extract.py`, `api/routers/index.py`
 
 ```text
 services/rule_engine/
+  langgraph.json    # LangGraph CLI: dependencies + graph entrypoint for Studio
+  langgraph_studio.py  # `graph` export for `langgraph dev` (no Postgres checkpointer)
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
   ingestion/        # Page raster, node builders, index_builder, rulebook_query (Phase 3 Q&A)
