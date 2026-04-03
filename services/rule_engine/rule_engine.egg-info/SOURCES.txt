@@ -20,7 +20,6 @@ graphs/nodes/toc_analyzer.py
 ingestion/__init__.py
 ingestion/hybrid_retriever.py
 ingestion/index_builder.py
-ingestion/llamaparse_loader.py
 ingestion/node_builders.py
 ingestion/page_jobs.py
 ingestion/page_raster.py

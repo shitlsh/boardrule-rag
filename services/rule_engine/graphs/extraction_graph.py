@@ -1,4 +1,4 @@
-"""LangGraph six-node extraction pipeline with optional Sqlite checkpointer."""
+"""LangGraph six-node extraction pipeline with a Postgres checkpointer."""
 
 from __future__ import annotations
 

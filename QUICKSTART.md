@@ -46,7 +46,7 @@ supabase start
 
 Production: point `DATABASE_URL` at your hosted Supabase project’s connection string; run `prisma migrate deploy` in CI or release. Set **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** so **`apps/web`** uses **Supabase Storage** for uploads and exports (recommended). Without them, files fall back to `apps/web/storage/` on disk. The database stores **paths/keys only**, not file bodies.
 
-Use one `DATABASE_URL` for **`apps/web` (Prisma)** and **`services/rule_engine`** when you want LangGraph **PostgresSaver** + **pgvector** in the same database (set `DATABASE_URL` / `PGVECTOR_DATABASE_URL` in the rule engine `.env`).
+Use the same `DATABASE_URL` for **`apps/web` (Prisma)** and **`services/rule_engine`** — the engine **requires** PostgreSQL for LangGraph checkpoints (there is no SQLite fallback). This also enables **pgvector** for indexing when configured (set `DATABASE_URL` / `PGVECTOR_DATABASE_URL` in the rule engine `.env`).
 
 ### Rulebook upload and the rule engine
 
@@ -71,8 +71,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | Yes | Google AI / Gemini API key (vision + text). |
-| `DATABASE_URL` | No | If set to a `postgresql://` URL, LangGraph uses **PostgresSaver** and `POST /build-index` can store vectors in **pgvector** (unless `USE_PGVECTOR=false`). Use the same URL as **`apps/web`** (Supabase local or hosted). |
-| `CHECKPOINT_DB_PATH` | No | SQLite checkpoints when `DATABASE_URL` is not PostgreSQL (default `checkpoints.sqlite`). |
+| `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and `POST /build-index` vectors in **pgvector** when enabled. Use the same URL as **`apps/web`** (Supabase local or hosted). Optional override: `RULE_ENGINE_CHECKPOINT_URL` for checkpoints only. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
@@ -82,8 +81,6 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | `GEMINI_EMBEDDING_MODEL` | No | Gemini embedding model id for `POST /build-index` (default `gemini-embedding-001`). |
 | `EMBEDDING_DIM` | No | Must match the embedding model (default `3072` for `gemini-embedding-001`). |
 | `RERANK_MODEL` | No | Cross-encoder name for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`; first run may download weights). |
-
-Optional: `LLAMA_CLOUD_API_KEY` only if you install the extra `llamaparse` optional dependency for legacy parsing (not used by the default vision path).
 
 See `services/rule_engine/.env.example` for the full list.
 
@@ -157,7 +154,8 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 | **Connection refused** to rule engine | Rule engine running; `RULE_ENGINE_URL` matches host/port (e.g. `http://127.0.0.1:8000`). |
 | **CORS errors** | Rule engine should allow the web origin only; ensure FastAPI CORS includes your Next dev origin (e.g. `http://localhost:3000`). |
 | **poppler / pdf2image errors** | Install poppler (`brew install poppler` on macOS); ensure `PAGE_RASTER_DPI` is reasonable. |
-| **PostgreSQL / migrate** | `supabase start`; `DATABASE_URL` matches `supabase status`; run `npx prisma migrate deploy` (or `migrate dev`) in `apps/web`. |
+| **PostgreSQL / migrate** | `supabase start`; `DATABASE_URL` matches `supabase status` in **both** `apps/web/.env` and `services/rule_engine/.env`; run `npx prisma migrate deploy` (or `migrate dev`) in `apps/web`. |
+| **Rule engine exits on startup** | Set `DATABASE_URL=postgresql://...` for the engine (see `services/rule_engine/.env.example`). SQLite checkpoints are not supported. |
 | **Gemini / `GOOGLE_API_KEY` errors** | Billing and API enablement for the Generative Language API in Google Cloud. |
 | **Port already in use** | Change `--port` for uvicorn or Next’s port via `-p` / `PORT`. |
 | **Prisma / DB errors** | `DATABASE_URL` correct; run `prisma migrate dev` after schema changes. |

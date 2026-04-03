@@ -1,4 +1,4 @@
-"""Rasterize PDF to per-page images (no LlamaParse)."""
+"""Rasterize PDF to per-page images."""
 
 from __future__ import annotations
 
