@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAppSettings } from "@/lib/app-settings";
 import { prisma } from "@/lib/prisma";
 import { fetchGstoneRuleImageUrls } from "@/lib/gstone";
 
@@ -41,7 +42,16 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   try {
+    const limits = await getAppSettings();
     const urls = await fetchGstoneRuleImageUrls(sourceUrl);
+    if (urls.length > limits.maxGstoneImageUrls) {
+      return NextResponse.json(
+        {
+          error: `集石页面解析出 ${urls.length} 张图，超过上限 ${limits.maxGstoneImageUrls} 张（可在系统设置中调整）`,
+        },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ urls });
   } catch (err) {
     const message = err instanceof Error ? err.message : "解析规则图片失败";

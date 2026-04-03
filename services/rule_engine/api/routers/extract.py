@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 import uuid
+from functools import partial
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -170,6 +172,40 @@ def _download_to_temp(url: str) -> Path:
     return p
 
 
+def _parse_int_form(
+    raw: str | None,
+    *,
+    env_key: str,
+    default: int,
+    field: str,
+) -> int:
+    if raw is None or str(raw).strip() == "":
+        ev = os.environ.get(env_key, "").strip()
+        return int(ev) if ev.isdigit() else default
+    try:
+        n = int(str(raw).strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"{field} 必须是整数") from e
+    if n < 1:
+        raise HTTPException(status_code=400, detail=f"{field} 必须 ≥ 1")
+    return n
+
+
+def _parse_max_side_form(raw: str | None) -> int | None:
+    if raw is None or str(raw).strip() == "":
+        ev = os.environ.get("PAGE_RASTER_MAX_SIDE", "2048").strip()
+        if ev == "" or ev.lower() in ("0", "none", "off"):
+            return None
+        return int(ev) if ev.isdigit() else 2048
+    try:
+        n = int(str(raw).strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="page_raster_max_side 必须是整数") from e
+    if n <= 0:
+        return None
+    return n
+
+
 def _public_page_url(job_id: str, filename: str) -> str:
     base = os.environ.get("RULE_ENGINE_PUBLIC_URL", "").strip().rstrip("/")
     rel = f"/page-assets/{job_id}/{filename}"
@@ -184,14 +220,54 @@ async def prepare_rulebook_pages(
     file: UploadFile | None = File(None),
     file_url: str | None = Form(None),
     files: list[UploadFile] | None = File(None),
+    page_raster_dpi: str | None = Form(None),
+    page_raster_max_side: str | None = Form(None),
+    max_pages: str | None = Form(None),
+    max_multi_image_files: str | None = Form(None),
+    max_pdf_bytes: str | None = Form(None),
+    max_image_bytes: str | None = Form(None),
 ) -> ExtractPagesResponse:
     """
     Rasterize a PDF or register ordered images as page PNGs. Returns a `job_id` for `POST /extract`
     together with TOC / exclude page selections.
+
+    Optional form fields (defaults from env or built-ins) enforce size/page limits and raster options.
     """
     multi = files or []
     if not file and not file_url and len(multi) == 0:
         raise HTTPException(status_code=400, detail="Provide `file`, `file_url`, or multiple `files`")
+
+    dpi_val = _parse_int_form(
+        page_raster_dpi,
+        env_key="PAGE_RASTER_DPI",
+        default=150,
+        field="page_raster_dpi",
+    )
+    max_side_val = _parse_max_side_form(page_raster_max_side)
+    max_pages_val = _parse_int_form(
+        max_pages,
+        env_key="RULEBOOK_MAX_PAGES",
+        default=80,
+        field="max_pages",
+    )
+    max_multi_val = _parse_int_form(
+        max_multi_image_files,
+        env_key="RULEBOOK_MAX_MULTI_IMAGE_FILES",
+        default=60,
+        field="max_multi_image_files",
+    )
+    max_pdf_b = _parse_int_form(
+        max_pdf_bytes,
+        env_key="RULEBOOK_MAX_PDF_BYTES",
+        default=52428800,
+        field="max_pdf_bytes",
+    )
+    max_img_b = _parse_int_form(
+        max_image_bytes,
+        env_key="RULEBOOK_MAX_IMAGE_BYTES",
+        default=10485760,
+        field="max_image_bytes",
+    )
 
     jid = str(uuid.uuid4())
     root = page_assets_root()
@@ -201,19 +277,34 @@ async def prepare_rulebook_pages(
     tmp_paths: list[Path] = []
     try:
         if len(multi) > 0:
+            nonempty = [uf for uf in multi if uf.filename]
+            if len(nonempty) > max_multi_val:
+                shutil.rmtree(out_dir, ignore_errors=True)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"一次最多上传 {max_multi_val} 张图片，当前 {len(nonempty)} 张",
+                )
             paths: list[Path] = []
-            for uf in multi:
-                if not uf.filename:
-                    continue
-                fd, raw = tempfile.mkstemp(suffix=Path(uf.filename).suffix or ".png")
+            for uf in nonempty:
+                raw_bytes = await uf.read()
+                if len(raw_bytes) > max_img_b:
+                    shutil.rmtree(out_dir, ignore_errors=True)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"图片 {uf.filename} 超过单张上限 {max_img_b} 字节",
+                    )
+                fd, raw_path = tempfile.mkstemp(suffix=Path(uf.filename).suffix or ".png")
                 os.close(fd)
-                pth = Path(raw)
-                pth.write_bytes(await uf.read())
+                pth = Path(raw_path)
+                pth.write_bytes(raw_bytes)
                 tmp_paths.append(pth)
                 paths.append(pth)
             if not paths:
+                shutil.rmtree(out_dir, ignore_errors=True)
                 raise HTTPException(status_code=400, detail="No usable files in `files`")
-            assets, meta = await asyncio.to_thread(import_ordered_images_to_dir, paths, out_dir)
+            assets, meta = await asyncio.to_thread(
+                partial(import_ordered_images_to_dir, paths, out_dir, max_side=max_side_val),
+            )
             src_name = "image_set"
         else:
             if file_url:
@@ -233,9 +324,32 @@ async def prepare_rulebook_pages(
 
             suf = local.suffix.lower()
             if suf == ".pdf":
-                assets, meta = await asyncio.to_thread(rasterize_pdf_to_dir, local, out_dir)
+                if local.stat().st_size > max_pdf_b:
+                    shutil.rmtree(out_dir, ignore_errors=True)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"PDF 超过单文件上限 {max_pdf_b} 字节",
+                    )
+                assets, meta = await asyncio.to_thread(
+                    partial(rasterize_pdf_to_dir, local, out_dir, dpi=dpi_val, max_side=max_side_val),
+                )
             else:
-                assets, meta = await asyncio.to_thread(import_ordered_images_to_dir, [local], out_dir)
+                if local.stat().st_size > max_img_b:
+                    shutil.rmtree(out_dir, ignore_errors=True)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"图片超过单文件上限 {max_img_b} 字节",
+                    )
+                assets, meta = await asyncio.to_thread(
+                    partial(import_ordered_images_to_dir, [local], out_dir, max_side=max_side_val),
+                )
+
+        if len(assets) > max_pages_val:
+            shutil.rmtree(out_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"分页后共 {len(assets)} 页，超过上限 {max_pages_val} 页",
+            )
 
         register_job(jid, src_name, assets, meta)
 

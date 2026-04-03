@@ -23,6 +23,16 @@ interface ExtractionPanelProps {
 
 type SourceTab = "pdf" | "images" | "gstone";
 
+type RulebookLimits = {
+  maxImageBytes: number;
+  maxPdfBytes: number;
+  maxMultiImageFiles: number;
+  maxPdfPages: number;
+  maxGstoneImageUrls: number;
+  pageRasterDpi: number;
+  pageRasterMaxSide: number;
+};
+
 function cycleRole(current: PagePickRole): PagePickRole {
   if (current === "none") return "toc";
   if (current === "toc") return "exclude";
@@ -45,6 +55,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
   const [gstonePreviewUrls, setGstonePreviewUrls] = useState<string[] | null>(null);
   const [gstoneExcluded, setGstoneExcluded] = useState<Set<number>>(new Set());
   const [loadingGstonePreview, setLoadingGstonePreview] = useState(false);
+  const [limits, setLimits] = useState<RulebookLimits | null>(null);
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +63,19 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
   useEffect(() => {
     setRoleByPage({});
   }, [game.paginationJobId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setLimits(data as RulebookLimits);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleGstoneExcluded = (index: number) => {
     setGstoneExcluded((prev) => {
@@ -191,11 +215,31 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           toast.error("请选择 PDF 文件");
           return;
         }
+        if (limits && pdfFile.size > limits.maxPdfBytes) {
+          toast.error(
+            `PDF 超过单文件上限（约 ${(limits.maxPdfBytes / (1024 * 1024)).toFixed(0)} MiB，可在系统设置调整）`,
+          );
+          return;
+        }
         await uploadPdfWithPresignFallback(pdfFile);
       } else if (tab === "images") {
         if (imageFiles.length === 0) {
           toast.error("请至少选择一张图片");
           return;
+        }
+        if (limits) {
+          if (imageFiles.length > limits.maxMultiImageFiles) {
+            toast.error(`一次最多 ${limits.maxMultiImageFiles} 张图片（系统设置可调整）`);
+            return;
+          }
+          for (const f of imageFiles) {
+            if (f.size > limits.maxImageBytes) {
+              toast.error(
+                `图片 ${f.name || "未命名"} 超过单张上限（约 ${(limits.maxImageBytes / (1024 * 1024)).toFixed(0)} MiB）`,
+              );
+              return;
+            }
+          }
         }
         await uploadImagesWithPresignFallback(imageFiles);
       } else {
@@ -277,6 +321,17 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           </CardTitle>
           <CardDescription>
             选择 PDF、多张图片或集石链接；确认后再提交分页（大文件可直传 Storage，不经 Vercel 请求体）。
+            {limits ? (
+              <span className="mt-1 block text-xs">
+                当前限制：PDF ≤ {(limits.maxPdfBytes / (1024 * 1024)).toFixed(0)} MiB，单图 ≤{" "}
+                {(limits.maxImageBytes / (1024 * 1024)).toFixed(0)} MiB，多图 ≤ {limits.maxMultiImageFiles}{" "}
+                张，分页后总页数 ≤ {limits.maxPdfPages}，集石链接 ≤ {limits.maxGstoneImageUrls}（可在
+                <a href="/settings" className="underline underline-offset-2">
+                  系统设置
+                </a>
+                调整）。
+              </span>
+            ) : null}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
