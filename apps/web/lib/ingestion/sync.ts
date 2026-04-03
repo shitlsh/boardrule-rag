@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { writeGameExports } from "@/lib/storage";
+import { deleteRawUploadsForGame, writeGameExports } from "@/lib/storage";
 import { getExtractJob } from "./client";
 import type { ExtractJobStatus } from "./types";
 
@@ -140,6 +140,8 @@ export async function syncTaskFromRuleEngine(taskId: string) {
         progressJson,
       },
     });
+
+    await deleteRawUploadsForGame(task.gameId).catch(() => undefined);
   } else if (poll.status === "failed") {
     await prisma.game.update({
       where: { id: task.gameId },

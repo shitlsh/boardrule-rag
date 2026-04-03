@@ -31,11 +31,11 @@ supabase start
 
 - **Postgres**: typically `postgresql://postgres:postgres@127.0.0.1:54322/postgres` — confirm with `supabase status`.
 - **Studio**: `http://127.0.0.1:54323`
-- **Storage (S3-compatible)**: e.g. `http://127.0.0.1:54321/storage/v1/s3` — bucket **`game-assets`** is created by `supabase/migrations/`.
+- **Storage (S3-compatible)**: e.g. `http://127.0.0.1:54321/storage/v1/s3` — buckets **`rulebook-raw`** and **`game-exports`** are created by `supabase/migrations/`.
 
 **Migrations (two layers):**
 
-1. **Supabase SQL** (`supabase/migrations/`) — applied when the local stack starts or on `supabase db reset`: enables **pgvector**, creates the **`game-assets`** storage bucket.
+1. **Supabase SQL** (`supabase/migrations/`) — applied when the local stack starts or on `supabase db reset`: enables **pgvector**, creates **`rulebook-raw`** and **`game-exports`** storage buckets.
 2. **Prisma** (`apps/web/prisma/`) — application tables (`Game`, `Task`). Apply after the DB is up:
 
    ```bash
@@ -122,8 +122,10 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 |----------|----------|-------------|
 | `RULE_ENGINE_URL` | Yes | Base URL of the rule engine, e.g. `http://localhost:8000`. The frontend must call **only** this backend (no Dify keys). |
 | `DATABASE_URL` | Yes | Prisma connection string: Supabase local (`postgres` on **54322**) or hosted project URL from the dashboard. |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Strongly recommended | Uploads and exports use **Supabase Storage** (bucket `game-assets` by default). Also enables **`file_url`** to the rule engine after upload (smaller server-to-engine requests). Without these, files use `apps/web/storage/` (gitignored) and the engine receives multipart `file` again. |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Strongly recommended | Use **raw** + **exports** buckets (`SUPABASE_STORAGE_BUCKET_RAW` / `SUPABASE_STORAGE_BUCKET_EXPORTS`, see `apps/web/.env.example`). Raw uploads can be removed after extraction completes. **Presigned upload**: `POST /api/games/[gameId]/upload-sign` then JSON `POST .../upload` with `storageKey`. Without Supabase, files use `apps/web/storage/`. |
 | Storage | No | Defaults to `apps/web/storage/` if Supabase env vars are unset. |
+
+**Web rulebook UI:** game detail page supports **PDF**, **multiple images**, or **Gstone URL** (preview API), then **thumbnail click** for TOC/exclude before extract.
 
 **Prisma ORM 7 notes:** The database URL is configured in `apps/web/prisma.config.ts` (with `dotenv` for CLI). The client is generated into `apps/web/generated/prisma/` (gitignored). `npm install` runs `prisma generate` via `postinstall`. At runtime, **`postgresql://`** URLs use `@prisma/adapter-pg` + `pg`; **`file:`** URLs use `@prisma/adapter-better-sqlite3` + `better-sqlite3`.
 
