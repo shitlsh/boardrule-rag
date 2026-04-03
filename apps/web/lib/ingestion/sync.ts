@@ -126,8 +126,6 @@ export async function syncTaskFromRuleEngine(taskId: string) {
         rulesMarkdownPath: paths.rulesMarkdownPath,
         quickStartGuidePath: paths.quickStartGuidePath,
         startQuestionsPath: paths.startQuestionsPath,
-        quickStartGuide: poll.quick_start,
-        startQuestions: JSON.stringify(poll.suggested_questions ?? []),
         extractionStatus: "COMPLETED",
         extractionJobId: task.jobId,
         lastCheckpointId: poll.last_checkpoint_id,

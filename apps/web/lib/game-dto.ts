@@ -1,10 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import type { Game as PrismaGame, Task as PrismaTask } from "../generated/prisma/client";
 
 import { parseProgressJson } from "@/lib/progress";
-import { getStorageRoot } from "@/lib/storage";
+import { readStorageText } from "@/lib/storage";
 import type { ExtractionStatus, ExtractionTask, Game, PageThumbnail, TaskStatus } from "@/lib/types";
 
 export function mapGameExtractionStatus(raw: string | null): ExtractionStatus {
@@ -51,13 +48,7 @@ function parseSuggestedQuestions(raw: string | null): string[] | undefined {
 }
 
 export async function readRulesMarkdownFromDisk(game: PrismaGame): Promise<string | undefined> {
-  if (!game.rulesMarkdownPath) return undefined;
-  const abs = path.join(getStorageRoot(), ...game.rulesMarkdownPath.split("/"));
-  try {
-    return await fs.readFile(abs, "utf8");
-  } catch {
-    return undefined;
-  }
+  return readStorageText(game.rulesMarkdownPath);
 }
 
 export function pagePreviewToThumbnails(json: string | null): PageThumbnail[] {
@@ -90,7 +81,10 @@ export function buildPagePreviewJson(pages: { page: number; url: string }[]): st
   return JSON.stringify(thumbs);
 }
 
-export function prismaGameToDto(game: PrismaGame, extras?: { rulesMarkdown?: string }): Game {
+export function prismaGameToDto(
+  game: PrismaGame,
+  extras?: { rulesMarkdown?: string; quickStart?: string; suggestedQuestions?: string[] },
+): Game {
   const isIndexed = Boolean(game.indexId || game.vectorStoreId);
   return {
     id: game.id,
@@ -105,16 +99,25 @@ export function prismaGameToDto(game: PrismaGame, extras?: { rulesMarkdown?: str
     extractionJobId: game.extractionJobId ?? undefined,
     lastCheckpointId: game.lastCheckpointId ?? undefined,
     rulesMarkdown: extras?.rulesMarkdown,
-    quickStart: game.quickStartGuide ?? undefined,
-    suggestedQuestions: parseSuggestedQuestions(game.startQuestions),
+    quickStart: extras?.quickStart,
+    suggestedQuestions: extras?.suggestedQuestions,
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString(),
   };
 }
 
 export async function prismaGameToDetailDto(game: PrismaGame): Promise<Game> {
-  const md = await readRulesMarkdownFromDisk(game);
-  return prismaGameToDto(game, { rulesMarkdown: md });
+  const [md, quickRaw, questionsRaw] = await Promise.all([
+    readRulesMarkdownFromDisk(game),
+    readStorageText(game.quickStartGuidePath),
+    readStorageText(game.startQuestionsPath),
+  ]);
+  const suggestedQuestions = questionsRaw ? parseSuggestedQuestions(questionsRaw) : undefined;
+  return prismaGameToDto(game, {
+    rulesMarkdown: md,
+    quickStart: quickRaw ?? undefined,
+    suggestedQuestions,
+  });
 }
 
 export function prismaTaskToExtractionTask(t: PrismaTask): ExtractionTask {

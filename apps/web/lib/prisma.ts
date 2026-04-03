@@ -15,8 +15,8 @@ function createClient(): PrismaClient {
   if (url.startsWith("file:")) {
     throw new Error(
       "Prisma schema uses provider `postgresql`, but DATABASE_URL is SQLite (file:...). " +
-        "They cannot be mixed. Start Postgres (e.g. `docker compose up -d` from the repo root) and set " +
-        "DATABASE_URL=postgresql://boardrule:boardrule@localhost:5432/boardrule — see apps/web/.env.example.",
+        "They cannot be mixed. Run `supabase start` and set DATABASE_URL to the Postgres URL from " +
+        "`supabase status` — see apps/web/.env.example.",
     );
   }
 

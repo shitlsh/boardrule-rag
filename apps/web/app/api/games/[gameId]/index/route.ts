@@ -1,11 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import { NextResponse } from "next/server";
 
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
-import { getStorageRoot } from "@/lib/storage";
+import { readStorageText } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -21,11 +18,8 @@ export async function POST(_req: Request, { params }: RouteParams) {
     return NextResponse.json({ message: "尚未提取规则正文，无法建索引" }, { status: 400 });
   }
 
-  const abs = path.join(getStorageRoot(), ...game.rulesMarkdownPath.split("/"));
-  let merged: string;
-  try {
-    merged = await fs.readFile(abs, "utf8");
-  } catch {
+  const merged = await readStorageText(game.rulesMarkdownPath);
+  if (merged === undefined) {
     return NextResponse.json({ message: "无法读取规则文件" }, { status: 400 });
   }
   if (!merged.trim()) {

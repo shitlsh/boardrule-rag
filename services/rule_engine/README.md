@@ -19,7 +19,7 @@ cp .env.example .env
 | Variable | Purpose |
 |----------|---------|
 | `GOOGLE_API_KEY` | Gemini API for Flash/Pro (vision + text). |
-| `DATABASE_URL` | Optional `postgresql://` — **PostgresSaver** for LangGraph and **pgvector** for `POST /build-index` (set `USE_PGVECTOR=false` to keep vectors on disk). |
+| `DATABASE_URL` | Optional `postgresql://` — **PostgresSaver** for LangGraph and **pgvector** for `POST /build-index` (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. |
 | `CHECKPOINT_DB_PATH` | SQLite path for LangGraph when `DATABASE_URL` is not PostgreSQL. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |

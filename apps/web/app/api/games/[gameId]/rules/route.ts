@@ -1,10 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { getStorageRoot } from "@/lib/storage";
+import { readStorageText } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -19,11 +16,9 @@ export async function GET(_req: Request, { params }: RouteParams) {
   if (!game.rulesMarkdownPath) {
     return NextResponse.json({ markdown: null });
   }
-  const abs = path.join(getStorageRoot(), game.rulesMarkdownPath);
-  try {
-    const markdown = await fs.readFile(abs, "utf8");
-    return NextResponse.json({ markdown });
-  } catch {
+  const markdown = await readStorageText(game.rulesMarkdownPath);
+  if (markdown === undefined) {
     return NextResponse.json({ error: "Could not read rules file" }, { status: 400 });
   }
+  return NextResponse.json({ markdown });
 }

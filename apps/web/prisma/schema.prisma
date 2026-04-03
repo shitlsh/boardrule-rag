@@ -7,7 +7,8 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Board game metadata and extraction artifacts (paths relative to storage root when set).
+/// Board game metadata and extraction artifacts.
+/// Path fields are object keys (Supabase Storage) or paths under apps/web/storage/ — never inline file bodies.
 model Game {
   id                  String   @id @default(cuid())
   name                String
@@ -17,9 +18,6 @@ model Game {
   rulesMarkdownPath   String?
   quickStartGuidePath String?
   startQuestionsPath  String?
-  quickStartGuide     String?
-  /// JSON array of suggested questions (string column for SQLite portability).
-  startQuestions      String?
   indexId             String?
   vectorStoreId       String?
   extractionStatus    String?

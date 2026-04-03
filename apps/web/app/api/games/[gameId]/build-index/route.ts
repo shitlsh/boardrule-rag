@@ -1,11 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import { NextResponse } from "next/server";
 
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
-import { getStorageRoot } from "@/lib/storage";
+import { readStorageText } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -24,11 +21,8 @@ export async function POST(_req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "No extracted rules yet (rulesMarkdownPath is empty)" }, { status: 400 });
   }
 
-  const abs = path.join(getStorageRoot(), ...game.rulesMarkdownPath.split("/"));
-  let merged: string;
-  try {
-    merged = await fs.readFile(abs, "utf8");
-  } catch {
+  const merged = await readStorageText(game.rulesMarkdownPath);
+  if (merged === undefined) {
     return NextResponse.json({ error: "Could not read rules markdown from storage" }, { status: 400 });
   }
   if (!merged.trim()) {
