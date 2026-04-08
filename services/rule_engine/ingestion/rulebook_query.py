@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import Field
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.response_synthesizers import get_response_synthesizer
+from llama_index.core.response_synthesizers import ResponseMode, get_response_synthesizer
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.llms.google_genai import GoogleGenAI
 from ingestion.bm25_retriever import BoardruleBM25Retriever
@@ -80,16 +82,27 @@ class PageMetadataPrefixPostprocessor(BaseNodePostprocessor):
         return out
 
 
+def _load_chat_system_markdown() -> str:
+    """Persona + rules from ``prompts/chat_system.md`` (single source for chat tone)."""
+    path = Path(__file__).resolve().parent.parent / "prompts" / "chat_system.md"
+    if path.is_file():
+        return path.read_text(encoding="utf-8").strip()
+    return (
+        "你是桌游规则助手。仅根据下方「规则书片段」回答，使用简体中文。\n"
+        "若片段不足以回答，请明确说明「规则书中未找到相关说明」。"
+    )
+
+
+# One-shot QA: ``simple_summarize`` avoids ``compact``'s multi-step **English** ``refine`` prompts.
 _RULE_QA_TEMPLATE = PromptTemplate(
-    "你是桌游规则助手。仅根据下方「上下文」回答，使用简体中文。\n"
-    "若上下文不足以回答，请明确说明「规则书中未找到相关说明」。\n"
-    "回答中请在相关句子旁标注页码（沿用上下文中的页码范围）。\n\n"
-    "上下文：\n"
+    _load_chat_system_markdown()
+    + "\n\n"
+    "下面是检索系统从本游戏规则书中提取的规则片段（回答具体规则问题时的唯一事实来源；请严格遵守上文原则）：\n\n"
     "---------------------\n"
     "{context_str}\n"
-    "---------------------\n"
-    "问题：{query_str}\n"
-    "回答："
+    "---------------------\n\n"
+    "玩家问题：{query_str}\n\n"
+    "请直接输出给玩家的回答："
 )
 
 
@@ -143,7 +156,7 @@ def build_rulebook_query_engine(game_id: str) -> RetrieverQueryEngine:
     response_synthesizer = get_response_synthesizer(
         llm=llm,
         text_qa_template=_RULE_QA_TEMPLATE,
-        response_mode="compact",
+        response_mode=ResponseMode.SIMPLE_SUMMARIZE,
     )
 
     return RetrieverQueryEngine.from_args(
