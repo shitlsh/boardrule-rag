@@ -6,6 +6,7 @@ import { ArrowLeft, Image as ImageIcon, MessageCircle } from "lucide-react";
 
 import { ExtractionPanel } from "@/components/extraction-panel";
 import { IndexPanel } from "@/components/index-panel";
+import { RetrievalSmokePanel } from "@/components/retrieval-smoke-panel";
 import { RulesPreview } from "@/components/rules-preview";
 import { ExtractionStatusBadge, IndexStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ export default function GameDetailPage() {
         <ExtractionPanel game={game} onUpdate={mutate} />
         <RulesPreview game={game} onRefresh={mutate} />
         <IndexPanel game={game} onUpdate={mutate} />
+        <RetrievalSmokePanel game={game} />
       </div>
     </div>
   );

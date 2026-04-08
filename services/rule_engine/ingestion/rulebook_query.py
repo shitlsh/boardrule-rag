@@ -97,7 +97,7 @@ def _load_chat_system_markdown() -> str:
 _RULE_QA_TEMPLATE = PromptTemplate(
     _load_chat_system_markdown()
     + "\n\n"
-    "下面是检索系统从本游戏规则书中提取的规则片段（回答具体规则问题时的唯一事实来源；请严格遵守上文原则）：\n\n"
+    "【规则书片段】（回答时的唯一事实来源；严格遵守上文原则）：\n\n"
     "---------------------\n"
     "{context_str}\n"
     "---------------------\n\n"
