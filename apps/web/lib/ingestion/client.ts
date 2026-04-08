@@ -12,6 +12,16 @@ import type {
 /** Align with `app/api/chat/route.ts` maxDuration; Node fetch has no default limit. */
 const RULE_ENGINE_CHAT_FETCH_MS = 300_000;
 
+/** Poll endpoints should return quickly; cap wait so `/api/games/.../tasks` cannot hang forever. */
+const RULE_ENGINE_POLL_FETCH_MS = 60_000;
+
+function isAbortError(e: unknown): boolean {
+  return (
+    (e instanceof Error && e.name === "AbortError") ||
+    (typeof e === "object" && e !== null && (e as { name?: string }).name === "AbortError")
+  );
+}
+
 export function getRuleEngineBaseUrl(): string {
   const raw = process.env.RULE_ENGINE_URL?.trim();
   if (!raw) {
@@ -85,7 +95,21 @@ export async function startExtractionWithPagePlan(params: {
 
 export async function getExtractJob(jobId: string): Promise<ExtractPollResponse> {
   const base = getRuleEngineBaseUrl();
-  const res = await fetch(`${base}/extract/${jobId}`, { method: "GET", cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(`${base}/extract/${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
+    });
+  } catch (e: unknown) {
+    if (isAbortError(e)) {
+      throw new Error(
+        `规则引擎轮询超时（>${RULE_ENGINE_POLL_FETCH_MS / 1000}s）。请确认 ${base} 可达且未阻塞。`,
+      );
+    }
+    throw e;
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Poll failed: ${res.status}`);
@@ -118,10 +142,21 @@ export async function startBuildIndex(params: {
 
 export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPollResponse> {
   const base = getRuleEngineBaseUrl();
-  const res = await fetch(`${base}/build-index/jobs/${encodeURIComponent(jobId)}`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${base}/build-index/jobs/${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
+    });
+  } catch (e: unknown) {
+    if (isAbortError(e)) {
+      throw new Error(
+        `建索引任务轮询超时（>${RULE_ENGINE_POLL_FETCH_MS / 1000}s）。请确认 ${base} 可达。`,
+      );
+    }
+    throw e;
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Build index poll failed: ${res.status}`);
@@ -150,12 +185,7 @@ export async function chatRules(params: {
       signal: AbortSignal.timeout(RULE_ENGINE_CHAT_FETCH_MS),
     });
   } catch (e: unknown) {
-    const aborted =
-      (e instanceof Error && e.name === "AbortError") ||
-      (typeof e === "object" &&
-        e !== null &&
-        (e as { name?: string }).name === "AbortError");
-    if (aborted) {
+    if (isAbortError(e)) {
       throw new Error(
         `规则引擎聊天超时（>${Math.round(RULE_ENGINE_CHAT_FETCH_MS / 1000)}s）。请确认 RULE_ENGINE_URL（当前 ${base}）可访问、服务已启动，且首次问答可能加载 rerank 模型。`,
       );

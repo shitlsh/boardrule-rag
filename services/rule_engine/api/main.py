@@ -23,6 +23,22 @@ load_dotenv()
 _compiled_graph = None
 
 
+def _configure_boardrule_logging() -> None:
+    """Ensure ``boardrule.*`` loggers emit to stderr (uvicorn does not configure them by default)."""
+    raw = (os.environ.get("RULE_ENGINE_LOG_LEVEL") or "INFO").strip().upper()
+    level = getattr(logging, raw, logging.INFO)
+    root = logging.getLogger("boardrule")
+    if root.handlers:
+        root.setLevel(level)
+        return
+    root.setLevel(level)
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter("%(levelname)s [%(name)s] %(message)s"))
+    root.addHandler(handler)
+    root.propagate = False
+
+
 def get_compiled_graph():
     global _compiled_graph
     if _compiled_graph is None:
@@ -40,6 +56,7 @@ def _postgres_checkpoint_uri() -> str | None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _compiled_graph
+    _configure_boardrule_logging()
     page_assets_root().mkdir(parents=True, exist_ok=True)
     pg_uri = _postgres_checkpoint_uri()
     if not pg_uri:
@@ -72,8 +89,11 @@ logger = logging.getLogger("boardrule.api")
 @app.middleware("http")
 async def boardrule_ai_header_middleware(request: Request, call_next):
     """Parse ``X-Boardrule-Ai-Config`` onto ``request.state`` for routes that need Gemini."""
-    if request.method == "POST" and request.url.path == "/chat":
-        logger.info("POST /chat received (before handler)")
+    if request.method == "POST":
+        if request.url.path == "/chat":
+            logger.info("POST /chat received (before handler)")
+        elif request.url.path == "/extract":
+            logger.info("POST /extract received (before handler; background task runs after response)")
     raw = request.headers.get("x-boardrule-ai-config")
     if raw:
         try:

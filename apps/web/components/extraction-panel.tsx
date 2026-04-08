@@ -299,8 +299,17 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
         }),
       });
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error((error as { message?: string }).message || "启动提取失败");
+        const error = (await res.json()) as {
+          message?: string;
+          code?: string;
+        };
+        if (error.code === "STALE_PAGE_JOB") {
+          toast.error(error.message || "分页会话已失效，请重新分页后再提取");
+          await mutatePages();
+          onUpdate();
+          return;
+        }
+        throw new Error(error.message || "启动提取失败");
       }
       toast.success("规则提取任务已启动");
       onUpdate();

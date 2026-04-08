@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -29,6 +30,8 @@ from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.paths import page_assets_root
 
 router = APIRouter(tags=["extract"])
+
+logger = logging.getLogger("boardrule.extract")
 
 
 class JobStatus(str, Enum):
@@ -171,17 +174,21 @@ def _build_page_rows(assets: list[Any]) -> list[dict[str, Any]]:
 
 
 def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]) -> None:
+    logger.info("extract job %s: background worker started", job_id)
     with boardrule_ai_runtime(ai_snapshot):
         with _jobs_lock:
             job = _jobs.get(job_id)
             if not job:
+                logger.warning("extract job %s: missing job record, worker exit", job_id)
                 return
             job.status = JobStatus.processing
             thread_id = job.thread_id
 
         try:
             graph = _get_graph()
+            logger.info("extract job %s: invoking LangGraph (thread_id=%s)", job_id, thread_id)
             final = run_extraction(graph, initial, thread_id=thread_id)
+            logger.info("extract job %s: LangGraph finished", job_id)
             out = {
                 "merged_markdown": final.get("merged_markdown"),
                 "structured_chapters": final.get("structured_chapters") or [],
@@ -199,6 +206,7 @@ def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]
                     j.result = out
                     j.status = JobStatus.completed
         except Exception as e:  # noqa: BLE001
+            logger.exception("extract job %s: failed", job_id)
             with _jobs_lock:
                 j = _jobs.get(job_id)
                 if j:

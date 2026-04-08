@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startExtractionWithPagePlan } from "@/lib/ingestion";
 import { parsePageIndices } from "@/lib/page-indices";
+import { isStalePageJobEngineError } from "@/lib/stale-page-job";
 
 export const runtime = "nodejs";
 
@@ -101,6 +102,26 @@ export async function POST(req: Request, { params }: RouteParams) {
         progressJson: JSON.stringify({ stage: "submit_error", detail: msg }),
       },
     });
+
+    if (isStalePageJobEngineError(msg)) {
+      await prisma.game.update({
+        where: { id: gameId },
+        data: {
+          extractionStatus: "FAILED",
+          pageRasterJobId: null,
+          pagePreviewJson: null,
+        },
+      });
+      return NextResponse.json(
+        {
+          code: "STALE_PAGE_JOB" as const,
+          message:
+            "分页会话已失效（常见于规则引擎重启：内存中的分页任务 ID 不再有效）。已清空本游戏的分页缓存，请重新在上方提交「确认并分页」，然后再启动提取。",
+        },
+        { status: 409 },
+      );
+    }
+
     await prisma.game.update({
       where: { id: gameId },
       data: { extractionStatus: "FAILED" },

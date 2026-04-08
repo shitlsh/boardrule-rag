@@ -21,15 +21,12 @@ export async function GET(_req: Request, { params }: RouteParams) {
     take: 30,
   });
 
-  for (const t of tasks) {
-    if (t.status === "PROCESSING" && t.jobId) {
-      if (t.type === "INDEX_BUILD") {
-        await syncIndexBuildTask(t.id);
-      } else {
-        await syncTaskFromRuleEngine(t.id);
-      }
-    }
-  }
+  const processing = tasks.filter((t) => t.status === "PROCESSING" && t.jobId);
+  await Promise.all(
+    processing.map((t) =>
+      t.type === "INDEX_BUILD" ? syncIndexBuildTask(t.id) : syncTaskFromRuleEngine(t.id),
+    ),
+  );
 
   const refreshed = await prisma.task.findMany({
     where: { gameId },
