@@ -16,6 +16,14 @@ export type SlotBinding = {
   model: string;
 };
 
+/** Optional RAG / indexing overrides (rule engine falls back to env when unset). */
+export type RagOptionsStored = {
+  rerankModel?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  bm25TokenProfile?: "cjk_char" | "latin_word";
+};
+
 export type AiGatewayStored = {
   version: 1;
   credentials: AiCredentialStored[];
@@ -24,6 +32,7 @@ export type AiGatewayStored = {
     temperature: number;
     maxTokens: number;
   };
+  ragOptions?: RagOptionsStored;
 };
 
 export type AiCredentialPublic = {
@@ -39,6 +48,7 @@ export type AiGatewayPublic = {
   credentials: AiCredentialPublic[];
   slotBindings: Record<SlotKey, SlotBinding | null>;
   chatOptions: { temperature: number; maxTokens: number };
+  ragOptions: RagOptionsStored;
 };
 
 /** Payload sent to rule_engine (camelCase). */
@@ -50,4 +60,5 @@ export type EngineAiPayloadV1 = {
     embed: { apiKey: string; model: string };
     chat: { apiKey: string; model: string; temperature: number; maxTokens: number };
   };
+  ragOptions?: RagOptionsStored;
 };

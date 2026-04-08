@@ -9,9 +9,9 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.llms.google_genai import GoogleGenAI
-from llama_index.retrievers.bm25 import BM25Retriever
-
+from ingestion.bm25_retriever import BoardruleBM25Retriever
 from ingestion.hybrid_retriever import HybridFusionRetriever
+from ingestion.node_builders import format_header_path_for_prompt
 from ingestion.index_builder import _rerank_model_name, configure_embedding_settings, game_index_dir, load_vector_index
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_gemini
@@ -42,7 +42,13 @@ class PageMetadataPrefixPostprocessor(BaseNodePostprocessor):
             node = nws.node
             meta = getattr(node, "metadata", {}) or {}
             pages = meta.get("pages") or meta.get("original_page_range")
-            prefix = f"[页码: {pages}]\n" if pages else ""
+            hp = format_header_path_for_prompt(meta.get("header_path"))
+            lines: list[str] = []
+            if pages:
+                lines.append(f"[页码: {pages}]")
+            if hp:
+                lines.append(f"[章节: {hp}]")
+            prefix = ("\n".join(lines) + "\n") if lines else ""
             body = node.get_content() if hasattr(node, "get_content") else str(getattr(node, "text", ""))
             new_node = TextNode(
                 text=prefix + body,
@@ -87,7 +93,7 @@ def build_rulebook_query_engine(
         raise FileNotFoundError(f"No index manifest for game_id={game_id}")
 
     index = load_vector_index(game_id)
-    bm25 = BM25Retriever.from_persist_dir(str(bm25_dir))
+    bm25 = BoardruleBM25Retriever.from_persist_dir(str(bm25_dir))
     vector_retriever = index.as_retriever(similarity_top_k=similarity_top_k)
     hybrid = HybridFusionRetriever(
         bm25,

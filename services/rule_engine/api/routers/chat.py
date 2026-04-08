@@ -41,6 +41,7 @@ class SourceRef(BaseModel):
     original_page_range: str | None = None
     page_start: int | None = None
     page_end: int | None = None
+    header_path: str | None = None
     text_preview: str | None = None
     score: float | None = None
 
@@ -59,6 +60,7 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
             continue
         meta = getattr(node, "metadata", {}) or {}
         text = (node.get_content() or "")[:500]
+        hp = meta.get("header_path")
         out.append(
             SourceRef(
                 game_id=meta.get("game_id"),
@@ -71,6 +73,7 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
                 ),
                 page_start=meta.get("page_start"),
                 page_end=meta.get("page_end"),
+                header_path=str(hp) if hp is not None and str(hp).strip() else None,
                 text_preview=text or None,
                 score=float(getattr(nws, "score")) if getattr(nws, "score", None) is not None else None,
             )

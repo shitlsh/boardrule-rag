@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
+import { ModelRagOptionsPanel } from "@/components/model-rag-options-panel";
 import { ModelChatOptionsPanel } from "@/components/model-chat-options-panel";
 import { ModelCredentialsPanel } from "@/components/model-credentials-panel";
 import { ModelSlotsPanel } from "@/components/model-slots-panel";
@@ -74,6 +75,7 @@ export default function ModelsPage() {
         <ModelCredentialsPanel data={data} onUpdated={onUpdated} />
         <ModelSlotsPanel data={data} onUpdated={onUpdated} />
         <ModelChatOptionsPanel data={data} onUpdated={onUpdated} />
+        <ModelRagOptionsPanel data={data} onUpdated={onUpdated} />
       </div>
     </div>
   );

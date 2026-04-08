@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import Any
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config", default=None)
@@ -44,11 +46,26 @@ class GeminiBundle(BaseModel):
     chat: ChatSlot
 
 
+class RagOptions(BaseModel):
+    """Optional RAG / indexing overrides from the web AI Gateway (engine falls back to env)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    rerank_model: str | None = Field(None, alias="rerankModel")
+    chunk_size: int | None = Field(None, alias="chunkSize", gt=0)
+    chunk_overlap: int | None = Field(None, alias="chunkOverlap", ge=0)
+    bm25_token_profile: Literal["cjk_char", "latin_word"] | None = Field(
+        None,
+        alias="bm25TokenProfile",
+    )
+
+
 class BoardruleAiConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     version: int = 1
     gemini: GeminiBundle
+    rag_options: RagOptions | None = Field(None, alias="ragOptions")
 
 
 def get_config() -> BoardruleAiConfig:

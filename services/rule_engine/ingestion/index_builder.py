@@ -9,13 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
-from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import QueryBundle
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
-from llama_index.retrievers.bm25 import BM25Retriever
 
+from ingestion.bm25_retriever import BM25_CJK_TOKEN_PATTERN, BoardruleBM25Retriever, default_bm25_from_nodes
 from ingestion.hybrid_retriever import HybridFusionRetriever
-from ingestion.node_builders import documents_to_nodes, merged_markdown_to_documents
+from ingestion.node_builders import documents_to_nodes, documents_to_nodes_loose, merged_markdown_to_documents
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_gemini
 from utils.paths import service_root
@@ -23,6 +22,42 @@ from utils.paths import service_root
 _MANIFEST_NAME = "manifest.json"
 _VECTOR_SUBDIR = "vector_storage"
 _BM25_SUBDIR = "bm25"
+
+_DEFAULT_RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-12-v2"
+
+
+def _try_rag_options():
+    try:
+        from utils.ai_gateway import get_config
+
+        return get_config().rag_options
+    except RuntimeError:
+        return None
+
+
+def _chunk_size_overlap() -> tuple[int, int]:
+    ro = _try_rag_options()
+    cs = int(os.environ.get("CHUNK_SIZE", "1024"))
+    co = int(os.environ.get("CHUNK_OVERLAP", "128"))
+    if ro is not None:
+        if ro.chunk_size is not None:
+            cs = ro.chunk_size
+        if ro.chunk_overlap is not None:
+            co = ro.chunk_overlap
+    if cs < 1:
+        cs = 1024
+    if co < 0:
+        co = 0
+    if co >= cs:
+        co = max(0, cs // 2)
+    return cs, co
+
+
+def _bm25_token_pattern() -> str:
+    ro = _try_rag_options()
+    if ro is not None and ro.bm25_token_profile == "latin_word":
+        return r"(?u)\b\w\w+\b"
+    return BM25_CJK_TOKEN_PATTERN
 
 
 def _index_root() -> Path:
@@ -42,10 +77,10 @@ def _embedding_model_name() -> str:
 
 
 def _rerank_model_name() -> str:
-    return os.environ.get(
-        "RERANK_MODEL",
-        "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    )
+    ro = _try_rag_options()
+    if ro is not None and ro.rerank_model and str(ro.rerank_model).strip():
+        return str(ro.rerank_model).strip()
+    return os.environ.get("RERANK_MODEL", _DEFAULT_RERANK_MODEL)
 
 
 def _embedding_dim() -> int:
@@ -167,11 +202,10 @@ def build_and_persist_index(
             "Ensure rules.md is non-empty and uses <!-- pages: N --> anchors as documented in EXTRACTION_FLOW.md."
         )
 
-    nodes = documents_to_nodes(docs)
+    chunk_size, chunk_overlap = _chunk_size_overlap()
+    nodes = documents_to_nodes(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     if not nodes:
-        # Rare: SentenceSplitter yields nothing on very short / odd tokenization; retry with one huge chunk.
-        loose = SentenceSplitter(chunk_size=10_000_000, chunk_overlap=0)
-        nodes = loose.get_nodes_from_documents(docs)
+        nodes = documents_to_nodes_loose(docs)
     if not nodes:
         raise ValueError(
             "Could not chunk merged Markdown for indexing. "
@@ -218,7 +252,11 @@ def build_and_persist_index(
         vector_backend = "disk"
         pg_table = None
 
-    bm25 = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=12)
+    bm25 = default_bm25_from_nodes(
+        nodes,
+        similarity_top_k=12,
+        token_pattern=_bm25_token_pattern(),
+    )
     bm25.persist(str(bm25_dir))
 
     manifest = {
@@ -239,6 +277,7 @@ def build_and_persist_index(
             "original_page_range",
             "page_start",
             "page_end",
+            "header_path",
         ],
         "vector_storage": str(vec_dir) if vector_backend == "disk" else None,
         "bm25_storage": str(bm25_dir),
@@ -309,7 +348,7 @@ def load_hybrid_reranked_nodes(
         raise FileNotFoundError(f"Missing BM25 persist dir at {bm25_dir}")
 
     index = load_vector_index(game_id)
-    bm25 = BM25Retriever.from_persist_dir(str(bm25_dir))
+    bm25 = BoardruleBM25Retriever.from_persist_dir(str(bm25_dir))
     vector_retriever = index.as_retriever(similarity_top_k=similarity_top_k)
     hybrid = HybridFusionRetriever(
         bm25,
