@@ -8,8 +8,6 @@ __pycache__/
 
 # LangGraph CLI (`langgraph dev`) local runtime state
 .langgraph_api/
-# Legacy local SQLite checkpoint files (no longer used; safe to delete)
-checkpoints.sqlite
-checkpoints.sqlite-*
-data/indexes/
-eval/fixtures/*.pdf
+
+# data
+data/*

@@ -156,7 +156,7 @@ flowchart LR
 
 ## 5. 配置与环境（与抽取相关）
 
-- **Gemini 凭证与模型**：由 **`apps/web`** 在调用规则引擎时通过请求头 **`X-Boardrule-Ai-Config`** 传入（见 Web 系统设置中的 AI Gateway）；规则引擎 `.env` 不再配置 `GOOGLE_API_KEY`。  
+- **Gemini 凭证与模型**：由 **`apps/web`** 在调用规则引擎时通过请求头 **`X-Boardrule-Ai-Config`** 传入（在 Web **`/models`** 配置）；规则引擎 `.env` 不再配置 `GOOGLE_API_KEY`。  
 - **`DATABASE_URL`**：LangGraph **PostgresSaver** 必需。  
 - **`VISION_BATCH_PAGES`** / **`COMPLEXITY_THRESHOLD_PAGES`** / **`GEMINI_PRO_MAX_OUTPUT_TOKENS`** 等：见 `.env.example` 与 `README.md`。  
 
