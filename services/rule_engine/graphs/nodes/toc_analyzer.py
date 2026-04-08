@@ -45,26 +45,12 @@ def run(state: ExtractionState) -> dict:
             return {"errors": (state.get("errors") or []) + [err], "toc": {}}
         return {"toc": toc}
 
-    # Fallback: legacy text (should be rare)
-    text = state.get("parsed_text") or ""
-    if not text.strip():
-        return {"errors": (state.get("errors") or []) + ["toc_analyzer: no TOC pages and empty parsed_text"], "toc": {}}
-
-    base = render_prompt("toc_analyzer.md", state)
-    prompt = f"{base}\n\n---\n\n规则书全文：\n\n{text[:200000]}"
-    try:
-        from utils.gemini import generate_flash
-
-        def _call() -> str:
-            return generate_flash(
-                prompt,
-                preset=FLASH_TOC,
-                meta=GeminiCallMeta(node="toc_analyzer", prompt_file="toc_analyzer.md"),
-            )
-
-        raw = retry(_call, attempts=3)
-        toc = parse_json_object(raw)
-    except Exception as e:  # noqa: BLE001
-        err = f"toc_analyzer: {e}"
-        return {"errors": (state.get("errors") or []) + [err], "toc": {}}
-    return {"toc": toc}
+    errs = list(state.get("errors") or [])
+    if not toc_idxs:
+        errs.append("toc_analyzer: no TOC page indices; cannot analyze structure without directory pages")
+        return {"errors": errs, "toc": {}}
+    errs.append(
+        "toc_analyzer: missing rasterized images for TOC pages "
+        f"{toc_idxs}; each TOC page must have a path in page_rows (vision-only pipeline)",
+    )
+    return {"errors": errs, "toc": {}}

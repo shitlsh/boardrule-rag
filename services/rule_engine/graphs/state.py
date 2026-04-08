@@ -13,7 +13,7 @@ class ExtractionState(TypedDict, total=False):
     terminology_context: str
     source_file: str
     source_url: str | None
-    # Legacy text path (empty when using vision pipeline)
+    # Optional; Web extract uses empty string (rules come from vision)
     parsed_text: str
     parsed_metadata: dict[str, Any]
     # Vision pipeline: rasterized pages (1-based page numbers, absolute paths as str)
@@ -29,7 +29,7 @@ class ExtractionState(TypedDict, total=False):
     complexity: str
     # Final routing flag: set in route_by_complexity; batch_splitter reads only this.
     needs_batching: bool
-    # Text batches (legacy); prefer vision_batches for chapter_extract
+    # Unused; kept for schema compatibility (always empty in vision-only mode)
     batches: list[str]
     chapter_outputs: list[str]
     merged_markdown: str
