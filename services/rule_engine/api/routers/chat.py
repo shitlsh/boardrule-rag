@@ -8,18 +8,25 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
+from llama_index.core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
 
 from api.deps import require_boardrule_ai
 from ingestion.rulebook_query import build_rulebook_query_engine, get_chat_llm
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
-from utils.paths import load_prompt
 
 router = APIRouter(tags=["chat"])
 
 logger = logging.getLogger("boardrule.chat")
 
-_CHAT_SYSTEM = load_prompt("chat_system.md").strip()
+# Replaces LlamaIndex default English condense template ("Given a conversation...").
+_RULEBOOK_CONDENSE_PROMPT = PromptTemplate(
+    "根据下面的对话历史与玩家最新一句话，改写为一句**独立、完整**的中文问题，"
+    "用于在规则书中检索；保留游戏语境与所有指代，只输出这一句问题本身，不要解释。\n\n"
+    "<对话历史>\n{chat_history}\n\n"
+    "<玩家最新一句>\n{question}\n\n"
+    "<独立问题>\n"
+)
 
 
 class ChatMessageIn(BaseModel):
@@ -102,11 +109,14 @@ def chat(  # sync: LlamaIndex GoogleGenAI uses asyncio.run(); async def would ne
             for m in body.messages:
                 role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
                 history.append(ChatMessage(role=role, content=m.content))
+            # ``CondenseQuestionChatEngine`` does not support ``system_prompt`` (LlamaIndex raises
+            # NotImplementedError). We pass a Chinese ``condense_question_prompt``; the final answer
+            # still uses ``rulebook_query._RULE_QA_TEMPLATE`` on the condensed question.
             chat_engine = CondenseQuestionChatEngine.from_defaults(
                 query_engine=query_engine,
                 chat_history=history,
-                system_prompt=_CHAT_SYSTEM,
                 llm=llm,
+                condense_question_prompt=_RULEBOOK_CONDENSE_PROMPT,
             )
             out = chat_engine.chat(body.message)
             answer = out.response or ""
