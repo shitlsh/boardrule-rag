@@ -49,7 +49,8 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
           向量索引
         </CardTitle>
         <CardDescription>
-          建立向量索引以启用规则问答功能
+          建立向量索引以启用规则问答功能。首次建立可能需较长时间（嵌入、BM25、可选 rerank
+          模型加载）；请勿关闭页面直至完成。部署在 Vercel 时本接口已放宽单次请求时长上限。
         </CardDescription>
       </CardHeader>
       <CardContent>

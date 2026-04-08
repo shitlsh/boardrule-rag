@@ -6,6 +6,29 @@ import { prisma } from "@/lib/prisma";
 import { readStorageText } from "@/lib/storage";
 
 export const runtime = "nodejs";
+/** Vercel / 部分托管：允许较长建索引时间（向量 + BM25 + 可选 rerank 模型加载）。 */
+export const maxDuration = 300;
+
+function messageFromRuleEngineBody(text: string, status: number): string {
+  const trimmed = text.trim();
+  try {
+    const j = JSON.parse(trimmed) as { detail?: unknown };
+    if (typeof j.detail === "string") return j.detail;
+    if (Array.isArray(j.detail)) {
+      const parts = j.detail.map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return "";
+      });
+      const s = parts.filter(Boolean).join("; ");
+      if (s) return s;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return trimmed || `建索引失败 (${status})`;
+}
 
 type RouteParams = { params: Promise<{ gameId: string }> };
 
@@ -28,7 +51,18 @@ export async function POST(_req: Request, { params }: RouteParams) {
   }
 
   const base = getRuleEngineBaseUrl();
-  const ai = await getEngineAiHeaders();
+  let ai: Record<string, string>;
+  try {
+    ai = await getEngineAiHeaders();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(
+      {
+        message: `AI 配置不完整，无法建索引：${msg}。请在「/models」中配置凭证并为 Flash / Pro / Embed / Chat 槽位选择模型后保存。`,
+      },
+      { status: 400 },
+    );
+  }
   const res = await fetch(`${base}/build-index`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...ai },
@@ -40,7 +74,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
   });
   const text = await res.text();
   if (!res.ok) {
-    return NextResponse.json({ message: text || `建索引失败: ${res.status}` }, { status: res.status });
+    return NextResponse.json(
+      { message: messageFromRuleEngineBody(text, res.status) },
+      { status: res.status },
+    );
   }
 
   const body = JSON.parse(text) as { index_id?: string; manifest?: { game_id?: string } };
