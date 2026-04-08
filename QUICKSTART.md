@@ -7,7 +7,7 @@ Follow these steps after cloning **`boardrule-rag`** to run the stack locally. K
 - **Git**
 - **Python 3.11+** (for `services/rule_engine`)
 - **Node.js 20.19+** (required for `apps/web`: Prisma ORM 7; 22.x recommended upstream)
-- **pnpm**, **npm**, or **yarn** (match whatever the `apps/web` package manager ends up using once `package.json` exists)
+- **npm** (the repo ships `apps/web/package-lock.json`; **pnpm** / **yarn** work if you prefer, but keep one lockfile strategy)
 
 Recommended for the full stack:
 
@@ -70,19 +70,19 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GOOGLE_API_KEY` | Yes | Google AI / Gemini API key (vision + text). |
 | `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and `POST /build-index` vectors in **pgvector** when enabled. Use the same URL as **`apps/web`** (Supabase local or hosted). Optional override: `RULE_ENGINE_CHECKPOINT_URL` for checkpoints only. |
+| `CORS_ORIGINS` | Recommended | Comma-separated browser origins for FastAPI CORS (default in `.env.example`: `http://localhost:3000`). Must include your **`apps/web`** origin. |
+| *(Gemini keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index`, `POST /chat`, etc. Configure Gemini API keys and per-slot models in the web app (**`/models`**). See §4.1. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
 | `LANGCHAIN_ENDPOINT` | No | Override only if your LangSmith deployment requires it. |
 | `INDEX_STORAGE_ROOT` | No | Per-game **BM25** + manifests (default `services/rule_engine/data/indexes/`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | No | PDF page render quality for `/extract/pages`. |
-| `GEMINI_EMBEDDING_MODEL` | No | Gemini embedding model id for `POST /build-index` (default `gemini-embedding-001`). |
-| `EMBEDDING_DIM` | No | Must match the embedding model (default `3072` for `gemini-embedding-001`). |
+| `EMBEDDING_DIM` | No | Vector width for pgvector / indexing (default `3072`). **Must match** the embedding model chosen in **AI Gateway** (Embed slot). |
 | `RERANK_MODEL` | No | Cross-encoder name for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`; first run may download weights). |
 
-See `services/rule_engine/.env.example` for the full list.
+See `services/rule_engine/.env.example` for the full list (commented blocks for index, vision graph, etc.).
 
 ### 3.2.5 Python: use one virtual environment
 
@@ -141,10 +141,21 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RULE_ENGINE_URL` | Yes | Base URL of the rule engine, e.g. `http://localhost:8000`. The frontend must call **only** this backend (no Dify keys). |
+| `RULE_ENGINE_URL` | Yes | Base URL of the rule engine, e.g. `http://127.0.0.1:8000` (no trailing slash). Server routes proxy to the engine; there is no separate “AI backend” besides this + AI Gateway settings. |
 | `DATABASE_URL` | Yes | Prisma connection string: Supabase local (`postgres` on **54322**) or hosted project URL from the dashboard. |
+| `AI_CONFIG_SECRET` | Yes | Long random string used to **AES-256-GCM** encrypt Gemini API keys stored in app settings. Required before saving credentials on **`/models`**. |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Strongly recommended | Use **raw** + **exports** buckets (`SUPABASE_STORAGE_BUCKET_RAW` / `SUPABASE_STORAGE_BUCKET_EXPORTS`, see `apps/web/.env.example`). Raw uploads can be removed after extraction completes. **Presigned upload**: `POST /api/games/[gameId]/upload-sign` then JSON `POST .../upload` with `storageKey`. Without Supabase, files use `apps/web/storage/`. |
 | Storage | No | Defaults to `apps/web/storage/` if Supabase env vars are unset. |
+
+### 4.1.1 AI Gateway (Gemini credentials & models)
+
+1. Start **`apps/web`** with `AI_CONFIG_SECRET` set.
+2. Open **`/models`** (模型与凭证): add at least one Gemini credential (API key), then assign **Flash / Pro / Embed / Chat** slots to a credential and pick a model from the filtered list for each slot. Save per slot when prompted.
+3. The web app persists this in **`AppSettings.aiGatewayJson`** and, when calling the rule engine, attaches header **`X-Boardrule-Ai-Config`** with the resolved keys and model IDs. The rule engine does **not** read `GOOGLE_API_KEY` from its own `.env` for those calls.
+
+Chat temperature / max tokens are configured on the models UI where applicable.
+
+**Direct `curl` to the rule engine:** for `POST /extract`, `POST /build-index`, or `POST /chat`, you must supply the same JSON header the BFF would send (or run flows through the web so the header is added automatically).
 
 **Web rulebook UI:** game detail page supports **PDF**, **multiple images**, or **Gstone URL** (preview API), then **thumbnail click** for TOC/exclude before extract.
 
@@ -164,12 +175,12 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 ## 5. End-to-end smoke test
 
 1. Rule engine responds on `GET /health`.
-2. With `GOOGLE_API_KEY` set, call **`POST /extract/pages`** with `game_id` and either **`file`** (multipart) or **`file_url`** (form field) to rasterize a PDF, then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
+2. Configure **AI Gateway** in **`apps/web`** (`/models`: credentials + all required slots). Then either use the **web UI** for extract, or call the engine with **`X-Boardrule-Ai-Config`** as the web would. **`POST /extract/pages`** only rasterizes pages (no Gemini); **`POST /extract`** needs the header for vision/text. Flow: **`POST /extract/pages`** with `game_id` and **`file`** (multipart) or **`file_url`** (form field), then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
 3. **验收辅助**：将合并后的 Markdown 存盘，运行 `python services/rule_engine/eval/check_extraction_output.py merged.md --min-words 3000 --min-page-markers 5` 检查字数与 `<!-- pages: -->` 锚点数量。
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
-5. **索引（Phase 2）**：调用 `POST /build-index`（JSON：`game_id` 与 `merged_markdown` **或** `documents[]`）。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
+5. **索引（Phase 2）**：调用 `POST /build-index`（JSON：`game_id` 与 `merged_markdown` **或** `documents[]`），请求需携带与提取相同的 **`X-Boardrule-Ai-Config`**（通过 Web 或手动构造）。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
 6. **Web**：游戏详情页在提取完成后可预览 Markdown，并手动 **建立索引**；**Chat** 未建索引时返回 **409**。
-7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`。
+7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`（同样需要 AI 配置头）。
 
 ## 6. Common issues
 
@@ -180,7 +191,7 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 | **poppler / pdf2image errors** | Install poppler (`brew install poppler` on macOS); ensure `PAGE_RASTER_DPI` is reasonable. |
 | **PostgreSQL / migrate** | `supabase start`; `DATABASE_URL` matches `supabase status` in **both** `apps/web/.env` and `services/rule_engine/.env`; run `npx prisma migrate deploy` (or `migrate dev`) in `apps/web`. |
 | **Rule engine exits on startup** | Set `DATABASE_URL=postgresql://...` for the engine (see `services/rule_engine/.env.example`). SQLite checkpoints are not supported. |
-| **Gemini / `GOOGLE_API_KEY` errors** | Billing and API enablement for the Generative Language API in Google Cloud. |
+| **Gemini / AI errors** | Configure **`/models`** in the web app: valid API key, slots saved, models allowed for that slot. Enable **Generative Language API** billing as needed. The rule engine does not use `GOOGLE_API_KEY` from `services/rule_engine/.env` for BFF-driven calls. |
 | **Port already in use** | Change `--port` for uvicorn or Next’s port via `-p` / `PORT`. |
 | **Prisma / DB errors** | `DATABASE_URL` correct; run `prisma migrate dev` after schema changes. |
 
@@ -188,3 +199,4 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 
 - [services/rule_engine/README.md](./services/rule_engine/README.md) — Python tooling and running the engine in isolation.
 - [services/rule_engine/EXTRACTION_FLOW.md](./services/rule_engine/EXTRACTION_FLOW.md) — extract pipeline, diagrams, and how index/chat consume outputs.
+- Web **AI Gateway** UI: **`/models`** (credentials + Flash / Pro / Embed / Chat slots).

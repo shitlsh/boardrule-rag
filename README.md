@@ -2,7 +2,7 @@
 
 Board-game rule extraction and RAG: ingest rule books (PDF/images), rasterize pages for **Gemini vision** extraction via LangGraph, optional human TOC/exclude confirmation in the web UI, then build per-game indexes (PostgreSQL + pgvector when configured, else on-disk vectors) for grounded Q&A with page references.
 
-This repository is the **single** codebase and product surface: a monorepo with **`apps/web`** (Next.js 14, App Router, TypeScript) and **`services/rule_engine`** (Python 3.11+, FastAPI, LangGraph, LlamaIndex).
+This repository is the **single** codebase and product surface: a monorepo with **`apps/web`** (Next.js App Router, TypeScript) and **`services/rule_engine`** (Python 3.11+, FastAPI, LangGraph, LlamaIndex).
 
 ## Relationship to the older demo
 
@@ -23,18 +23,18 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 
 | Area | Role |
 |------|------|
-| **apps/web** | Game metadata, rule uploads, task polling, extraction status; calls the rule engine via `RULE_ENGINE_URL` only. |
+| **apps/web** | Game metadata, rule uploads, task polling, extraction status; calls the rule engine via `RULE_ENGINE_URL` only. **Gemini** API keys and per-slot models are configured in the UI (`/models`) and sent as **`X-Boardrule-Ai-Config`** to the engine (see **QUICKSTART.md**). |
 | **services/rule_engine** | `POST /extract/pages` (rasterize), `POST /extract` (vision pipeline + checkpoints), `POST /build-index`, `POST /chat`, `GET /health`. |
 
 ## Tech stack (fixed)
 
 - **Runtime**: Python **3.11+** (`services/rule_engine`).
-- **Web**: **Next.js 14** App Router, **TypeScript** (`apps/web`).
+- **Web**: **Next.js** App Router, **TypeScript** (`apps/web`).
 - **Data**: **Prisma ORM 7** (`prisma.config.ts`); **PostgreSQL + pgvector** via **Supabase** (local `supabase start` or hosted). **Supabase Storage** (S3-compatible) for rule uploads and exports when configured — see **QUICKSTART.md**.
 - **Ingestion**: **pdf2image** + **poppler** (system) for PDF page renders; ordered images also supported.
 - **Orchestration**: **LangGraph** with checkpointing (**PostgreSQL** via `DATABASE_URL` or `RULE_ENGINE_CHECKPOINT_URL`).
 - **RAG**: **LlamaIndex** (Phase 2: hybrid retrieval + rerank).
-- **LLM**: **Gemini** (Flash / Pro roles as configured in the service).
+- **LLM**: **Gemini** — credentials and Flash / Pro / Embed / Chat slots are configured in **`apps/web`** (`/models`), not in `services/rule_engine/.env`.
 - **Observability**: **LangSmith** (optional tracing).
 
 ## Documentation
