@@ -29,7 +29,9 @@ cp .env.example .env
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | PDF rasterization for `/extract/pages`. |
-| `VISION_BATCH_PAGES` / `COMPLEXITY_THRESHOLD_PAGES` | Vision batch size and body-page threshold for `needs_batching` (see `.env.example`). |
+| `EXTRACTION_SIMPLE_MAX_BODY_PAGES` | Simple-profile gate: max **body** page count (default `10`; see `EXTRACTION_FLOW.md` §2.1). |
+| `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES` | Complex-profile only: `needs_batching` when body pages exceed this (default `15`). Deprecated alias: `COMPLEXITY_THRESHOLD_PAGES`. |
+| `VISION_BATCH_PAGES` | Pages per vision batch when `needs_batching` is true (default `6`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `EMBEDDING_DIM` | Vector dimension for pgvector / indexing (must match the embedding model chosen in AI Gateway). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |

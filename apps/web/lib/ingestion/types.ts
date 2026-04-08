@@ -26,6 +26,9 @@ export type ExtractPollResponse = {
   suggested_questions: string[];
   errors: string[];
   last_checkpoint_id: string | null;
+  complexity?: string | null;
+  extraction_profile?: string | null;
+  toc?: Record<string, unknown> | null;
 };
 
 /** Mirrors `POST /chat` on the rule engine (snake_case JSON). */

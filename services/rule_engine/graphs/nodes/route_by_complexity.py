@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import os
-
+from graphs.extraction_settings import (
+    complex_route_body_pages_threshold,
+    extraction_simple_max_body_pages,
+)
 from graphs.state import ExtractionState
-
-
-def _complexity_threshold_pages() -> int:
-    raw = os.environ.get("COMPLEXITY_THRESHOLD_PAGES", "15").strip()
-    return int(raw) if raw.isdigit() else 15
 
 
 def run(state: ExtractionState) -> dict:
@@ -21,13 +18,29 @@ def run(state: ExtractionState) -> dict:
     body_pages = len(body)
     effective = body_pages * 3500
 
-    threshold = _complexity_threshold_pages()
-    # Single source of truth for "heavy / needs splitting" (replaces batch_splitter heuristics).
+    force_full = bool(state.get("force_full_pipeline"))
+    simple_max = extraction_simple_max_body_pages()
+
+    # Simple profile: thin rulebooks — prefer single vision batch, minimal merge drift.
+    if not force_full and body_pages <= simple_max:
+        return {
+            "complexity": "simple",
+            "needs_batching": False,
+            "extraction_profile": "simple",
+        }
+
+    # Complex profile: multi-stage batching acceptable; optional user override to always batch.
+    complex_body_threshold = complex_route_body_pages_threshold()
     needs_batching = (
-        toc_needs
+        force_full
+        or toc_needs
         or n_sections > 8
         or effective > 40_000
-        or body_pages > threshold
+        or body_pages > complex_body_threshold
     )
     complexity = "complex" if needs_batching else "simple"
-    return {"complexity": complexity, "needs_batching": needs_batching}
+    return {
+        "complexity": complexity,
+        "needs_batching": needs_batching,
+        "extraction_profile": "complex",
+    }

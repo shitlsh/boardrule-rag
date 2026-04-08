@@ -29,6 +29,10 @@ class ExtractionState(TypedDict, total=False):
     complexity: str
     # Final routing flag: set in route_by_complexity; batch_splitter reads only this.
     needs_batching: bool
+    # True → skip simple-profile gate and use complex-route heuristics (multi-batch friendly).
+    force_full_pipeline: bool
+    # "simple" | "complex" — product profile after route_by_complexity (for UI / debugging).
+    extraction_profile: str
     chapter_outputs: list[str]
     merged_markdown: str
     # Optional structured chunks for Phase 2 (list of {text, metadata})

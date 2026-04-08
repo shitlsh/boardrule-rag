@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
+from graphs.extraction_settings import simple_path_warn_body_pages
 from graphs.state import ExtractionState
 
 # Max physical pages per Gemini vision call (payload / quota)
 _DEFAULT_BATCH_PAGES = 6
 _MAX_BATCHES = 64
+
+_LOG = logging.getLogger(__name__)
 
 
 def _pages_per_batch() -> int:
@@ -47,13 +51,24 @@ def run(state: ExtractionState) -> dict:
         if p is not None and path:
             by_page[int(p)] = str(path)
 
-    if body and by_page:
-        per = _pages_per_batch()
-        vb = _split_body_into_vision_batches(body, by_page, per)
-        if not needs_batching and len(vb) == 1:
-            pass
-        elif not needs_batching and len(body) <= per:
-            vb = _split_body_into_vision_batches(body, by_page, max(per, len(body)))
+    if not body or not by_page:
+        return {"vision_batches": []}
+
+    per = _pages_per_batch()
+
+    if not needs_batching:
+        # Simple path (B1): one vision call for all body pages when possible — avoids 6+4 splits + merge drift.
+        n = len(body)
+        warn_at = simple_path_warn_body_pages()
+        if n > warn_at:
+            _LOG.warning(
+                "simple-path single vision batch covers %s body pages (threshold %s); "
+                "if the API errors or quality drops, raise VISION_BATCH_PAGES / use force_full_pipeline.",
+                n,
+                warn_at,
+            )
+        vb = _split_body_into_vision_batches(body, by_page, max(per, n))
         return {"vision_batches": vb}
 
-    return {"vision_batches": []}
+    vb = _split_body_into_vision_batches(body, by_page, per)
+    return {"vision_batches": vb}
