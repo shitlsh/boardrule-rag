@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from pydantic import BaseModel, Field
 
+from api.deps import require_boardrule_ai
 from ingestion.rulebook_query import build_rulebook_query_engine, get_chat_llm
+from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.paths import load_prompt
 
 router = APIRouter(tags=["chat"])
@@ -75,36 +76,38 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest) -> ChatResponse:
-    if not os.environ.get("GOOGLE_API_KEY"):
-        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY is not configured")
-    try:
-        query_engine = build_rulebook_query_engine(body.game_id)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+async def chat(
+    body: ChatRequest,
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
+) -> ChatResponse:
+    with boardrule_ai_runtime(_ai):
+        try:
+            query_engine = build_rulebook_query_engine(body.game_id)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
 
-    llm = get_chat_llm()
+        llm = get_chat_llm()
 
-    if body.messages:
-        history: list[ChatMessage] = []
-        for m in body.messages:
-            role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
-            history.append(ChatMessage(role=role, content=m.content))
-        chat_engine = CondenseQuestionChatEngine.from_defaults(
-            query_engine=query_engine,
-            chat_history=history,
-            system_prompt=_CHAT_SYSTEM,
-            llm=llm,
-        )
-        out = chat_engine.chat(body.message)
-        answer = out.response or ""
-        nodes = list(out.source_nodes or [])
-    else:
-        resp = query_engine.query(body.message)
-        answer = resp.response or ""
-        nodes = list(resp.source_nodes or [])
+        if body.messages:
+            history: list[ChatMessage] = []
+            for m in body.messages:
+                role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
+                history.append(ChatMessage(role=role, content=m.content))
+            chat_engine = CondenseQuestionChatEngine.from_defaults(
+                query_engine=query_engine,
+                chat_history=history,
+                system_prompt=_CHAT_SYSTEM,
+                llm=llm,
+            )
+            out = chat_engine.chat(body.message)
+            answer = out.response or ""
+            nodes = list(out.source_nodes or [])
+        else:
+            resp = query_engine.query(body.message)
+            answer = resp.response or ""
+            nodes = list(resp.source_nodes or [])
 
     return ChatResponse(
         answer=answer,

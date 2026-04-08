@@ -15,6 +15,7 @@ from llama_index.retrievers.bm25 import BM25Retriever
 
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import documents_to_nodes, merged_markdown_to_documents
+from utils.ai_gateway import get_gemini
 from utils.paths import service_root
 
 _MANIFEST_NAME = "manifest.json"
@@ -35,7 +36,7 @@ def game_index_dir(game_id: str) -> Path:
 
 
 def _embedding_model_name() -> str:
-    return os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+    return get_gemini().embed.model
 
 
 def _rerank_model_name() -> str:
@@ -70,12 +71,10 @@ def _safe_table_name(game_id: str) -> str:
 
 def configure_embedding_settings() -> None:
     """Set global LlamaIndex embedding model (Gemini)."""
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY is not set")
+    g = get_gemini().embed
     Settings.embed_model = GoogleGenAIEmbedding(
-        model_name=_embedding_model_name(),
-        api_key=api_key,
+        model_name=g.model,
+        api_key=g.api_key,
     )
 
 

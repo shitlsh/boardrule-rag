@@ -1,3 +1,5 @@
+import { getEngineAiHeaders } from "@/lib/engine-ai";
+
 import type {
   ChatResponse,
   ExtractPagesResponse,
@@ -58,8 +60,10 @@ export async function startExtractionWithPagePlan(params: {
   }
   form.append("resume", "false");
 
+  const ai = await getEngineAiHeaders();
   const res = await fetch(`${base}/extract`, {
     method: "POST",
+    headers: ai,
     body: form,
   });
 
@@ -88,9 +92,10 @@ export async function chatRules(params: {
   messages?: { role: "user" | "assistant"; content: string }[];
 }): Promise<ChatResponse> {
   const base = getRuleEngineBaseUrl();
+  const ai = await getEngineAiHeaders();
   const res = await fetch(`${base}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...ai },
     body: JSON.stringify({
       game_id: params.gameId,
       message: params.message,

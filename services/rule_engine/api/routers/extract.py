@@ -16,13 +16,15 @@ from threading import Lock
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from api.deps import require_boardrule_ai
 from graphs.extraction_graph import run_extraction
 from graphs.state import ExtractionState
 from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
+from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.paths import page_assets_root
 
 router = APIRouter(tags=["extract"])
@@ -47,6 +49,7 @@ class ExtractJob:
     source_file: str = ""
     parsed_text_cache: str | None = None
     vision_cache: dict[str, Any] | None = None
+    ai_snapshot: dict[str, Any] | None = None
 
 
 _jobs: dict[str, ExtractJob] = {}
@@ -155,38 +158,39 @@ def _build_page_rows(assets: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _run_sync(job_id: str, initial: ExtractionState) -> None:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if not job:
-            return
-        job.status = JobStatus.processing
-        thread_id = job.thread_id
+def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]) -> None:
+    with boardrule_ai_runtime(ai_snapshot):
+        with _jobs_lock:
+            job = _jobs.get(job_id)
+            if not job:
+                return
+            job.status = JobStatus.processing
+            thread_id = job.thread_id
 
-    try:
-        graph = _get_graph()
-        final = run_extraction(graph, initial, thread_id=thread_id)
-        out = {
-            "merged_markdown": final.get("merged_markdown"),
-            "structured_chapters": final.get("structured_chapters") or [],
-            "quick_start": final.get("quick_start"),
-            "suggested_questions": final.get("suggested_questions") or [],
-            "errors": final.get("errors") or [],
-            "toc": final.get("toc"),
-            "complexity": final.get("complexity"),
-            "last_checkpoint_id": thread_id,
-        }
-        with _jobs_lock:
-            j = _jobs.get(job_id)
-            if j:
-                j.result = out
-                j.status = JobStatus.completed
-    except Exception as e:  # noqa: BLE001
-        with _jobs_lock:
-            j = _jobs.get(job_id)
-            if j:
-                j.status = JobStatus.failed
-                j.error = str(e)
+        try:
+            graph = _get_graph()
+            final = run_extraction(graph, initial, thread_id=thread_id)
+            out = {
+                "merged_markdown": final.get("merged_markdown"),
+                "structured_chapters": final.get("structured_chapters") or [],
+                "quick_start": final.get("quick_start"),
+                "suggested_questions": final.get("suggested_questions") or [],
+                "errors": final.get("errors") or [],
+                "toc": final.get("toc"),
+                "complexity": final.get("complexity"),
+                "last_checkpoint_id": thread_id,
+            }
+            with _jobs_lock:
+                j = _jobs.get(job_id)
+                if j:
+                    j.result = out
+                    j.status = JobStatus.completed
+        except Exception as e:  # noqa: BLE001
+            with _jobs_lock:
+                j = _jobs.get(job_id)
+                if j:
+                    j.status = JobStatus.failed
+                    j.error = str(e)
 
 
 def _download_to_temp(url: str) -> Path:
@@ -413,9 +417,9 @@ async def start_extract(
     page_job_id: str | None = Form(None),
     toc_page_indices: str | None = Form(None),
     exclude_page_indices: str | None = Form(None),
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> ExtractJobResponse:
-    if not os.environ.get("GOOGLE_API_KEY"):
-        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY is not configured")
+    snapshot = _ai.model_dump(mode="json", by_alias=True)
 
     jid = job_id or str(uuid.uuid4())
     thread_id = f"{jid}-run-{uuid.uuid4()}"
@@ -462,6 +466,7 @@ async def start_extract(
             job.game_id = game_id
             job.game_name = gn
             job.terminology_context = tc
+            job.ai_snapshot = snapshot
     else:
         if not page_job_id:
             raise HTTPException(
@@ -525,9 +530,10 @@ async def start_extract(
                 source_file=source_name,
                 parsed_text_cache="",
                 vision_cache=vision_cache,
+                ai_snapshot=snapshot,
             )
 
-    background_tasks.add_task(_run_sync, jid, initial)
+    background_tasks.add_task(_run_sync, jid, initial, snapshot)
 
     with _jobs_lock:
         j = _jobs.setdefault(jid, ExtractJob(thread_id=thread_id, game_id=game_id))

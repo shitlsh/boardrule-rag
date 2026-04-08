@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
+import { getEngineAiHeaders } from "@/lib/engine-ai";
 import { prisma } from "@/lib/prisma";
 import { readStorageText } from "@/lib/storage";
 
@@ -27,9 +28,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
   }
 
   const base = getRuleEngineBaseUrl();
+  const ai = await getEngineAiHeaders();
   const res = await fetch(`${base}/build-index`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...ai },
     body: JSON.stringify({
       game_id: game.id,
       merged_markdown: merged,
