@@ -8,6 +8,7 @@ import type {
   AiGatewayPublic,
   AiGatewayStored,
   EngineAiPayloadV1,
+  RagOptionsStored,
   SlotBinding,
   SlotKey,
 } from "@/lib/ai-gateway-types";
@@ -16,12 +17,32 @@ const SLOTS: SlotKey[] = ["flash", "pro", "embed", "chat"];
 
 const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
 
+function normalizeRagOptions(raw: unknown): RagOptionsStored | undefined {
+  if (raw === undefined || raw === null || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: RagOptionsStored = {};
+  if (typeof r.rerankModel === "string" && r.rerankModel.trim()) {
+    out.rerankModel = r.rerankModel.trim();
+  }
+  if (typeof r.chunkSize === "number" && Number.isFinite(r.chunkSize) && r.chunkSize > 0) {
+    out.chunkSize = Math.trunc(r.chunkSize);
+  }
+  if (typeof r.chunkOverlap === "number" && Number.isFinite(r.chunkOverlap) && r.chunkOverlap >= 0) {
+    out.chunkOverlap = Math.trunc(r.chunkOverlap);
+  }
+  if (r.bm25TokenProfile === "cjk_char" || r.bm25TokenProfile === "latin_word") {
+    out.bm25TokenProfile = r.bm25TokenProfile;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function emptyStored(): AiGatewayStored {
   return {
     version: 1,
     credentials: [],
     slotBindings: { flash: null, pro: null, embed: null, chat: null },
     chatOptions: { ...DEFAULT_CHAT },
+    ragOptions: {},
   };
 }
 
@@ -60,7 +81,9 @@ function parseStored(raw: string): AiGatewayStored {
           ? Math.trunc(co.maxTokens)
           : DEFAULT_CHAT.maxTokens,
     };
-    return { version: 1, credentials, slotBindings, chatOptions };
+    const ragRaw = (o as { ragOptions?: unknown }).ragOptions;
+    const ragOptions = normalizeRagOptions(ragRaw);
+    return { version: 1, credentials, slotBindings, chatOptions, ragOptions };
   } catch {
     return emptyStored();
   }
@@ -114,6 +137,7 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
       chat: stored.slotBindings.chat ?? null,
     },
     chatOptions: { ...stored.chatOptions },
+    ragOptions: { ...(stored.ragOptions ?? {}) },
   };
 }
 
@@ -138,6 +162,7 @@ export type AiGatewayPatchBody = {
   }[];
   slotBindings?: Partial<Record<SlotKey, SlotBinding | null>>;
   chatOptions?: Partial<{ temperature: number; maxTokens: number }>;
+  ragOptions?: Partial<RagOptionsStored> | null;
 };
 
 function validateCredentialsUniqueAliases(next: { alias: string }[]): void {
@@ -204,11 +229,25 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     }
   }
 
+  let ragOptions: RagOptionsStored | undefined = cur.ragOptions ?? {};
+  if (patch.ragOptions !== undefined) {
+    if (patch.ragOptions === null) {
+      ragOptions = {};
+    } else {
+      ragOptions = { ...ragOptions, ...patch.ragOptions };
+      if (patch.ragOptions.rerankModel === "") {
+        const { rerankModel: _r, ...rest } = ragOptions;
+        ragOptions = rest;
+      }
+    }
+  }
+
   const stored: AiGatewayStored = {
     version: 1,
     credentials,
     slotBindings,
     chatOptions,
+    ragOptions,
   };
 
   for (const s of SLOTS) {
@@ -249,6 +288,13 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1
   const embed = resolveSlot(stored, "embed");
   const chat = resolveSlot(stored, "chat");
   const { temperature, maxTokens } = stored.chatOptions;
+  const ro = stored.ragOptions;
+  const hasRag =
+    ro &&
+    ((ro.rerankModel && ro.rerankModel.trim()) ||
+      (typeof ro.chunkSize === "number" && Number.isFinite(ro.chunkSize)) ||
+      (typeof ro.chunkOverlap === "number" && Number.isFinite(ro.chunkOverlap)) ||
+      ro.bm25TokenProfile);
   return {
     version: 1,
     gemini: {
@@ -262,6 +308,7 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1
         maxTokens,
       },
     },
+    ...(hasRag ? { ragOptions: ro } : {}),
   };
 }
 
@@ -398,4 +445,55 @@ export async function patchGatewayChatOptions(
     chatOptions.maxTokens = m;
   }
   return persistStored({ ...cur, chatOptions });
+}
+
+/** PATCH body for RAG options: use `null` on a key to clear it (fall back to rule engine env). */
+export type RagOptionsPatch = {
+  rerankModel?: string | null;
+  chunkSize?: number | null;
+  chunkOverlap?: number | null;
+  bm25TokenProfile?: "cjk_char" | "latin_word" | null;
+};
+
+export async function patchGatewayRagOptions(patch: RagOptionsPatch): Promise<AiGatewayPublic> {
+  const cur = await getAiGatewayStored();
+  let ragOptions: RagOptionsStored = { ...(cur.ragOptions ?? {}) };
+
+  if ("rerankModel" in patch) {
+    if (patch.rerankModel === null || patch.rerankModel === "") {
+      const { rerankModel: _r, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (typeof patch.rerankModel === "string") {
+      ragOptions = { ...ragOptions, rerankModel: patch.rerankModel.trim() };
+    }
+  }
+  if ("chunkSize" in patch) {
+    if (patch.chunkSize === null) {
+      const { chunkSize: _c, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.chunkSize !== undefined && Number.isFinite(patch.chunkSize)) {
+      const n = Math.trunc(patch.chunkSize);
+      if (n < 1) throw new Error("chunkSize 无效");
+      ragOptions = { ...ragOptions, chunkSize: n };
+    }
+  }
+  if ("chunkOverlap" in patch) {
+    if (patch.chunkOverlap === null) {
+      const { chunkOverlap: _c, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.chunkOverlap !== undefined && Number.isFinite(patch.chunkOverlap)) {
+      const n = Math.trunc(patch.chunkOverlap);
+      if (n < 0) throw new Error("chunkOverlap 无效");
+      ragOptions = { ...ragOptions, chunkOverlap: n };
+    }
+  }
+  if ("bm25TokenProfile" in patch) {
+    if (patch.bm25TokenProfile === null) {
+      const { bm25TokenProfile: _b, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.bm25TokenProfile === "cjk_char" || patch.bm25TokenProfile === "latin_word") {
+      ragOptions = { ...ragOptions, bm25TokenProfile: patch.bm25TokenProfile };
+    }
+  }
+  return persistStored({ ...cur, ragOptions });
 }

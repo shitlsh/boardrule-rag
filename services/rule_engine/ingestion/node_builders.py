@@ -6,7 +6,8 @@ import re
 from typing import Any
 
 from llama_index.core import Document
-from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
+from llama_index.core.node_parser.text.sentence import CHUNKING_REGEX
 from llama_index.core.schema import TextNode
 
 # Matches <!-- pages: 12-15 -->, <!-- pages: 12 -->, <!-- pages: ? -->
@@ -101,12 +102,50 @@ def merged_markdown_to_documents(
     return [Document(text=body, metadata=meta) for body, meta in parts]
 
 
+def format_header_path_for_prompt(raw: str | None) -> str:
+    """
+    Turn LlamaIndex ``header_path`` (e.g. ``/A/B/``) into a single readable line for prompts.
+    """
+    if not raw or not str(raw).strip():
+        return ""
+    s = str(raw).strip()
+    if s in ("/", "//"):
+        return ""
+    parts = [p for p in s.split("/") if p.strip()]
+    return " › ".join(parts)
+
+
 def documents_to_nodes(
     documents: list[Document],
     *,
     chunk_size: int = 1024,
     chunk_overlap: int = 128,
 ) -> list[TextNode]:
-    """Chunk documents; metadata is copied onto each node."""
-    splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    return splitter.get_nodes_from_documents(documents)
+    """
+    For each page-level ``Document``: split on Markdown headings (``header_path``), then split
+    oversized sections with ``SentenceSplitter`` using Chinese-friendly sentence boundaries.
+    """
+    if not documents:
+        return []
+
+    md_parser = MarkdownNodeParser.from_defaults()
+    md_nodes = md_parser.get_nodes_from_documents(documents)
+    if not md_nodes:
+        return []
+
+    # Same defaults as LlamaIndex SentenceSplitter: ``[^,.;。？！]+[,.;。？！]?|[,.;。？！]``
+    secondary = CHUNKING_REGEX
+    splitter = SentenceSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        secondary_chunking_regex=secondary,
+    )
+    out = splitter.get_nodes_from_documents(md_nodes)
+    return [n for n in out if isinstance(n, TextNode)]
+
+
+def documents_to_nodes_loose(documents: list[Document]) -> list[TextNode]:
+    """Fallback: single huge chunk per document (used when normal pipeline yields nothing)."""
+    loose = SentenceSplitter(chunk_size=10_000_000, chunk_overlap=0)
+    nodes = loose.get_nodes_from_documents(documents)
+    return [n for n in nodes if isinstance(n, TextNode)]
