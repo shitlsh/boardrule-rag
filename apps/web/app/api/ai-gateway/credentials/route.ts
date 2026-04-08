@@ -1,0 +1,33 @@
+import { NextResponse } from "next/server";
+
+import { addGeminiCredential } from "@/lib/ai-gateway";
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null) {
+    return NextResponse.json({ message: "Expected object body" }, { status: 400 });
+  }
+  const o = body as Record<string, unknown>;
+  const id = typeof o.id === "string" ? o.id.trim() : "";
+  const alias = typeof o.alias === "string" ? o.alias : "";
+  const apiKey = typeof o.apiKey === "string" ? o.apiKey : "";
+  if (!id) {
+    return NextResponse.json({ message: "id 必填" }, { status: 400 });
+  }
+
+  try {
+    const data = await addGeminiCredential({ id, alias, apiKey });
+    return NextResponse.json(data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "保存失败";
+    const status = /为空|已存在|冲突|不存在/.test(msg) ? 400 : 500;
+    return NextResponse.json({ message: msg }, { status });
+  }
+}

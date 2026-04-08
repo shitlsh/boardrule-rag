@@ -13,7 +13,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu } from 'lucide-react'
+import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu, Sparkles } from 'lucide-react'
 
 const navItems = [
   {
@@ -25,6 +25,11 @@ const navItems = [
     title: '聊天预览',
     href: '/chat',
     icon: MessageCircle,
+  },
+  {
+    title: '模型管理',
+    href: '/models',
+    icon: Sparkles,
   },
   {
     title: '系统设置',
@@ -79,7 +84,10 @@ export function MobileNav() {
             </SheetHeader>
             <nav className="space-y-1 p-3">
               {navItems.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+                const isActive =
+                  item.href === "/settings"
+                    ? pathname === "/settings"
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}
