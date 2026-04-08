@@ -30,12 +30,14 @@ cp .env.example .env
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | PDF rasterization for `/extract/pages`. |
 | `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro (Pro must support images). |
+| `GEMINI_FLASH_MAX_OUTPUT_TOKENS` / `GEMINI_PRO_MAX_OUTPUT_TOKENS` | Max output tokens per call (defaults `8192`; raise for long merges if the model allows). |
+| `VISION_BATCH_PAGES` / `COMPLEXITY_THRESHOLD_PAGES` | Vision batch size and body-page threshold for `needs_batching` (see `.env.example`). |
 | `GEMINI_CHAT_MODEL` / `GEMINI_CHAT_TEMPERATURE` / `GEMINI_CHAT_MAX_TOKENS` | Phase 3 `POST /chat` synthesis (defaults: chat model follows `GEMINI_FLASH_MODEL` or `gemini-2.0-flash`, temperature `0.2`, max tokens `8192`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `GEMINI_EMBEDDING_MODEL` / `EMBEDDING_DIM` | Gemini embedding id and dimension for pgvector / indexing. |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
 
-Prefer **`.env.example`** as the authoritative list when in doubt.
+Prefer **`.env.example`** as the authoritative list (grouped by concern: HTTP, LangSmith, raster defaults, vision graph, chat, index, paths).
 
 ## Install
 
