@@ -5,20 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 
 from graphs.state import ExtractionState
-from utils.gemini import build_labeled_image_parts, generate_pro, generate_pro_vision
-from utils.paths import load_prompt
-from utils.prompt_context import fill_prompt_placeholders
+from utils.gemini import (
+    PRO_EXTRACT,
+    build_labeled_image_parts,
+    generate_pro,
+    generate_pro_vision,
+    pro_max_output_tokens,
+)
+from utils.prompt_context import render_prompt
 from utils.retry import retry
 
 
 def run(state: ExtractionState) -> dict:
-    rule_style_core = fill_prompt_placeholders(load_prompt("rule_style_core.md"), state)
+    rule_style_core = render_prompt("rule_style_core.md", state)
     vision_batches = state.get("vision_batches") or []
     errs: list[str] = list(state.get("errors") or [])
+    _mot = pro_max_output_tokens()
 
     if vision_batches:
-        template = fill_prompt_placeholders(load_prompt("chapter_extract_vision.md"), state)
-        filled = template.replace("{{RULE_STYLE_CORE}}", rule_style_core)
+        filled = render_prompt("chapter_extract_vision.md", state, rule_style_core=rule_style_core)
         outputs: list[str] = []
         for i, batch in enumerate(vision_batches):
             labeled: list[tuple[int, Path]] = []
@@ -37,7 +42,7 @@ def run(state: ExtractionState) -> dict:
             try:
 
                 def _call() -> str:
-                    return generate_pro_vision(parts, temperature=0.0)
+                    return generate_pro_vision(parts, preset=PRO_EXTRACT, max_output_tokens=_mot)
 
                 out = retry(_call, attempts=3)
                 outputs.append(out)
@@ -53,19 +58,19 @@ def run(state: ExtractionState) -> dict:
             "errors": errs + ["chapter_extract: no vision_batches and no text batches"],
         }
 
-    template = load_prompt("chapter_extract_strict.md")
     outputs = []
     for i, batch in enumerate(batches):
-        filled = (
-            fill_prompt_placeholders(template, state)
-            .replace("{{RULE_STYLE_CORE}}", rule_style_core)
-            .replace("{{BATCH_TEXT}}", batch[:180_000])
+        filled = render_prompt(
+            "chapter_extract_strict.md",
+            state,
+            rule_style_core=rule_style_core,
+            batch_text=batch[:180_000],
         )
         prompt = f"{filled}\n\n（本批为第 {i + 1}/{len(batches)} 批）"
         try:
 
             def _call() -> str:
-                return generate_pro(prompt, temperature=0.0, max_output_tokens=8192)
+                return generate_pro(prompt, preset=PRO_EXTRACT, max_output_tokens=_mot)
 
             out = retry(_call, attempts=3)
             outputs.append(out)

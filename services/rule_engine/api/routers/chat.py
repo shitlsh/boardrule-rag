@@ -11,13 +11,11 @@ from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from pydantic import BaseModel, Field
 
 from ingestion.rulebook_query import build_rulebook_query_engine, get_chat_llm
+from utils.paths import load_prompt
 
 router = APIRouter(tags=["chat"])
 
-_CHAT_SYSTEM = (
-    "你是桌游规则助手。仅根据检索到的规则内容回答；不要编造规则书中未出现的机制。"
-    "使用简体中文，并在相关结论处标注页码（沿用上下文中的页码范围）。"
-)
+_CHAT_SYSTEM = load_prompt("chat_system.md").strip()
 
 
 class ChatMessageIn(BaseModel):

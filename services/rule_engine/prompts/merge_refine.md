@@ -2,15 +2,15 @@
 
 你是「规则抽取流水线」中的**合并与精修**节点。你将收到多段**按批抽取**的 Markdown（段间可能用 `---` 分隔），它们来自同一款游戏的规则书。
 
-当前游戏：**{{GAME_NAME}}**
+当前游戏：**{{ game_name }}**
 
 # 必读：全局文风与硬约束（rule_style_core）
 
-{{RULE_STYLE_CORE}}
+{{ rule_style_core }}
 
 # 输入段落（按顺序拼接）
 
-{{CHUNKS}}
+{{ chunks }}
 
 # 任务
 

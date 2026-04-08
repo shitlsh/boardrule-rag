@@ -124,7 +124,7 @@ Request/response models live in `api/routers/extract.py`, `api/routers/index.py`
 
 ### Prompt placeholders（`{{GAME_NAME}}` / `{{TERM_CONTEXT}}`）
 
-模板里的占位符由 `utils/prompt_context.fill_prompt_placeholders()` 根据 `ExtractionState` 在运行时替换。
+模板由 `utils/prompt_context.render_prompt()`（Jinja2）根据 `ExtractionState` 与额外变量在运行时渲染。
 
 | Placeholder | 含义 | 来源 |
 |-------------|------|------|

@@ -64,6 +64,7 @@ def _legacy_char_batches(text: str) -> list[str]:
 
 
 def run(state: ExtractionState) -> dict:
+    needs_batching = bool(state.get("needs_batching"))
     body = sorted(set(state.get("body_page_indices") or []))
     rows = state.get("page_rows") or []
     by_page: dict[int, str] = {}
@@ -75,8 +76,6 @@ def run(state: ExtractionState) -> dict:
 
     if body and by_page:
         per = _pages_per_batch()
-        toc = state.get("toc") or {}
-        needs_batching = bool(toc.get("needs_batching")) or state.get("complexity") == "complex"
         vb = _split_body_into_vision_batches(body, by_page, per)
         if not needs_batching and len(vb) == 1:
             pass
@@ -85,9 +84,6 @@ def run(state: ExtractionState) -> dict:
         return {"vision_batches": vb, "batches": []}
 
     text = state.get("parsed_text") or ""
-    toc = state.get("toc") or {}
-    complexity = state.get("complexity") or "simple"
-    needs_batching = bool(toc.get("needs_batching")) or complexity == "complex"
 
     if not needs_batching and len(text) < 14_000:
         batches = [text]
