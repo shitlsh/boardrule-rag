@@ -23,7 +23,8 @@ _MANIFEST_NAME = "manifest.json"
 _VECTOR_SUBDIR = "vector_storage"
 _BM25_SUBDIR = "bm25"
 
-_DEFAULT_RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-12-v2"
+# Multilingual cross-encoder; stronger than MiniLM variants for zh/en retrieval reranking.
+_DEFAULT_RERANK_MODEL = "BAAI/bge-reranker-base"
 
 
 def _try_rag_options():
@@ -74,6 +75,38 @@ def game_index_dir(game_id: str) -> Path:
 
 def _embedding_model_name() -> str:
     return get_gemini().embed.model
+
+
+def _normalize_embedding_model_id(model_id: str) -> str:
+    """Compare Gemini model ids whether or not the ``models/`` prefix is present."""
+    t = model_id.strip()
+    if t.startswith("models/"):
+        return t[len("models/") :].lower()
+    return t.lower()
+
+
+def _embedding_models_equivalent(stored: str | None, current: str) -> bool:
+    if not stored or not str(stored).strip():
+        return True
+    return _normalize_embedding_model_id(str(stored)) == _normalize_embedding_model_id(current)
+
+
+def _require_query_embedding_matches_manifest(manifest: dict[str, Any]) -> None:
+    """
+    Dense retrieval must embed the query with the same model that produced index vectors.
+
+    The manifest records the model used at build time; mismatch yields meaningless similarity scores.
+    """
+    stored = manifest.get("embedding_model")
+    if not stored or not str(stored).strip():
+        return
+    current = _embedding_model_name()
+    if not _embedding_models_equivalent(str(stored), current):
+        raise RuntimeError(
+            f"Embedding model mismatch: index was built with {stored!r}, "
+            f"but the current AI Gateway Embed slot is {current!r}. "
+            "Rebuild the index after changing the embedding model, or restore the same Embed model id."
+        )
 
 
 def _rerank_model_name() -> str:
@@ -299,6 +332,8 @@ def load_vector_index(game_id: str) -> VectorStoreIndex:
     manifest = load_manifest(game_id)
     if not manifest:
         raise FileNotFoundError(f"No index manifest for game_id={game_id}")
+
+    _require_query_embedding_matches_manifest(manifest)
 
     backend = manifest.get("vector_backend") or "disk"
     if backend == "pgvector":

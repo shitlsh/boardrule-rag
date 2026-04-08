@@ -34,7 +34,7 @@ cp .env.example .env
 | `VISION_BATCH_PAGES` | Pages per vision batch when `needs_batching` is true (default `6`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `EMBEDDING_DIM` | Vector dimension for pgvector / indexing (must match the embedding model chosen in AI Gateway). |
-| `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
+| `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `BAAI/bge-reranker-base`). |
 
 Prefer **`.env.example`** as the authoritative list (grouped by concern: HTTP, LangSmith, raster defaults, vision graph, chat, index, paths).
 
