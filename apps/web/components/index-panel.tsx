@@ -23,7 +23,7 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
     setIsBuilding(true)
 
     try {
-      const res = await fetch(`/api/games/${game.id}/index`, {
+      const res = await fetch(`/api/games/${game.id}/build-index`, {
         method: 'POST',
       })
 
