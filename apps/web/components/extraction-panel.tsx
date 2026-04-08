@@ -9,6 +9,7 @@ import { PageThumbnails } from "@/components/page-thumbnails";
 import { TaskList } from "@/components/task-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,6 +48,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [terminologyContext, setTerminologyContext] = useState("");
+  const [forceFullPipeline, setForceFullPipeline] = useState(false);
   const [roleByPage, setRoleByPage] = useState<Record<number, PagePickRole>>({});
 
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -293,6 +295,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           tocPages: tocPages || undefined,
           excludePages: excludePages || undefined,
           terminologyContext: terminologyContext.trim() || undefined,
+          forceFullPipeline: forceFullPipeline || undefined,
         }),
       });
       if (!res.ok) {
@@ -507,6 +510,22 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
                 disabled={isExtracting || isProcessing}
                 rows={3}
               />
+            </Field>
+            <Field className="flex flex-row items-start gap-3 space-y-0">
+              <Checkbox
+                id="forceFullPipeline"
+                checked={forceFullPipeline}
+                onCheckedChange={(v) => setForceFullPipeline(v === true)}
+                disabled={isExtracting || isProcessing}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <FieldLabel htmlFor="forceFullPipeline" className="cursor-pointer font-normal">
+                  强制全量流程
+                </FieldLabel>
+                <p className="text-xs text-muted-foreground">
+                  跳过「薄册简单路径」，始终按复杂规则书分流与分批（用于厚册或与旧多阶段管线对齐排查）。
+                </p>
+              </div>
             </Field>
           </FieldGroup>
           <Button onClick={handleStartExtraction} disabled={!hasPagination || isExtracting || isProcessing}>

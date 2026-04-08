@@ -45,6 +45,8 @@ export async function startExtractionWithPagePlan(params: {
   pageJobId: string;
   tocPageIndices: number[];
   excludePageIndices: number[];
+  /** Skip simple-profile gate; use complex-route heuristics (multipart `force_full_pipeline`). */
+  forceFullPipeline?: boolean;
 }): Promise<ExtractStartResponse> {
   const base = getRuleEngineBaseUrl();
   const form = new FormData();
@@ -58,6 +60,7 @@ export async function startExtractionWithPagePlan(params: {
   if (params.terminologyContext) {
     form.append("terminology_context", params.terminologyContext);
   }
+  form.append("force_full_pipeline", params.forceFullPipeline ? "true" : "false");
   form.append("resume", "false");
 
   const ai = await getEngineAiHeaders();

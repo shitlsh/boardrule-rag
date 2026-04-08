@@ -86,6 +86,9 @@ class ExtractPollResponse(BaseModel):
     suggested_questions: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     last_checkpoint_id: str | None = None
+    complexity: str | None = None
+    extraction_profile: str | None = None
+    toc: dict[str, Any] | None = None
 
 
 def _get_graph():
@@ -178,6 +181,7 @@ def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]
                 "errors": final.get("errors") or [],
                 "toc": final.get("toc"),
                 "complexity": final.get("complexity"),
+                "extraction_profile": final.get("extraction_profile"),
                 "last_checkpoint_id": thread_id,
             }
             with _jobs_lock:
@@ -222,6 +226,13 @@ def _parse_int_form(
     if n < 1:
         raise HTTPException(status_code=400, detail=f"{field} 必须 ≥ 1")
     return n
+
+
+def _parse_optional_bool_form(raw: str | None) -> bool:
+    if raw is None:
+        return False
+    s = str(raw).strip().lower()
+    return s in ("1", "true", "yes", "on")
 
 
 def _parse_max_side_form(raw: str | None) -> int | None:
@@ -417,9 +428,11 @@ async def start_extract(
     page_job_id: str | None = Form(None),
     toc_page_indices: str | None = Form(None),
     exclude_page_indices: str | None = Form(None),
+    force_full_pipeline: str | None = Form(None),
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> ExtractJobResponse:
     snapshot = _ai.model_dump(mode="json", by_alias=True)
+    force_full = _parse_optional_bool_form(force_full_pipeline)
 
     jid = job_id or str(uuid.uuid4())
     thread_id = f"{jid}-run-{uuid.uuid4()}"
@@ -446,6 +459,7 @@ async def start_extract(
             "toc_page_indices": list(vc.get("toc_page_indices") or []),
             "exclude_page_indices": list(vc.get("exclude_page_indices") or []),
             "body_page_indices": list(vc.get("body_page_indices") or []),
+            "force_full_pipeline": bool(vc.get("force_full_pipeline")),
             "errors": [],
             "retry_count": 0,
         }
@@ -509,6 +523,7 @@ async def start_extract(
             "toc_page_indices": toc,
             "exclude_page_indices": exclude,
             "body_page_indices": body,
+            "force_full_pipeline": force_full,
             "errors": [],
             "retry_count": 0,
         }
@@ -519,6 +534,7 @@ async def start_extract(
             "body_page_indices": body,
             "source_file": source_name,
             "source_url": None,
+            "force_full_pipeline": force_full,
         }
         with _jobs_lock:
             _jobs[jid] = ExtractJob(
@@ -562,4 +578,7 @@ async def get_extract_job(job_id: str) -> ExtractPollResponse:
         suggested_questions=res.get("suggested_questions") or [],
         errors=res.get("errors") or [],
         last_checkpoint_id=res.get("last_checkpoint_id"),
+        complexity=res.get("complexity"),
+        extraction_profile=res.get("extraction_profile"),
+        toc=res.get("toc"),
     )

@@ -12,6 +12,8 @@ type Body = {
   tocPages?: string;
   excludePages?: string;
   terminologyContext?: string;
+  /** Skip simple-profile gate on the rule engine (force multi-stage routing). */
+  forceFullPipeline?: boolean;
 };
 
 export async function POST(req: Request, { params }: RouteParams) {
@@ -61,6 +63,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       pageJobId,
       tocPageIndices,
       excludePageIndices,
+      forceFullPipeline: body.forceFullPipeline === true,
     });
 
     await prisma.task.update({
