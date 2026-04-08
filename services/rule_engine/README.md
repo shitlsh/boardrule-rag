@@ -87,7 +87,9 @@ When tracing is on **and** a LangSmith API key is set (`LANGCHAIN_API_KEY` or `L
 
 ## Batching and concurrency
 
-The graph **sequentially** calls Gemini once per batch **inside** a single node implementation: for example `chapter_extract` iterates over `vision_batches` or text `batches` in a `for` loop, and `merge_and_refine` may issue multiple merge calls when outputs are long. That keeps memory use and API rate limits easy to reason about.
+The graph **sequentially** calls Gemini once per batch **inside** a single node implementation: for example `chapter_extract` iterates over `vision_batches` in a `for` loop (vision-only; there are no text character batches), and `merge_and_refine` may issue multiple merge calls when outputs are long. That keeps memory use and API rate limits easy to reason about.
+
+**End-to-end flow (Web → extract → index → chat):** see **[EXTRACTION_FLOW.md](./EXTRACTION_FLOW.md)**.
 
 **Optional future work** (not implemented here): parallel batch requests with `asyncio.gather` plus a semaphore or token bucket for rate limiting, or refactoring to LangGraph **`Send`** so each batch is a mapped child run—either approach would require careful handling of ordering when assembling `chapter_outputs` and merged text.
 
@@ -149,6 +151,7 @@ Request/response models live in `api/routers/extract.py`, `api/routers/index.py`
 
 ```text
 services/rule_engine/
+  EXTRACTION_FLOW.md  # Extract → index → chat: diagrams and business steps
   langgraph.json    # LangGraph CLI: dependencies + graph entrypoint for Studio
   langgraph_studio.py  # `graph` export for `langgraph dev` (no Postgres checkpointer)
   api/              # FastAPI app and routers
