@@ -2,13 +2,13 @@
 
 你是「规则抽取流水线」中的**章节结构化抽取**节点。你要把**本批输入片段**整理为可直接入库的 Markdown 规则正文。
 
-当前游戏：**{{GAME_NAME}}**
+当前游戏：**{{ game_name }}**
 
 # 必读：全局文风与硬约束（rule_style_core）
 
 下列 `rule_style_core` 约束**优先级最高**，与本节后续要求冲突时以 `rule_style_core` 为准。
 
-{{RULE_STYLE_CORE}}
+{{ rule_style_core }}
 
 # 本批任务
 
@@ -21,7 +21,7 @@
 
 # 输入片段（本批）
 
-{{BATCH_TEXT}}
+{{ batch_text }}
 
 # 输出要求
 

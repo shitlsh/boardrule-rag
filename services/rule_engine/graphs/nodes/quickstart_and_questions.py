@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import generate_flash
+from utils.gemini import FLASH_QUICKSTART, flash_max_output_tokens, generate_flash
 from utils.json_extract import parse_json_object
-from utils.paths import load_prompt
-from utils.prompt_context import fill_prompt_placeholders
+from utils.prompt_context import render_prompt
 from utils.retry import retry
 
 
@@ -18,12 +17,12 @@ def run(state: ExtractionState) -> dict:
             "suggested_questions": [],
             "errors": (state.get("errors") or []) + ["quickstart_and_questions: empty merged_markdown"],
         }
-    template = fill_prompt_placeholders(load_prompt("quickstart_and_questions.md"), state)
-    prompt = template.replace("{{MERGED}}", merged[:120_000])
+    prompt = render_prompt("quickstart_and_questions.md", state, merged=merged[:120_000])
+    _mot = flash_max_output_tokens()
     try:
 
         def _call() -> str:
-            return generate_flash(prompt, temperature=0.3, max_output_tokens=8192)
+            return generate_flash(prompt, preset=FLASH_QUICKSTART, max_output_tokens=_mot)
 
         raw = retry(_call, attempts=3)
         data = parse_json_object(raw)

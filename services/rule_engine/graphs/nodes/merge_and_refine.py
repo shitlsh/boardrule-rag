@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from graphs.state import ExtractionState
 from ingestion.node_builders import merged_markdown_to_documents
-from utils.gemini import generate_pro
-from utils.paths import load_prompt
-from utils.prompt_context import fill_prompt_placeholders
+from utils.gemini import PRO_MERGE, generate_pro, pro_max_output_tokens
+from utils.prompt_context import render_prompt
 from utils.retry import retry
 
 
@@ -22,9 +21,9 @@ def _structured_from_md(state: ExtractionState, md: str) -> list[dict]:
 
 
 def run(state: ExtractionState) -> dict:
-    rule_style_core = fill_prompt_placeholders(load_prompt("rule_style_core.md"), state)
-    template = fill_prompt_placeholders(load_prompt("merge_refine.md"), state)
+    rule_style_core = render_prompt("rule_style_core.md", state)
     chunks = state.get("chapter_outputs") or []
+    _mot = pro_max_output_tokens()
     if not chunks:
         return {
             "merged_markdown": "",
@@ -42,12 +41,22 @@ def run(state: ExtractionState) -> dict:
         try:
 
             def _merge_a() -> str:
-                p = template.replace("{{RULE_STYLE_CORE}}", rule_style_core).replace("{{CHUNKS}}", first_half[:120_000])
-                return generate_pro(p, temperature=0.0, max_output_tokens=8192)
+                p = render_prompt(
+                    "merge_refine.md",
+                    state,
+                    rule_style_core=rule_style_core,
+                    chunks=first_half[:120_000],
+                )
+                return generate_pro(p, preset=PRO_MERGE, max_output_tokens=_mot)
 
             def _merge_b() -> str:
-                p = template.replace("{{RULE_STYLE_CORE}}", rule_style_core).replace("{{CHUNKS}}", second_half[:120_000])
-                return generate_pro(p, temperature=0.0, max_output_tokens=8192)
+                p = render_prompt(
+                    "merge_refine.md",
+                    state,
+                    rule_style_core=rule_style_core,
+                    chunks=second_half[:120_000],
+                )
+                return generate_pro(p, preset=PRO_MERGE, max_output_tokens=_mot)
 
             part_a = retry(_merge_a, attempts=2)
             part_b = retry(_merge_b, attempts=2)
@@ -60,11 +69,16 @@ def run(state: ExtractionState) -> dict:
                 "errors": (state.get("errors") or []) + [f"merge_and_refine split: {e}"],
             }
 
-    prompt = template.replace("{{RULE_STYLE_CORE}}", rule_style_core).replace("{{CHUNKS}}", body[:200_000])
+    prompt = render_prompt(
+        "merge_refine.md",
+        state,
+        rule_style_core=rule_style_core,
+        chunks=body[:200_000],
+    )
     try:
 
         def _final() -> str:
-            return generate_pro(prompt, temperature=0.0, max_output_tokens=8192)
+            return generate_pro(prompt, preset=PRO_MERGE, max_output_tokens=_mot)
 
         merged_md = retry(_final, attempts=3)
     except Exception as e:  # noqa: BLE001

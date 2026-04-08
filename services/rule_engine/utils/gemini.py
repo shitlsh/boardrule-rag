@@ -1,12 +1,24 @@
-"""Gemini client wrapper (Flash / Pro, text + multimodal vision)."""
+"""Gemini client wrapper (Flash / Pro, text + multimodal vision).
+
+All generation uses named presets for temperature and max_output_tokens (from env).
+"""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import google.generativeai as genai
+
+# Preset names (use at call sites to avoid magic strings)
+FLASH_TOC = "flash_toc"
+FLASH_QUICKSTART = "flash_quickstart"
+PRO_EXTRACT = "pro_extract"
+PRO_MERGE = "pro_merge"
+
+FlashPreset = Literal["flash_toc", "flash_quickstart"]
+ProPreset = Literal["pro_extract", "pro_merge"]
 
 
 def _configure() -> None:
@@ -24,24 +36,48 @@ def pro_model_name() -> str:
     return os.environ.get("GEMINI_PRO_MODEL", "gemini-1.5-pro")
 
 
+def flash_max_output_tokens() -> int:
+    raw = os.environ.get("GEMINI_FLASH_MAX_OUTPUT_TOKENS", "8192").strip()
+    return int(raw) if raw.isdigit() else 8192
+
+
 def pro_max_output_tokens() -> int:
     raw = os.environ.get("GEMINI_PRO_MAX_OUTPUT_TOKENS", "8192").strip()
     return int(raw) if raw.isdigit() else 8192
 
 
+# (temperature,) — max tokens come from flash_max_output_tokens() / pro_max_output_tokens()
+_FLASH_PRESET_TEMP: dict[FlashPreset, float] = {
+    "flash_toc": 0.1,
+    "flash_quickstart": 0.3,
+}
+
+_PRO_PRESET_TEMP: dict[ProPreset, float] = {
+    "pro_extract": 0.0,
+    "pro_merge": 0.0,
+}
+
+
+def _generation_config(*, temperature: float, max_output_tokens: int) -> genai.GenerationConfig:
+    return genai.GenerationConfig(
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+    )
+
+
 def generate_flash(
     prompt: str,
     *,
-    temperature: float = 0.2,
-    max_output_tokens: int = 8192,
+    preset: FlashPreset,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> str:
     _configure()
+    temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
+    mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
     model = genai.GenerativeModel(
         flash_model_name(),
-        generation_config=genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-        ),
+        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
     response = model.generate_content(prompt)
     if not response.text:
@@ -52,16 +88,16 @@ def generate_flash(
 def generate_pro(
     prompt: str,
     *,
-    temperature: float = 0.0,
-    max_output_tokens: int = 8192,
+    preset: ProPreset,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> str:
     _configure()
+    temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
+    mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
     model = genai.GenerativeModel(
         pro_model_name(),
-        generation_config=genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-        ),
+        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
     response = model.generate_content(prompt)
     if not response.text:
@@ -101,17 +137,17 @@ def build_labeled_image_parts(
 def generate_flash_vision(
     parts: list[Any],
     *,
-    temperature: float = 0.1,
-    max_output_tokens: int = 8192,
+    preset: FlashPreset = "flash_toc",
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> str:
     """Multimodal Flash (images + text parts)."""
     _configure()
+    temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
+    mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
     model = genai.GenerativeModel(
         flash_model_name(),
-        generation_config=genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-        ),
+        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
     response = model.generate_content(parts)
     if not response.text:
@@ -122,18 +158,17 @@ def generate_flash_vision(
 def generate_pro_vision(
     parts: list[Any],
     *,
-    temperature: float = 0.0,
+    preset: ProPreset = "pro_extract",
+    temperature: float | None = None,
     max_output_tokens: int | None = None,
 ) -> str:
     """Multimodal Pro (images + text parts)."""
     _configure()
+    temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
     model = genai.GenerativeModel(
         pro_model_name(),
-        generation_config=genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=mot,
-        ),
+        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
     response = model.generate_content(parts)
     if not response.text:

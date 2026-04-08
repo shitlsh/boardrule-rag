@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import build_labeled_image_parts, generate_flash_vision
+from utils.gemini import FLASH_TOC, build_labeled_image_parts, generate_flash_vision
 from utils.json_extract import parse_json_object
-from utils.paths import load_prompt
-from utils.prompt_context import fill_prompt_placeholders
+from utils.prompt_context import render_prompt
 from utils.retry import retry
 
 
@@ -24,7 +23,7 @@ def run(state: ExtractionState) -> dict:
             labeled.append((p, Path(path)))
 
     if labeled:
-        base = fill_prompt_placeholders(load_prompt("toc_analyzer_vision.md"), state)
+        base = render_prompt("toc_analyzer_vision.md", state)
         parts = build_labeled_image_parts(
             labeled,
             preamble=base + "\n\n你将看到以下目录页图片（已标注物理页码）：\n",
@@ -33,7 +32,7 @@ def run(state: ExtractionState) -> dict:
         try:
 
             def _call() -> str:
-                return generate_flash_vision(parts, temperature=0.1, max_output_tokens=8192)
+                return generate_flash_vision(parts, preset=FLASH_TOC)
 
             raw = retry(_call, attempts=3)
             toc = parse_json_object(raw)
@@ -47,13 +46,13 @@ def run(state: ExtractionState) -> dict:
     if not text.strip():
         return {"errors": (state.get("errors") or []) + ["toc_analyzer: no TOC pages and empty parsed_text"], "toc": {}}
 
-    base = fill_prompt_placeholders(load_prompt("toc_analyzer.md"), state)
+    base = render_prompt("toc_analyzer.md", state)
     prompt = f"{base}\n\n---\n\n规则书全文：\n\n{text[:200000]}"
     try:
         from utils.gemini import generate_flash
 
         def _call() -> str:
-            return generate_flash(prompt, temperature=0.1, max_output_tokens=8192)
+            return generate_flash(prompt, preset=FLASH_TOC)
 
         raw = retry(_call, attempts=3)
         toc = parse_json_object(raw)

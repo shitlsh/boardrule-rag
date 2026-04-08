@@ -27,6 +27,8 @@ class ExtractionState(TypedDict, total=False):
     # TOC analyzer (Flash) — structured outline
     toc: dict[str, Any]
     complexity: str
+    # Final routing flag: set in route_by_complexity; batch_splitter reads only this.
+    needs_batching: bool
     # Text batches (legacy); prefer vision_batches for chapter_extract
     batches: list[str]
     chapter_outputs: list[str]
