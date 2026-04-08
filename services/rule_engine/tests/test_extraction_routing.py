@@ -55,10 +55,9 @@ def test_force_full_skips_simple_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["needs_batching"] is True
 
 
-def test_complex_route_uses_legacy_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_complex_route_respects_extraction_complex_route_body_pages(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EXTRACTION_SIMPLE_MAX_BODY_PAGES", "5")
-    monkeypatch.setenv("COMPLEXITY_THRESHOLD_PAGES", "20")
-    monkeypatch.delenv("EXTRACTION_COMPLEX_ROUTE_BODY_PAGES", raising=False)
+    monkeypatch.setenv("EXTRACTION_COMPLEX_ROUTE_BODY_PAGES", "20")
     # 10 body pages: above simple gate (5), below legacy body threshold (20); keep effective under 40k.
     st = _minimal_state(body_pages=list(range(1, 11)))
     out = route_by_complexity.run(st)
