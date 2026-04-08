@@ -29,8 +29,6 @@ class ExtractionState(TypedDict, total=False):
     complexity: str
     # Final routing flag: set in route_by_complexity; batch_splitter reads only this.
     needs_batching: bool
-    # Unused; kept for schema compatibility (always empty in vision-only mode)
-    batches: list[str]
     chapter_outputs: list[str]
     merged_markdown: str
     # Optional structured chunks for Phase 2 (list of {text, metadata})

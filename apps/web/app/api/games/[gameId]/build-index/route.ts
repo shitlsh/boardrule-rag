@@ -6,27 +6,24 @@ import { readStorageText } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-/**
- * Reads merged rules Markdown from storage and calls the rule engine `POST /build-index`.
- */
 type RouteParams = { params: Promise<{ gameId: string }> };
 
 export async function POST(_req: Request, { params }: RouteParams) {
   const { gameId } = await params;
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
-    return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
   }
   if (!game.rulesMarkdownPath) {
-    return NextResponse.json({ error: "No extracted rules yet (rulesMarkdownPath is empty)" }, { status: 400 });
+    return NextResponse.json({ message: "尚未提取规则正文，无法建索引" }, { status: 400 });
   }
 
   const merged = await readStorageText(game.rulesMarkdownPath);
   if (merged === undefined) {
-    return NextResponse.json({ error: "Could not read rules markdown from storage" }, { status: 400 });
+    return NextResponse.json({ message: "无法读取规则文件" }, { status: 400 });
   }
   if (!merged.trim()) {
-    return NextResponse.json({ error: "Rules markdown file is empty" }, { status: 400 });
+    return NextResponse.json({ message: "规则文件为空" }, { status: 400 });
   }
 
   const base = getRuleEngineBaseUrl();
@@ -41,7 +38,7 @@ export async function POST(_req: Request, { params }: RouteParams) {
   });
   const text = await res.text();
   if (!res.ok) {
-    return NextResponse.json({ error: text || `Build index failed: ${res.status}` }, { status: res.status });
+    return NextResponse.json({ message: text || `建索引失败: ${res.status}` }, { status: res.status });
   }
 
   const body = JSON.parse(text) as { index_id?: string; manifest?: { game_id?: string } };
@@ -55,5 +52,8 @@ export async function POST(_req: Request, { params }: RouteParams) {
     },
   });
 
-  return NextResponse.json({ ok: true, indexId, raw: body });
+  return NextResponse.json({
+    message: "索引建立成功",
+    indexId,
+  });
 }

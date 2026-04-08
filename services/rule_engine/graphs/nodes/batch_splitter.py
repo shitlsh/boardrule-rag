@@ -54,6 +54,6 @@ def run(state: ExtractionState) -> dict:
             pass
         elif not needs_batching and len(body) <= per:
             vb = _split_body_into_vision_batches(body, by_page, max(per, len(body)))
-        return {"vision_batches": vb, "batches": []}
+        return {"vision_batches": vb}
 
-    return {"vision_batches": [], "batches": []}
+    return {"vision_batches": []}
