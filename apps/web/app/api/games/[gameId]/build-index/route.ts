@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { readStorageText } from "@/lib/storage";
 import { startBuildIndex } from "@/lib/ingestion";
 import { getEngineAiHeaders } from "@/lib/engine-ai";
+import { getAiGatewayStored } from "@/lib/ai-gateway";
 
 export const runtime = "nodejs";
 /** Submit-only: engine runs build in background; long work is not bound to this request. */
@@ -32,7 +33,16 @@ function messageFromRuleEngineBody(text: string, status: number): string {
 
 type RouteParams = { params: Promise<{ gameId: string }> };
 
-export async function POST(_req: Request, { params }: RouteParams) {
+function asInt(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return Math.trunc(n);
+  }
+  return undefined;
+}
+
+export async function POST(req: Request, { params }: RouteParams) {
   const { gameId } = await params;
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
@@ -71,11 +81,33 @@ export async function POST(_req: Request, { params }: RouteParams) {
     },
   });
 
+  let body: Record<string, unknown> = {};
+  try {
+    const raw = await req.json();
+    if (raw && typeof raw === "object") body = raw as Record<string, unknown>;
+  } catch {
+    /* empty or invalid body */
+  }
+
+  const gw = await getAiGatewayStored();
+  const ro = gw.ragOptions ?? {};
+  const similarityTopK = asInt(body.similarityTopK) ?? ro.similarityTopK;
+  const rerankTopN = asInt(body.rerankTopN) ?? ro.rerankTopN;
+  const retrievalMode =
+    body.retrievalMode === "vector_only" || body.retrievalMode === "hybrid"
+      ? body.retrievalMode
+      : ro.retrievalMode;
+  const useRerank = typeof body.useRerank === "boolean" ? body.useRerank : ro.useRerank;
+
   try {
     const start = await startBuildIndex({
       gameId: game.id,
       mergedMarkdown: merged,
       sourceFile: game.slug,
+      ...(similarityTopK != null && { similarityTopK }),
+      ...(rerankTopN != null && { rerankTopN }),
+      ...(retrievalMode != null && { retrievalMode }),
+      ...(useRerank != null && { useRerank }),
     });
 
     await prisma.$transaction([

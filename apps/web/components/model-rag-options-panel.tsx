@@ -5,9 +5,11 @@ import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { AiGatewayPublic } from "@/lib/ai-gateway-types";
 import type { RagOptionsPatch } from "@/lib/ai-gateway";
 
@@ -25,6 +27,14 @@ export function ModelRagOptionsPanel({ data, onUpdated }: Props) {
   const [bm25TokenProfile, setBm25TokenProfile] = useState<"" | "cjk_char" | "latin_word">(
     ro.bm25TokenProfile ?? "",
   );
+  const [similarityTopK, setSimilarityTopK] = useState(
+    ro.similarityTopK != null ? String(ro.similarityTopK) : "",
+  );
+  const [rerankTopN, setRerankTopN] = useState(ro.rerankTopN != null ? String(ro.rerankTopN) : "");
+  const [retrievalMode, setRetrievalMode] = useState<"" | "hybrid" | "vector_only">(
+    ro.retrievalMode ?? "",
+  );
+  const [useRerank, setUseRerank] = useState(ro.useRerank ?? true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -33,6 +43,10 @@ export function ModelRagOptionsPanel({ data, onUpdated }: Props) {
     setChunkSize(r.chunkSize != null ? String(r.chunkSize) : "");
     setChunkOverlap(r.chunkOverlap != null ? String(r.chunkOverlap) : "");
     setBm25TokenProfile(r.bm25TokenProfile ?? "");
+    setSimilarityTopK(r.similarityTopK != null ? String(r.similarityTopK) : "");
+    setRerankTopN(r.rerankTopN != null ? String(r.rerankTopN) : "");
+    setRetrievalMode(r.retrievalMode ?? "");
+    setUseRerank(r.useRerank ?? true);
   }, [data.ragOptions]);
 
   const flush = async () => {
@@ -68,6 +82,26 @@ export function ModelRagOptionsPanel({ data, onUpdated }: Props) {
         : undefined;
     if (prof !== prev.bm25TokenProfile) {
       patch.bm25TokenProfile = bm25TokenProfile === "" ? null : bm25TokenProfile;
+    }
+    if (similarityTopK.trim() === "") {
+      if (prev.similarityTopK !== undefined) patch.similarityTopK = null;
+    } else {
+      const n = Math.trunc(Number(similarityTopK));
+      if (!Number.isFinite(n) || n < 1) {
+        toast.error("similarityTopK 须为正整数");
+        return;
+      }
+      if (n !== prev.similarityTopK) patch.similarityTopK = n;
+    }
+    if (rerankTopN.trim() === "") {
+      if (prev.rerankTopN !== undefined) patch.rerankTopN = null;
+    } else {
+      const n = Math.trunc(Number(rerankTopN));
+      if (!Number.isFinite(n) || n < 1) {
+        toast.error("rerankTopN 须为正整数");
+        return;
+      }
+      if (n !== prev.rerankTopN) patch.rerankTopN = n;
     }
     if (Object.keys(patch).length === 0) {
       return;
@@ -189,6 +223,108 @@ export function ModelRagOptionsPanel({ data, onUpdated }: Props) {
                   <option value="latin_word">latin_word（英文 `\b\w\w+\b` 词界）</option>
                 </select>
               </Field>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                以下为「新建/重建索引」时的默认值：<strong className="text-foreground">索引模式</strong>只影响是否建
+                BM25；<strong className="text-foreground">启用 rerank</strong>只影响查询时是否加载 cross-encoder，二者独立。游戏详情页可再次覆盖；查询以各游戏 manifest 为准。
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Field className="flex-1 min-w-0">
+                  <FieldLabel>默认 similarityTopK</FieldLabel>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={200}
+                    placeholder="8"
+                    value={similarityTopK}
+                    onChange={(e) => setSimilarityTopK(e.target.value)}
+                    onBlur={() => void flush()}
+                    disabled={saving}
+                  />
+                </Field>
+                <Field className="flex-1 min-w-0">
+                  <FieldLabel>默认 rerankTopN</FieldLabel>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    placeholder="5"
+                    value={rerankTopN}
+                    onChange={(e) => setRerankTopN(e.target.value)}
+                    onBlur={() => void flush()}
+                    disabled={saving}
+                  />
+                </Field>
+              </div>
+              <Field className="min-w-0">
+                <FieldLabel>默认检索模式</FieldLabel>
+                <select
+                  className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  value={retrievalMode}
+                  onChange={(e) => {
+                    const v = e.target.value as "" | "hybrid" | "vector_only";
+                    setRetrievalMode(v);
+                    void (async () => {
+                      const prevRm = data.ragOptions?.retrievalMode;
+                      const next = v === "" ? null : v;
+                      if (next === (prevRm ?? null)) return;
+                      setSaving(true);
+                      try {
+                        const res = await fetch("/api/ai-gateway/rag-options", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ retrievalMode: next }),
+                        });
+                        const json = (await res.json()) as AiGatewayPublic & { message?: string };
+                        if (!res.ok) throw new Error(json.message || "保存失败");
+                        onUpdated(json);
+                        toast.success("检索与索引参数已保存");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "保存失败");
+                      } finally {
+                        setSaving(false);
+                      }
+                    })();
+                  }}
+                  disabled={saving}
+                >
+                  <option value="">（引擎 env 默认 hybrid）</option>
+                  <option value="hybrid">hybrid</option>
+                  <option value="vector_only">vector_only</option>
+                </select>
+              </Field>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="gw-use-rerank"
+                  checked={useRerank}
+                  onCheckedChange={(v) => {
+                    setUseRerank(v === true);
+                    void (async () => {
+                      const next = v === true;
+                      if (next === (data.ragOptions?.useRerank ?? true)) return;
+                      setSaving(true);
+                      try {
+                        const res = await fetch("/api/ai-gateway/rag-options", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ useRerank: next }),
+                        });
+                        const json = (await res.json()) as AiGatewayPublic & { message?: string };
+                        if (!res.ok) throw new Error(json.message || "保存失败");
+                        onUpdated(json);
+                        toast.success("检索与索引参数已保存");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "保存失败");
+                      } finally {
+                        setSaving(false);
+                      }
+                    })();
+                  }}
+                  disabled={saving}
+                />
+                <Label htmlFor="gw-use-rerank" className="text-sm font-normal">
+                  默认启用 rerank（新建索引时）
+                </Label>
+              </div>
             </div>
           </CardContent>
         </CollapsibleContent>
