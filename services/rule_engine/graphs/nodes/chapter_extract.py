@@ -60,6 +60,12 @@ def run(state: ExtractionState) -> dict:
                 filled
                 + f"\n\n（本批为第 {i + 1}/{len(batch_list)} 批；物理页：{page_nums}）\n"
             )
+            if len(batch_list) == 1:
+                preamble += (
+                    "\n【单批全文】本批已覆盖本次抽取的**全部正文页**图片。"
+                    "禁止用 NEED_MORE_CONTEXT 声称「本批未包含某正文页」；"
+                    "若图中确实看不清某段内容，再写 NEED_MORE_CONTEXT 并说明原因。\n"
+                )
             labeled = [(int(x["page"]), Path(str(x["path"]))) for x in combined]
             parts = build_labeled_image_parts(
                 labeled,

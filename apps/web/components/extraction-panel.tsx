@@ -10,7 +10,7 @@ import { TaskList } from "@/components/task-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -490,6 +490,10 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           <CardTitle>步骤二：目录与排除（点选缩略图）</CardTitle>
           <CardDescription>
             在分页完成后，点选目录页与需排除的广告/全图页；也可填写术语上下文。
+            <span className="mt-2 block text-xs text-muted-foreground">
+              未标记任何「目录页」时，引擎仍会用第 1 页做目录结构分析；若总页数较少（默认 ≤10），正文抽取会包含全部页（含第 1
+              页），避免薄册配件页被误排除。若你明确把第 1 页标为目录，则正文不含该页。
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -511,22 +515,23 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
                 rows={3}
               />
             </Field>
-            <Field className="flex flex-row items-start gap-3 space-y-0">
+            <div className="flex w-full min-w-0 items-start gap-3">
               <Checkbox
                 id="forceFullPipeline"
+                className="mt-0.5 shrink-0"
                 checked={forceFullPipeline}
                 onCheckedChange={(v) => setForceFullPipeline(v === true)}
                 disabled={isExtracting || isProcessing}
               />
-              <div className="grid gap-1.5 leading-none">
-                <FieldLabel htmlFor="forceFullPipeline" className="cursor-pointer font-normal">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <FieldLabel htmlFor="forceFullPipeline" className="block cursor-pointer font-normal leading-snug">
                   强制全量流程
                 </FieldLabel>
-                <p className="text-xs text-muted-foreground">
+                <FieldDescription>
                   跳过「薄册简单路径」，始终按复杂规则书分流与分批（用于厚册或与旧多阶段管线对齐排查）。
-                </p>
+                </FieldDescription>
               </div>
-            </Field>
+            </div>
           </FieldGroup>
           <Button onClick={handleStartExtraction} disabled={!hasPagination || isExtracting || isProcessing}>
             {isExtracting || isProcessing ? (

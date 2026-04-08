@@ -117,7 +117,7 @@ flowchart TB
   end
 ```
 
-说明：未在 UI 选目录页时，引擎可将 **第 1 页** 默认作为目录（见 `extract.py`）。**`chapter_extract` 节点内部**：若某批输出含 `NEED_MORE_CONTEXT`，会在上限内 **合并相邻图片批次** 再次调用 Pro（非图中的独立节点）。
+说明：**未在 UI 标记任何目录页**时，仍会用 **第 1 页** 参与 Flash 目录分析（与 `toc_page_indices` 默认一致，见 `extract.py`）。若此时 **总页数 ≤ `EXTRACTION_SIMPLE_MAX_BODY_PAGES`（默认 10）**，**正文页集合会包含全部页（含第 1 页）**，仅排除「排除页」——避免薄册把第 1 页当目录后，vision 批次缺配件页。若用户**明确**把第 1 页标为目录，则正文不含该页。**`chapter_extract` 节点内部**：若某批输出含 `NEED_MORE_CONTEXT`，会在上限内 **合并相邻图片批次** 再次调用 Pro（非图中的独立节点）。
 
 ### 3.2 merge 对 NEED_MORE_CONTEXT 的分支（逻辑在 `merge_and_refine` 内）
 
