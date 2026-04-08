@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { prismaGameToDetailDto, prismaGameToDto } from "@/lib/game-dto";
+import { gameHasActiveIndexBuild, prismaGameToDetailDto, prismaGameToDto } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
 
 type RouteParams = { params: Promise<{ gameId: string }> };
@@ -39,5 +39,6 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         : {}),
     },
   });
-  return NextResponse.json(prismaGameToDto(game));
+  const indexBuilding = await gameHasActiveIndexBuild(gameId);
+  return NextResponse.json(prismaGameToDto(game, undefined, { indexBuilding }));
 }

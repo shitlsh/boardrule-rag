@@ -10,13 +10,13 @@ from pathlib import Path
 from typing import Any
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.schema import QueryBundle
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.retrievers.bm25 import BM25Retriever
 
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import documents_to_nodes, merged_markdown_to_documents
+from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_gemini
 from utils.paths import service_root
 
@@ -316,7 +316,7 @@ def load_hybrid_reranked_nodes(
         vector_retriever,
         similarity_top_k=similarity_top_k,
     )
-    rerank = SentenceTransformerRerank(
+    rerank = get_cached_sentence_transformer_rerank(
         model=_rerank_model_name(),
         top_n=rerank_top_n,
     )

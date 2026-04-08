@@ -24,7 +24,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 | Area | Role |
 |------|------|
 | **apps/web** | Game metadata, rule uploads, task polling, extraction status; calls the rule engine via `RULE_ENGINE_URL` only. **Gemini** API keys and per-slot models are configured in the UI (`/models`) and sent as **`X-Boardrule-Ai-Config`** to the engine (see **QUICKSTART.md**). |
-| **services/rule_engine** | `POST /extract/pages` (rasterize), `POST /extract` (vision pipeline + checkpoints), `POST /build-index`, `POST /chat`, `GET /health`. |
+| **services/rule_engine** | `POST /extract/pages` (rasterize), `POST /extract` (vision pipeline + checkpoints), `POST /build-index/start` + `GET /build-index/jobs/{id}`, `POST /chat`, `GET /health`. |
 
 ## Tech stack (fixed)
 

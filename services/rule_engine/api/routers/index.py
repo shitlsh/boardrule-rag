@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from llama_index.core import Document
 from pydantic import BaseModel, Field, model_validator
 
 from api.deps import require_boardrule_ai
+from api.routers import index_jobs
 from ingestion.index_builder import build_and_persist_index, load_hybrid_reranked_nodes, load_manifest
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 
@@ -35,25 +36,27 @@ class BuildIndexRequest(BaseModel):
         return self
 
 
-class BuildIndexResponse(BaseModel):
-    status: str
-    game_id: str
-    index_id: str
-    manifest: dict[str, Any]
-
-
 class IndexManifestResponse(BaseModel):
     game_id: str
     manifest: dict[str, Any] | None
 
 
-@router.post("/build-index", response_model=BuildIndexResponse)
-async def build_index(
-    body: BuildIndexRequest,
-    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
-) -> BuildIndexResponse:
+class BuildIndexStartResponse(BaseModel):
+    job_id: str
+    status: Literal["pending"] = "pending"
+
+
+class BuildIndexJobPollResponse(BaseModel):
+    job_id: str
+    status: Literal["pending", "processing", "completed", "failed"]
+    manifest: dict[str, Any] | None = None
+    error: str | None = None
+
+
+def _run_build_index_job(job_id: str, body: BuildIndexRequest, ai_snapshot: dict[str, Any]) -> None:
+    index_jobs.set_processing(job_id)
     try:
-        with boardrule_ai_runtime(_ai):
+        with boardrule_ai_runtime(ai_snapshot):
             docs = (
                 [Document(text=d.text, metadata=d.metadata) for d in body.documents]
                 if body.documents
@@ -65,16 +68,34 @@ async def build_index(
                 documents=docs,
                 source_file=body.source_file or "",
             )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    gid = manifest.get("game_id", body.game_id)
-    return BuildIndexResponse(
-        status="completed",
-        game_id=gid,
-        index_id=gid,
-        manifest=manifest,
+        index_jobs.set_completed(job_id, manifest)
+    except Exception as e:  # noqa: BLE001
+        index_jobs.set_failed(job_id, str(e))
+
+
+@router.post("/build-index/start", response_model=BuildIndexStartResponse)
+async def start_build_index(
+    body: BuildIndexRequest,
+    background_tasks: BackgroundTasks,
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
+) -> BuildIndexStartResponse:
+    """Queue index build; poll ``GET /build-index/jobs/{job_id}`` until completed or failed."""
+    job_id = index_jobs.create_job()
+    snapshot = _ai.model_dump(mode="json", by_alias=True)
+    background_tasks.add_task(_run_build_index_job, job_id, body, snapshot)
+    return BuildIndexStartResponse(job_id=job_id, status="pending")
+
+
+@router.get("/build-index/jobs/{job_id}", response_model=BuildIndexJobPollResponse)
+async def get_build_index_job(job_id: str) -> BuildIndexJobPollResponse:
+    job = index_jobs.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown build-index job_id")
+    return BuildIndexJobPollResponse(
+        job_id=job_id,
+        status=job.status,
+        manifest=job.manifest,
+        error=job.error,
     )
 
 

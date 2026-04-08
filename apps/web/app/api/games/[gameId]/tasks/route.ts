@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prismaTaskToExtractionTask } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
-import { syncTaskFromRuleEngine } from "@/lib/ingestion";
+import { syncIndexBuildTask, syncTaskFromRuleEngine } from "@/lib/ingestion";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,11 @@ export async function GET(_req: Request, { params }: RouteParams) {
 
   for (const t of tasks) {
     if (t.status === "PROCESSING" && t.jobId) {
-      await syncTaskFromRuleEngine(t.id);
+      if (t.type === "INDEX_BUILD") {
+        await syncIndexBuildTask(t.id);
+      } else {
+        await syncTaskFromRuleEngine(t.id);
+      }
     }
   }
 

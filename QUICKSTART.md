@@ -75,9 +75,9 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and `POST /build-index` vectors in **pgvector** when enabled. Use the same URL as **`apps/web`** (Supabase local or hosted). Optional override: `RULE_ENGINE_CHECKPOINT_URL` for checkpoints only. |
+| `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and **pgvector** for per-game vectors when enabled. Use the same URL as **`apps/web`** (Supabase local or hosted). Optional override: `RULE_ENGINE_CHECKPOINT_URL` for checkpoints only. |
 | `CORS_ORIGINS` | Recommended | Comma-separated browser origins for FastAPI CORS (default in `.env.example`: `http://localhost:3000`). Must include your **`apps/web`** origin. |
-| *(Gemini keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index`, `POST /chat`, etc. Configure Gemini API keys and per-slot models in the web app (**`/models`**). See §4.1. |
+| *(Gemini keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure Gemini API keys and per-slot models in the web app (**`/models`**). See §4.1. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
@@ -161,7 +161,7 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 
 Chat temperature / max tokens are configured on the models UI where applicable.
 
-**Direct `curl` to the rule engine:** for `POST /extract`, `POST /build-index`, or `POST /chat`, you must supply the same JSON header the BFF would send (or run flows through the web so the header is added automatically).
+**Direct `curl` to the rule engine:** for `POST /extract`, `POST /build-index/start`, or `POST /chat`, you must supply the same JSON header the BFF would send (or run flows through the web so the header is added automatically).
 
 **Web rulebook UI:** game detail page supports **PDF**, **multiple images**, or **Gstone URL** (preview API), then **thumbnail click** for TOC/exclude before extract.
 
@@ -184,8 +184,8 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 2. Configure **AI Gateway** in **`apps/web`** (`/models`: credentials + all required slots). Then either use the **web UI** for extract, or call the engine with **`X-Boardrule-Ai-Config`** as the web would. **`POST /extract/pages`** only rasterizes pages (no Gemini); **`POST /extract`** needs the header for vision/text. Flow: **`POST /extract/pages`** with `game_id` and **`file`** (multipart) or **`file_url`** (form field), then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
 3. **验收辅助**：将合并后的 Markdown 存盘，运行 `python services/rule_engine/eval/check_extraction_output.py merged.md --min-words 3000 --min-page-markers 5` 检查字数与 `<!-- pages: -->` 锚点数量。
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
-5. **索引（Phase 2）**：调用 `POST /build-index`（JSON：`game_id` 与 `merged_markdown` **或** `documents[]`），请求需携带与提取相同的 **`X-Boardrule-Ai-Config`**（通过 Web 或手动构造）。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
-6. **Web**：游戏详情页在提取完成后可预览 Markdown，并手动 **建立索引**；**Chat** 未建索引时返回 **409**。
+5. **索引（Phase 2）**：调用 **`POST /build-index/start`**（同上 JSON 体），携带 **`X-Boardrule-Ai-Config`**；用返回的 `job_id` 轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed`。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
+6. **Web**：游戏详情页在提取完成后可预览 Markdown，并 **建立索引**（BFF 异步提交引擎任务并轮询）；**Chat** 未建索引时返回 **409**。
 7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`（同样需要 AI 配置头）。
 
 ## 6. WeChat miniapp rate limiting

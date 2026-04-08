@@ -76,7 +76,7 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
+def chat(  # sync: LlamaIndex GoogleGenAI uses asyncio.run(); async def would nest a running loop and crash.
     body: ChatRequest,
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> ChatResponse:

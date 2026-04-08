@@ -41,7 +41,7 @@ npm run dev               # 默认 http://localhost:3000
 
 - **上传 / 任务**：`POST /api/tasks`（multipart：`gameId`、`file`，可选 `terminologyContext`）→ 调用规则引擎 `POST /extract`（附带 **`X-Boardrule-Ai-Config`**）。
 - **轮询**：任务详情 `GET /api/tasks/[taskId]` 会同步规则引擎任务状态并写回导出文件路径。
-- **问答**：`POST /api/chat` 代理规则引擎 `POST /chat`；**需先**对该 `game_id` 在引擎侧执行 `POST /build-index`（见仓库根目录 **QUICKSTART.md** 与 `services/rule_engine/eval/README.md`）。当前 Web **不会**在提取完成后自动建索引。
+- **问答**：`POST /api/chat` 代理规则引擎 `POST /chat`；**需先**对该 `game_id` 完成向量索引（游戏详情 **建立索引**，引擎侧为 `POST /build-index/start` + 轮询，见 **QUICKSTART.md**）。
 
 ## 微信小程序 & 每日限流
 

@@ -19,7 +19,8 @@ export default function ChatListPage() {
   const { games, isLoading, isError } = useGames();
 
   const indexedGames = games.filter((g) => g.isIndexed);
-  const pendingGames = games.filter((g) => !g.isIndexed);
+  const buildingGames = games.filter((g) => g.indexBuilding);
+  const pendingGames = games.filter((g) => !g.isIndexed && !g.indexBuilding);
 
   return (
     <div className="space-y-6">
@@ -48,6 +49,52 @@ export default function ChatListPage() {
         </Empty>
       ) : (
         <div className="space-y-8">
+          {buildingGames.length > 0 ? (
+            <section>
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-medium text-amber-700 dark:text-amber-500">
+                <Lock className="h-5 w-5" />
+                索引更新中
+                <Badge variant="outline" className="ml-2 border-amber-600/50">
+                  {buildingGames.length}
+                </Badge>
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {buildingGames.map((game) => (
+                  <Link key={game.id} href={`/games/${game.id}`}>
+                    <Card className="h-full cursor-pointer transition-all hover:border-amber-500/40 hover:shadow-md">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-3">
+                          {game.coverUrl ? (
+                            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+                              <img
+                                src={game.coverUrl}
+                                alt={game.name}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                              <Gamepad2 className="h-7 w-7 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <CardTitle className="truncate text-base">{game.name}</CardTitle>
+                            <CardDescription className="truncate font-mono text-xs">{game.slug}</CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <p className="text-sm text-muted-foreground">
+                          正在建立或重建向量索引，完成后即可问答。点击前往游戏详情查看进度。
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {indexedGames.length > 0 ? (
             <section>
               <h2 className="mb-4 flex items-center gap-2 text-lg font-medium">

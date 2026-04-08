@@ -68,7 +68,7 @@ export default function GameDetailPage() {
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <ExtractionStatusBadge status={game.extractionStatus} />
-            <IndexStatusBadge isIndexed={game.isIndexed} />
+            <IndexStatusBadge isIndexed={game.isIndexed} indexBuilding={game.indexBuilding} />
             {game.isIndexed ? (
               <Button variant="outline" size="sm" asChild className="ml-2">
                 <Link href={`/chat/${game.id}`}>

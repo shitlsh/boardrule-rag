@@ -7,7 +7,10 @@ export interface Game {
   slug: string
   coverUrl?: string
   extractionStatus: ExtractionStatus
+  /** True when the game has a persisted index and no in-flight index build; use for chat eligibility. */
   isIndexed: boolean
+  /** True while INDEX_BUILD task is PENDING or PROCESSING (first build or rebuild). */
+  indexBuilding?: boolean
   indexId?: string
   vectorStoreId?: string
   paginationJobId?: string

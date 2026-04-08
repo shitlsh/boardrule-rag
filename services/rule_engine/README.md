@@ -1,6 +1,6 @@
 # Rule engine service
 
-Python service for board-game rule extraction: **PDF → per-page images** (`pdf2image` + poppler) or ordered images, **Gemini vision** chapter extraction, **LangGraph** orchestration (TOC → routing → batching → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind `POST /build-index` (dense vectors in **PostgreSQL + pgvector** when configured, else on-disk `VectorStoreIndex`, plus **BM25**, **RRF fusion**, **cross-encoder rerank**).
+Python service for board-game rule extraction: **PDF → per-page images** (`pdf2image` + poppler) or ordered images, **Gemini vision** chapter extraction, **LangGraph** orchestration (TOC → routing → batching → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind **`POST /build-index/start`** (poll **`GET /build-index/jobs/{job_id}`** until `completed`; dense vectors in **PostgreSQL + pgvector** when configured, else on-disk `VectorStoreIndex`, plus **BM25**, **RRF fusion**, **cross-encoder rerank**).
 
 ### Vision-only extraction
 
@@ -22,8 +22,8 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| *(none for Gemini keys)* | **Gemini API keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index`, `POST /chat`, etc. Configure providers in the web app at **`/models`** (模型与凭证). |
-| `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for `POST /build-index` when enabled (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. Optional: `RULE_ENGINE_CHECKPOINT_URL` if checkpoints should use a different URL. |
+| *(none for Gemini keys)* | **Gemini API keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure providers in the web app at **`/models`** (模型与凭证). |
+| `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for indexing when enabled (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. Optional: `RULE_ENGINE_CHECKPOINT_URL` if checkpoints should use a different URL. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
@@ -130,10 +130,11 @@ This is **in addition to** the FastAPI server (`uvicorn api.main:app`, port **80
 | `GET` | `/health` | Liveness. |
 | `POST` | `/extract/pages` | Multipart: `game_id`, `file` or `file_url` or multiple `files` — rasterize to PNGs; returns `job_id` and per-page `url` under `/page-assets/...`。 |
 | `POST` | `/extract` | Multipart: `game_id`, `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON array strings), optional `game_name`, `terminology_context`; optional `resume` + `job_id`。轮询 `GET /extract/{job_id}`。 |
-| `POST` | `/build-index` | JSON: `game_id`, and **`merged_markdown` or `documents[]`**, optional `source_file`。BM25 + manifest on disk; vectors in pgvector or disk per `DATABASE_URL` / `USE_PGVECTOR`。 |
+| `POST` | `/build-index/start` | JSON: `game_id`, and **`merged_markdown` or `documents[]`**, optional `source_file`。立即返回 `job_id`；后台建索引。轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed` 或 `failed`。BM25 + manifest on disk; vectors in pgvector or disk per `DATABASE_URL` / `USE_PGVECTOR`。 |
+| `GET` | `/build-index/jobs/{job_id}` | 异步建索引任务状态：`pending` / `processing` / `completed` / `failed`，成功时含 `manifest`。 |
 | `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
 | `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
-| `POST` | `/chat` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）。需已 `POST /build-index`；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + Gemini）。 |
+| `POST` | `/chat` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）。需已为该 `game_id` 建立向量索引；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + Gemini）。 |
 
 Request/response models live in `api/routers/extract.py`, `api/routers/index.py`, and `api/routers/chat.py`.
 

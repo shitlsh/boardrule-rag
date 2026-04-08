@@ -1,6 +1,7 @@
 import type { Game as PrismaGame, Task as PrismaTask } from "../generated/prisma/client";
 
 import { parseProgressJson } from "@/lib/progress";
+import { prisma } from "@/lib/prisma";
 import { readStorageText } from "@/lib/storage";
 import type { ExtractionStatus, ExtractionTask, Game, PageThumbnail, TaskStatus } from "@/lib/types";
 
@@ -81,11 +82,43 @@ export function buildPagePreviewJson(pages: { page: number; url: string }[]): st
   return JSON.stringify(thumbs);
 }
 
+type GameDtoOpts = { indexBuilding?: boolean };
+
+export async function gameIdsWithActiveIndexBuild(gameIds: string[]): Promise<Set<string>> {
+  if (gameIds.length === 0) {
+    return new Set();
+  }
+  const rows = await prisma.task.findMany({
+    where: {
+      gameId: { in: gameIds },
+      type: "INDEX_BUILD",
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+    select: { gameId: true },
+  });
+  return new Set(rows.map((r) => r.gameId));
+}
+
+export async function gameHasActiveIndexBuild(gameId: string): Promise<boolean> {
+  const row = await prisma.task.findFirst({
+    where: {
+      gameId,
+      type: "INDEX_BUILD",
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+    select: { id: true },
+  });
+  return Boolean(row);
+}
+
 export function prismaGameToDto(
   game: PrismaGame,
   extras?: { rulesMarkdown?: string; quickStart?: string; suggestedQuestions?: string[] },
+  opts?: GameDtoOpts,
 ): Game {
-  const isIndexed = Boolean(game.indexId || game.vectorStoreId);
+  const hasPersistedIndex = Boolean(game.indexId || game.vectorStoreId);
+  const indexBuilding = opts?.indexBuilding === true;
+  const isIndexed = hasPersistedIndex && !indexBuilding;
   return {
     id: game.id,
     name: game.name,
@@ -93,6 +126,7 @@ export function prismaGameToDto(
     coverUrl: game.coverUrl ?? undefined,
     extractionStatus: mapGameExtractionStatus(game.extractionStatus),
     isIndexed,
+    ...(indexBuilding ? { indexBuilding: true } : {}),
     indexId: game.indexId ?? undefined,
     vectorStoreId: game.vectorStoreId ?? undefined,
     paginationJobId: game.pageRasterJobId ?? undefined,
@@ -107,22 +141,28 @@ export function prismaGameToDto(
 }
 
 export async function prismaGameToDetailDto(game: PrismaGame): Promise<Game> {
-  const [md, quickRaw, questionsRaw] = await Promise.all([
+  const [md, quickRaw, questionsRaw, indexBuilding] = await Promise.all([
     readRulesMarkdownFromDisk(game),
     readStorageText(game.quickStartGuidePath),
     readStorageText(game.startQuestionsPath),
+    gameHasActiveIndexBuild(game.id),
   ]);
   const suggestedQuestions = questionsRaw ? parseSuggestedQuestions(questionsRaw) : undefined;
-  return prismaGameToDto(game, {
-    rulesMarkdown: md,
-    quickStart: quickRaw ?? undefined,
-    suggestedQuestions,
-  });
+  return prismaGameToDto(
+    game,
+    {
+      rulesMarkdown: md,
+      quickStart: quickRaw ?? undefined,
+      suggestedQuestions,
+    },
+    { indexBuilding },
+  );
 }
 
 export function prismaTaskToExtractionTask(t: PrismaTask): ExtractionTask {
   const p = parseProgressJson(t.progressJson);
-  const label = t.type === "EXTRACTION" ? "规则提取" : t.type;
+  const label =
+    t.type === "EXTRACTION" ? "规则提取" : t.type === "INDEX_BUILD" ? "建立索引" : t.type;
   return {
     id: t.id,
     type: label,

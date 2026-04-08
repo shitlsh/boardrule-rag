@@ -25,22 +25,32 @@ python eval/check_extraction_output.py path/to/merged.md --min-words 3000 --min-
 
 ```bash
 python - <<'PY'
-import json, urllib.request
+import json, time, urllib.request
+base = "http://127.0.0.1:8000"
 body = {
   "game_id": "eval-game-1",
   "merged_markdown": open("merged.md", encoding="utf-8").read(),
   "source_file": "rules.pdf",
 }
 req = urllib.request.Request(
-  "http://127.0.0.1:8000/build-index",
+  f"{base}/build-index/start",
   data=json.dumps(body).encode("utf-8"),
   headers={"Content-Type": "application/json"},
 )
-print(urllib.request.urlopen(req).read().decode())
+start = json.loads(urllib.request.urlopen(req).read().decode())
+job_id = start["job_id"]
+while True:
+  poll = json.loads(
+    urllib.request.urlopen(f"{base}/build-index/jobs/{job_id}").read().decode()
+  )
+  if poll["status"] in ("completed", "failed"):
+    print(json.dumps(poll, ensure_ascii=False, indent=2))
+    break
+  time.sleep(2)
 PY
 ```
 
-成功时响应含 `manifest`（`metadata_contract`、`node_count`、`embedding_model` 等）。
+生产环境需在请求头携带与 `POST /extract` 相同的 **`X-Boardrule-Ai-Config`**（由 Web `/models` 生成）；本地若已配置环境变量亦可。轮询至 `completed` 时响应中的 `manifest` 含 `metadata_contract`、`node_count`、`embedding_model` 等。
 
 ```bash
 curl -s "http://127.0.0.1:8000/index/eval-game-1/smoke-retrieve?q=%E5%9B%9E%E5%90%88"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from llama_index.core import Settings
-from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.query_engine import RetrieverQueryEngine
@@ -14,6 +13,7 @@ from llama_index.retrievers.bm25 import BM25Retriever
 
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.index_builder import _rerank_model_name, configure_embedding_settings, game_index_dir, load_vector_index
+from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_gemini
 
 _BM25_SUBDIR = "bm25"
@@ -94,7 +94,7 @@ def build_rulebook_query_engine(
         vector_retriever,
         similarity_top_k=similarity_top_k,
     )
-    rerank = SentenceTransformerRerank(
+    rerank = get_cached_sentence_transformer_rerank(
         model=_rerank_model_name(),
         top_n=rerank_top_n,
     )
