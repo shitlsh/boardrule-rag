@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
+from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.schema import QueryBundle
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
@@ -121,9 +122,24 @@ def build_and_persist_index(
         game_id=game_id,
         source_file=source_file or "",
     )
+    docs = [d for d in docs if (getattr(d, "text", None) or "").strip()]
+    if not docs:
+        raise ValueError(
+            "No text to index after splitting merged Markdown. "
+            "Ensure rules.md is non-empty and uses <!-- pages: N --> anchors as documented in EXTRACTION_FLOW.md."
+        )
+
     nodes = documents_to_nodes(docs)
     if not nodes:
-        raise ValueError("No nodes to index: empty documents or unchunkable content")
+        # Rare: SentenceSplitter yields nothing on very short / odd tokenization; retry with one huge chunk.
+        loose = SentenceSplitter(chunk_size=10_000_000, chunk_overlap=0)
+        nodes = loose.get_nodes_from_documents(docs)
+    if not nodes:
+        raise ValueError(
+            "Could not chunk merged Markdown for indexing. "
+            "Check that sections contain visible text (not only HTML comments). "
+            "Page anchors must look like <!-- pages: 3 --> or <!-- pages: 3-5 -->."
+        )
 
     import shutil
 
