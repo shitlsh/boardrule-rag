@@ -62,6 +62,8 @@ model AppSettings {
   maxGstoneImageUrls Int @default(80)
   pageRasterDpi      Int @default(150)
   pageRasterMaxSide  Int @default(2048)
+  /// JSON: LLM Gateway (credentials with encrypted keys, slot bindings). See lib/ai-gateway.ts.
+  aiGatewayJson      String @default("{}")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

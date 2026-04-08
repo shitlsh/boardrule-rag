@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from llama_index.core import Document
 from pydantic import BaseModel, Field, model_validator
 
+from api.deps import require_boardrule_ai
 from ingestion.index_builder import build_and_persist_index, load_hybrid_reranked_nodes, load_manifest
+from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 
 router = APIRouter(tags=["index"])
 
@@ -47,21 +48,23 @@ class IndexManifestResponse(BaseModel):
 
 
 @router.post("/build-index", response_model=BuildIndexResponse)
-async def build_index(body: BuildIndexRequest) -> BuildIndexResponse:
-    if not os.environ.get("GOOGLE_API_KEY"):
-        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY is not configured")
+async def build_index(
+    body: BuildIndexRequest,
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
+) -> BuildIndexResponse:
     try:
-        docs = (
-            [Document(text=d.text, metadata=d.metadata) for d in body.documents]
-            if body.documents
-            else None
-        )
-        manifest = build_and_persist_index(
-            game_id=body.game_id,
-            merged_markdown=body.merged_markdown,
-            documents=docs,
-            source_file=body.source_file or "",
-        )
+        with boardrule_ai_runtime(_ai):
+            docs = (
+                [Document(text=d.text, metadata=d.metadata) for d in body.documents]
+                if body.documents
+                else None
+            )
+            manifest = build_and_persist_index(
+                game_id=body.game_id,
+                merged_markdown=body.merged_markdown,
+                documents=docs,
+                source_file=body.source_file or "",
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
@@ -82,12 +85,15 @@ async def get_index_manifest(game_id: str) -> IndexManifestResponse:
 
 
 @router.get("/index/{game_id}/smoke-retrieve")
-async def smoke_retrieve(game_id: str, q: str = "规则") -> dict[str, Any]:
+async def smoke_retrieve(
+    game_id: str,
+    q: str = "规则",
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
+) -> dict[str, Any]:
     """Dev-only sanity check: hybrid + rerank without LLM synthesis (NO_TEXT)."""
-    if not os.environ.get("GOOGLE_API_KEY"):
-        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY is not configured")
     try:
-        nodes = load_hybrid_reranked_nodes(game_id, q)
+        with boardrule_ai_runtime(_ai):
+            nodes = load_hybrid_reranked_nodes(game_id, q)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:

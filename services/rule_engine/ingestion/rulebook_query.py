@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from llama_index.core import Settings
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -16,26 +14,18 @@ from llama_index.retrievers.bm25 import BM25Retriever
 
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.index_builder import _rerank_model_name, configure_embedding_settings, game_index_dir, load_vector_index
+from utils.ai_gateway import get_gemini
 
 _BM25_SUBDIR = "bm25"
 
 
-def _chat_model_name() -> str:
-    return os.environ.get(
-        "GEMINI_CHAT_MODEL",
-        os.environ.get("GEMINI_FLASH_MODEL", "gemini-2.0-flash"),
-    )
-
-
 def get_chat_llm() -> GoogleGenAI:
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY is not set")
+    c = get_gemini().chat
     return GoogleGenAI(
-        model=_chat_model_name(),
-        api_key=api_key,
-        temperature=float(os.environ.get("GEMINI_CHAT_TEMPERATURE", "0.2")),
-        max_tokens=int(os.environ.get("GEMINI_CHAT_MAX_TOKENS", "8192")),
+        model=c.model,
+        api_key=c.api_key,
+        temperature=float(c.temperature),
+        max_tokens=int(c.max_tokens),
     )
 
 

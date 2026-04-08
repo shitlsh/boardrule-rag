@@ -7,13 +7,14 @@ import os
 from collections.abc import AsyncIterator
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.routers import chat, extract, health
 from api.routers import index as index_api
 from graphs.extraction_graph import build_extraction_graph
+from utils.ai_gateway import BoardruleAiConfig
 from utils.paths import page_assets_root
 
 load_dotenv()
@@ -62,6 +63,25 @@ def _allowed_origins() -> list[str]:
 
 
 app = FastAPI(title="boardrule-rag rule engine", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def boardrule_ai_header_middleware(request: Request, call_next):
+    """Parse ``X-Boardrule-Ai-Config`` onto ``request.state`` for routes that need Gemini."""
+    raw = request.headers.get("x-boardrule-ai-config")
+    if raw:
+        try:
+            request.state.boardrule_ai = BoardruleAiConfig.model_validate_json(raw)
+            request.state.boardrule_ai_invalid = False
+        except Exception:
+            request.state.boardrule_ai = None
+            request.state.boardrule_ai_invalid = True
+    else:
+        request.state.boardrule_ai = None
+        request.state.boardrule_ai_invalid = False
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),

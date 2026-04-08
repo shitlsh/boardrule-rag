@@ -1,11 +1,8 @@
 """Gemini client wrapper (Flash / Pro, text + multimodal vision).
 
-All generation uses named presets for temperature and max_output_tokens (from env).
+Runtime config comes from BFF ``X-Boardrule-Ai-Config`` (see ``utils/ai_gateway.py``). Uses ``google-genai``.
 
-When LangSmith tracing is enabled (``LANGCHAIN_TRACING_V2`` / ``LANGSMITH_TRACING_V2``
-and a LangSmith API key), optional :class:`GeminiCallMeta` attaches node / prompt file /
-SHA-256 to a child ``llm`` run via ``langsmith.run_helpers.trace``. If tracing is off or
-``meta`` is omitted, behavior matches untraced calls (no extra imports or network).
+When LangSmith tracing is enabled, optional :class:`GeminiCallMeta` attaches metadata to a child ``llm`` run.
 """
 
 from __future__ import annotations
@@ -16,7 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+
+from utils.ai_gateway import get_gemini
 
 # Preset names (use at call sites to avoid magic strings)
 FLASH_TOC = "flash_toc"
@@ -38,29 +38,14 @@ class GeminiCallMeta:
     call_tag: str | None = None
 
 
-def _configure() -> None:
-    key = os.environ.get("GOOGLE_API_KEY")
-    if not key:
-        raise RuntimeError("GOOGLE_API_KEY is not set")
-    genai.configure(api_key=key)
-
-
-def flash_model_name() -> str:
-    return os.environ.get("GEMINI_FLASH_MODEL", "gemini-2.0-flash")
-
-
-def pro_model_name() -> str:
-    return os.environ.get("GEMINI_PRO_MODEL", "gemini-1.5-pro")
-
-
 def flash_max_output_tokens() -> int:
-    raw = os.environ.get("GEMINI_FLASH_MAX_OUTPUT_TOKENS", "8192").strip()
-    return int(raw) if raw.isdigit() else 8192
+    g = get_gemini().flash
+    return g.max_output_tokens if g.max_output_tokens is not None else 8192
 
 
 def pro_max_output_tokens() -> int:
-    raw = os.environ.get("GEMINI_PRO_MAX_OUTPUT_TOKENS", "8192").strip()
-    return int(raw) if raw.isdigit() else 8192
+    g = get_gemini().pro
+    return g.max_output_tokens if g.max_output_tokens is not None else 8192
 
 
 # (temperature,) — max tokens come from flash_max_output_tokens() / pro_max_output_tokens()
@@ -73,13 +58,6 @@ _PRO_PRESET_TEMP: dict[ProPreset, float] = {
     "pro_extract": 0.0,
     "pro_merge": 0.0,
 }
-
-
-def _generation_config(*, temperature: float, max_output_tokens: int) -> genai.GenerationConfig:
-    return genai.GenerationConfig(
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-    )
 
 
 def _tracing_enabled_for_gemini() -> bool:
@@ -109,18 +87,42 @@ def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
     return h.hexdigest()
 
 
-def _generate_with_optional_trace(
-    model: genai.GenerativeModel,
-    contents: str | list[Any],
+def _generate_once(
     *,
+    api_key: str,
+    model: str,
+    contents: str | list[Any],
+    gen_config: types.GenerateContentConfig,
+    empty_error: str,
+) -> str:
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=gen_config,
+    )
+    if not response.text:
+        raise RuntimeError(empty_error)
+    return response.text
+
+
+def _generate_with_optional_trace(
+    *,
+    api_key: str,
+    model: str,
+    contents: str | list[Any],
+    gen_config: types.GenerateContentConfig,
     meta: GeminiCallMeta | None,
     empty_error: str,
 ) -> str:
     def _call() -> str:
-        response = model.generate_content(contents)
-        if not response.text:
-            raise RuntimeError(empty_error)
-        return response.text
+        return _generate_once(
+            api_key=api_key,
+            model=model,
+            contents=contents,
+            gen_config=gen_config,
+            empty_error=empty_error,
+        )
 
     if meta is None or not _tracing_enabled_for_gemini():
         return _call()
@@ -168,16 +170,15 @@ def generate_flash(
     max_output_tokens: int | None = None,
     meta: GeminiCallMeta | None = None,
 ) -> str:
-    _configure()
+    slot = get_gemini().flash
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
-    model = genai.GenerativeModel(
-        flash_model_name(),
-        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
-    )
+    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
     return _generate_with_optional_trace(
-        model,
-        prompt,
+        api_key=slot.api_key,
+        model=slot.model,
+        contents=prompt,
+        gen_config=gen_config,
         meta=meta,
         empty_error="Gemini Flash returned empty response",
     )
@@ -191,16 +192,15 @@ def generate_pro(
     max_output_tokens: int | None = None,
     meta: GeminiCallMeta | None = None,
 ) -> str:
-    _configure()
+    slot = get_gemini().pro
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
-    model = genai.GenerativeModel(
-        pro_model_name(),
-        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
-    )
+    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
     return _generate_with_optional_trace(
-        model,
-        prompt,
+        api_key=slot.api_key,
+        model=slot.model,
+        contents=prompt,
+        gen_config=gen_config,
         meta=meta,
         empty_error="Gemini Pro returned empty response",
     )
@@ -244,16 +244,15 @@ def generate_flash_vision(
     meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Flash (images + text parts)."""
-    _configure()
+    slot = get_gemini().flash
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
-    model = genai.GenerativeModel(
-        flash_model_name(),
-        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
-    )
+    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
     return _generate_with_optional_trace(
-        model,
-        parts,
+        api_key=slot.api_key,
+        model=slot.model,
+        contents=parts,
+        gen_config=gen_config,
         meta=meta,
         empty_error="Gemini Flash returned empty response (vision)",
     )
@@ -268,16 +267,15 @@ def generate_pro_vision(
     meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Pro (images + text parts)."""
-    _configure()
+    slot = get_gemini().pro
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
-    model = genai.GenerativeModel(
-        pro_model_name(),
-        generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
-    )
+    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
     return _generate_with_optional_trace(
-        model,
-        parts,
+        api_key=slot.api_key,
+        model=slot.model,
+        contents=parts,
+        gen_config=gen_config,
         meta=meta,
         empty_error="Gemini Pro returned empty response (vision)",
     )

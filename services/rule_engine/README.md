@@ -22,19 +22,16 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| `GOOGLE_API_KEY` | Gemini API for Flash/Pro (vision + text). |
+| *(none for Gemini keys)* | **Gemini API keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index`, `POST /chat`, etc. Configure providers in the web **系统设置 → AI Gateway**. |
 | `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for `POST /build-index` when enabled (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. Optional: `RULE_ENGINE_CHECKPOINT_URL` if checkpoints should use a different URL. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | PDF rasterization for `/extract/pages`. |
-| `GEMINI_FLASH_MODEL` / `GEMINI_PRO_MODEL` | Optional model overrides for Flash vs Pro (Pro must support images). |
-| `GEMINI_FLASH_MAX_OUTPUT_TOKENS` / `GEMINI_PRO_MAX_OUTPUT_TOKENS` | Max output tokens per call (defaults `8192`; raise for long merges if the model allows). |
 | `VISION_BATCH_PAGES` / `COMPLEXITY_THRESHOLD_PAGES` | Vision batch size and body-page threshold for `needs_batching` (see `.env.example`). |
-| `GEMINI_CHAT_MODEL` / `GEMINI_CHAT_TEMPERATURE` / `GEMINI_CHAT_MAX_TOKENS` | Phase 3 `POST /chat` synthesis (defaults: chat model follows `GEMINI_FLASH_MODEL` or `gemini-2.0-flash`, temperature `0.2`, max tokens `8192`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
-| `GEMINI_EMBEDDING_MODEL` / `EMBEDDING_DIM` | Gemini embedding id and dimension for pgvector / indexing. |
+| `EMBEDDING_DIM` | Vector dimension for pgvector / indexing (must match the embedding model chosen in AI Gateway). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`). |
 
 Prefer **`.env.example`** as the authoritative list (grouped by concern: HTTP, LangSmith, raster defaults, vision graph, chat, index, paths).
@@ -83,7 +80,7 @@ export LANGCHAIN_API_KEY=your-langsmith-key
 export LANGCHAIN_PROJECT=boardrule-rag
 ```
 
-Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`. When tracing is off, or the API key is missing, the rule engine does not open LangSmith runs around native `google.generativeai` calls (no extra imports or network for Gemini).
+Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`. When tracing is off, or the API key is missing, the rule engine does not open LangSmith runs around native Gemini (`google-genai`) calls.
 
 When tracing is on **and** a LangSmith API key is set (`LANGCHAIN_API_KEY` or `LANGSMITH_API_KEY`), each Gemini call from graph nodes records a child **`llm`** run (via `langsmith.run_helpers.trace`) with metadata such as **`gemini_node`** (graph node name), **`prompt_file`** (template basename when applicable), **`prompt_sha256`** (hash of the rendered prompt or multimodal text parts), and optional **`call_tag`** (for example batch index or merge stage). This does not send full prompts to LangSmith—only hashes and short labels.
 
@@ -99,7 +96,7 @@ The graph **sequentially** calls Gemini once per batch **inside** a single node 
 
 Use the official CLI to run the extraction graph against the **LangGraph dev API** and open **Studio** for a visual graph and step debugging. Configuration lives in **`langgraph.json`**; the exported graph is **`langgraph_studio.py`** (same `StateGraph` as production, compiled **without** `PostgresSaver` so Studio does not require a running database for the graph definition itself).
 
-**Prerequisite:** `langgraph dev` imports `langgraph_studio.py`, which pulls in the full node stack (including `utils/gemini.py` and `google.generativeai`). The **same Python environment** that runs `langgraph` must have the rule engine installed in editable mode, not only `langgraph-cli`.
+**Prerequisite:** `langgraph dev` imports `langgraph_studio.py`, which pulls in the full node stack (including `utils/gemini.py` and `google-genai`). The **same Python environment** that runs `langgraph` must have the rule engine installed in editable mode, not only `langgraph-cli`.
 
 From the repository root (with your venv activated), either:
 
@@ -166,7 +163,7 @@ services/rule_engine/
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError: No module named 'google.generativeai'`** (when running `langgraph dev`): The interpreter used by `langgraph` does not have the rule engine’s dependencies. Install the package into that venv: `pip install -e "services/rule_engine/[dev]"` from the repo root, or `pip install -e ".[dev]"` from `services/rule_engine`. Confirm with `python -c "import google.generativeai"` using the same `python` as `which langgraph` points to (or `python -m langgraph dev ...` to force the venv’s Python).
+- **`ModuleNotFoundError: No module named 'google.genai'`** (when running `langgraph dev`): The interpreter used by `langgraph` does not have the rule engine’s dependencies. Install the package into that venv: `pip install -e "services/rule_engine/[dev]"` from the repo root, or `pip install -e ".[dev]"` from `services/rule_engine`. Confirm with `python -c "from google import genai"` using the same `python` as `which langgraph` points to (or `python -m langgraph dev ...` to force the venv’s Python).
 - **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
 - **PDF rasterization**: Ensure poppler is installed; check `PAGE_RASTER_DPI` if pages fail to render.
 - **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
