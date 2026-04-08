@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,8 @@ from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.paths import load_prompt
 
 router = APIRouter(tags=["chat"])
+
+logger = logging.getLogger("boardrule.chat")
 
 _CHAT_SYSTEM = load_prompt("chat_system.md").strip()
 
@@ -80,6 +83,7 @@ def chat(  # sync: LlamaIndex GoogleGenAI uses asyncio.run(); async def would ne
     body: ChatRequest,
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> ChatResponse:
+    logger.info("chat handler entered game_id=%s", body.game_id)
     with boardrule_ai_runtime(_ai):
         try:
             query_engine = build_rulebook_query_engine(body.game_id)

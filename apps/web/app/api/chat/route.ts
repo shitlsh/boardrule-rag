@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { chatRules } from "@/lib/ingestion/client";
+import { chatRules, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
 import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
 import { getWechatConfigPublic } from "@/lib/wechat-settings";
@@ -31,6 +31,10 @@ export async function POST(req: Request) {
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!gameId || !message) {
     return NextResponse.json({ message: "gameId and message are required" }, { status: 400 });
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("[api/chat] request", { gameId });
   }
 
   // ── Rate limiting ────────────────────────────────────────────────────────────
@@ -87,6 +91,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Invalid messages[] entries" }, { status: 400 });
       }
     }
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("[api/chat] calling rule engine", {
+      base: getRuleEngineBaseUrl(),
+      gameId,
+    });
   }
 
   try {

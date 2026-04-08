@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 from collections.abc import AsyncIterator
 
@@ -65,9 +66,14 @@ def _allowed_origins() -> list[str]:
 app = FastAPI(title="boardrule-rag rule engine", lifespan=lifespan)
 
 
+logger = logging.getLogger("boardrule.api")
+
+
 @app.middleware("http")
 async def boardrule_ai_header_middleware(request: Request, call_next):
     """Parse ``X-Boardrule-Ai-Config`` onto ``request.state`` for routes that need Gemini."""
+    if request.method == "POST" and request.url.path == "/chat":
+        logger.info("POST /chat received (before handler)")
     raw = request.headers.get("x-boardrule-ai-config")
     if raw:
         try:

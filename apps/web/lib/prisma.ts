@@ -21,7 +21,11 @@ function createClient(): PrismaClient {
   }
 
   if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
-    const pool = new pg.Pool({ connectionString: url });
+    const pool = new pg.Pool({
+      connectionString: url,
+      /** Avoid hanging forever when Postgres is unreachable (wrong host, VPN, DB down). */
+      connectionTimeoutMillis: 15_000,
+    });
     const adapter = new PrismaPg(pool);
     return new PrismaClient({ adapter, log: [...log] });
   }
