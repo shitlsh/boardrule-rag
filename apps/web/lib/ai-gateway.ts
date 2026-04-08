@@ -275,3 +275,127 @@ export function getCredentialApiKey(stored: AiGatewayStored, credentialId: strin
   if (!cred) throw new Error("凭证不存在");
   return decryptSecret(cred.apiKeyEnc).trim();
 }
+
+async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> {
+  await getAppSettings();
+  await prisma.appSettings.update({
+    where: { id: "default" },
+    data: { aiGatewayJson: JSON.stringify(stored) },
+  });
+  return toPublic(stored);
+}
+
+/** Add a new Gemini credential (saved immediately). */
+export async function addGeminiCredential(params: {
+  id: string;
+  alias: string;
+  apiKey: string;
+}): Promise<AiGatewayPublic> {
+  const alias = params.alias.trim();
+  const key = params.apiKey.trim();
+  if (!alias) throw new Error("别名不能为空");
+  if (!key) throw new Error("API Key 不能为空");
+  const cur = await getAiGatewayStored();
+  const newKey = aliasKey(alias);
+  for (const c of cur.credentials) {
+    if (aliasKey(c.alias) === newKey) {
+      throw new Error("别名已存在");
+    }
+  }
+  if (cur.credentials.some((c) => c.id === params.id)) {
+    throw new Error("凭证 ID 冲突");
+  }
+  const next: AiCredentialStored = {
+    id: params.id,
+    vendor: "gemini",
+    alias,
+    apiKeyEnc: encryptSecret(key),
+  };
+  const stored: AiGatewayStored = {
+    ...cur,
+    credentials: [...cur.credentials, next],
+  };
+  return persistStored(stored);
+}
+
+/** Update alias and/or API Key for one credential. */
+export async function updateGeminiCredential(params: {
+  id: string;
+  alias?: string;
+  apiKey?: string;
+}): Promise<AiGatewayPublic> {
+  const cur = await getAiGatewayStored();
+  const idx = cur.credentials.findIndex((c) => c.id === params.id);
+  if (idx < 0) throw new Error("凭证不存在");
+  const prev = cur.credentials[idx]!;
+  let alias = prev.alias.trim();
+  if (params.alias !== undefined) {
+    alias = params.alias.trim();
+    if (!alias) throw new Error("别名不能为空");
+    const nk = aliasKey(alias);
+    for (const c of cur.credentials) {
+      if (c.id !== params.id && aliasKey(c.alias) === nk) {
+        throw new Error("别名已存在");
+      }
+    }
+  }
+  let apiKeyEnc = prev.apiKeyEnc;
+  if (params.apiKey !== undefined && params.apiKey.trim() !== "") {
+    apiKeyEnc = encryptSecret(params.apiKey.trim());
+  }
+  const nextCred: AiCredentialStored = { ...prev, alias, apiKeyEnc };
+  const credentials = [...cur.credentials];
+  credentials[idx] = nextCred;
+  return persistStored({ ...cur, credentials });
+}
+
+/** Remove credential; clears any slot that referenced it. */
+export async function removeCredentialById(id: string): Promise<AiGatewayPublic> {
+  const cur = await getAiGatewayStored();
+  if (!cur.credentials.some((c) => c.id === id)) {
+    throw new Error("凭证不存在");
+  }
+  const credentials = cur.credentials.filter((c) => c.id !== id);
+  const slotBindings = { ...cur.slotBindings };
+  for (const s of SLOTS) {
+    const b = slotBindings[s];
+    if (b?.credentialId === id) {
+      slotBindings[s] = null;
+    }
+  }
+  return persistStored({ ...cur, credentials, slotBindings });
+}
+
+/** Set one slot binding (auto-save). Both parts required when binding is set. */
+export async function setSlotBinding(slot: SlotKey, binding: SlotBinding | null): Promise<AiGatewayPublic> {
+  if (!SLOTS.includes(slot)) throw new Error("无效槽位");
+  const cur = await getAiGatewayStored();
+  const credIds = new Set(cur.credentials.map((c) => c.id));
+  let nextBinding: SlotBinding | null = null;
+  if (binding !== null) {
+    const cid = binding.credentialId.trim();
+    const model = binding.model.trim();
+    if (!cid || !model) throw new Error("请选择凭证并填写模型");
+    if (!credIds.has(cid)) throw new Error("凭证不存在");
+    nextBinding = { credentialId: cid, model };
+  }
+  const slotBindings = { ...cur.slotBindings, [slot]: nextBinding };
+  return persistStored({ ...cur, slotBindings });
+}
+
+export async function patchGatewayChatOptions(
+  patch: Partial<{ temperature: number; maxTokens: number }>,
+): Promise<AiGatewayPublic> {
+  const cur = await getAiGatewayStored();
+  const chatOptions = { ...cur.chatOptions };
+  if (patch.temperature !== undefined) {
+    if (!Number.isFinite(patch.temperature)) throw new Error("chat temperature 无效");
+    chatOptions.temperature = patch.temperature;
+  }
+  if (patch.maxTokens !== undefined) {
+    const m = Math.trunc(patch.maxTokens);
+    if (m < 1) throw new Error("chat maxTokens 无效");
+    chatOptions.maxTokens = m;
+  }
+  return persistStored({ ...cur, chatOptions });
+}

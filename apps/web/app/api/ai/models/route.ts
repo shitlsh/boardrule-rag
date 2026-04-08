@@ -1,25 +1,35 @@
 import { NextResponse } from "next/server";
 
+import type { SlotKey } from "@/lib/ai-gateway-types";
+import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import { getAiGatewayStored, getCredentialApiKey } from "@/lib/ai-gateway";
 
 export const runtime = "nodejs";
 
-type GoogleListModelsResponse = {
-  models?: {
-    name?: string;
-    displayName?: string;
-    supportedGenerationMethods?: string[];
-  }[];
-};
+const SLOT_KEYS: readonly SlotKey[] = ["flash", "pro", "embed", "chat"];
+
+function parseSlot(raw: unknown): SlotKey | null | "invalid" {
+  if (raw == null || raw === "") return null;
+  if (typeof raw !== "string") return "invalid";
+  const s = raw.trim() as SlotKey;
+  return SLOT_KEYS.includes(s) ? s : "invalid";
+}
 
 /**
- * List Gemini models for a stored credential (used after picking provider alias in settings).
+ * List Gemini models (normalized + optional slot filter).
+ * - GET ?credentialId=…&slot=flash|pro|embed|chat — slot optional; when set, filters by capability.
+ * - POST JSON { credentialId } or { apiKey }, optional slot — same behavior.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const credentialId = searchParams.get("credentialId")?.trim();
   if (!credentialId) {
     return NextResponse.json({ message: "credentialId 必填" }, { status: 400 });
+  }
+
+  const slot = parseSlot(searchParams.get("slot"));
+  if (slot === "invalid") {
+    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
   }
 
   let apiKey: string;
@@ -31,35 +41,58 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: msg }, { status: 400 });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
   try {
-    const res = await fetch(url, { method: "GET", next: { revalidate: 0 } });
-    const text = await res.text();
-    if (!res.ok) {
-      return NextResponse.json(
-        { message: text || `Google API error: ${res.status}` },
-        { status: 502 },
-      );
-    }
-    const data = JSON.parse(text) as GoogleListModelsResponse;
-    const raw = data.models ?? [];
-    const models = raw
-      .map((m) => {
-        const name = typeof m.name === "string" ? m.name : "";
-        const methods = m.supportedGenerationMethods ?? [];
-        const canGen = methods.some((x) => /generateContent/i.test(String(x)));
-        const canEmbed = methods.some((x) => /embedContent/i.test(String(x)));
-        return {
-          name,
-          displayName: m.displayName ?? name,
-          capabilities: { generateContent: canGen, embedContent: canEmbed },
-        };
-      })
-      .filter((m) => m.name && (m.capabilities.generateContent || m.capabilities.embedContent));
-
-    return NextResponse.json({ models });
+    const models = slot
+      ? await fetchGeminiModelsForSlot(apiKey, slot)
+      : await fetchGeminiModelsFromGoogle(apiKey);
+    return NextResponse.json({ models, slot: slot ?? null });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "拉取模型列表失败";
-    return NextResponse.json({ message: msg }, { status: 500 });
+    return NextResponse.json({ message: msg }, { status: 502 });
+  }
+}
+
+export async function POST(req: Request) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null) {
+    return NextResponse.json({ message: "Expected object body" }, { status: 400 });
+  }
+  const o = body as Record<string, unknown>;
+  const apiKeyDirect = typeof o.apiKey === "string" ? o.apiKey.trim() : "";
+  const credentialId = typeof o.credentialId === "string" ? o.credentialId.trim() : "";
+  const slot = parseSlot(o.slot);
+
+  if (slot === "invalid") {
+    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
+  }
+
+  let apiKey: string;
+  if (apiKeyDirect) {
+    apiKey = apiKeyDirect;
+  } else if (credentialId) {
+    try {
+      const stored = await getAiGatewayStored();
+      apiKey = getCredentialApiKey(stored, credentialId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "读取凭证失败";
+      return NextResponse.json({ message: msg }, { status: 400 });
+    }
+  } else {
+    return NextResponse.json({ message: "请提供 apiKey 或 credentialId" }, { status: 400 });
+  }
+
+  try {
+    const models = slot
+      ? await fetchGeminiModelsForSlot(apiKey, slot)
+      : await fetchGeminiModelsFromGoogle(apiKey);
+    return NextResponse.json({ models, slot: slot ?? null });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "拉取模型列表失败";
+    return NextResponse.json({ message: msg }, { status: 502 });
   }
 }

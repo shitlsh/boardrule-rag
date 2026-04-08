@@ -1,6 +1,5 @@
 import { Cpu, Database, Info, Server, Settings } from "lucide-react";
 
-import { SettingsAiGatewayForm } from "@/components/settings-ai-gateway-form";
 import { SettingsLimitsForm } from "@/components/settings-limits-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +44,7 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">查看系统信息和配置</p>
       </div>
 
-      <div className="grid max-w-2xl gap-6">
+      <div className="mx-auto grid w-full max-w-5xl gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -80,8 +79,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-
-        <SettingsAiGatewayForm />
 
         <SettingsLimitsForm />
       </div>

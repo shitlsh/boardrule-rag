@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun } from 'lucide-react'
+import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Sparkles } from 'lucide-react'
 
 const navItems = [
   {
@@ -18,6 +18,11 @@ const navItems = [
     title: '聊天预览',
     href: '/chat',
     icon: MessageCircle,
+  },
+  {
+    title: '模型管理',
+    href: '/models',
+    icon: Sparkles,
   },
   {
     title: '系统设置',
@@ -47,7 +52,10 @@ export function SidebarNav() {
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const isActive =
+              item.href === "/settings"
+                ? pathname === "/settings"
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
