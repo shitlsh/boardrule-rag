@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from api.deps import require_boardrule_ai
 from graphs.extraction_graph import run_extraction
+from graphs.extraction_settings import extraction_simple_max_body_pages
 from graphs.state import ExtractionState
 from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
@@ -123,6 +124,14 @@ def _compute_body_page_indices(
     toc = set(toc_page_indices)
     exc = set(exclude_page_indices)
     return [p for p in all_pages if p not in exc and p not in toc]
+
+
+def _all_body_pages_excluding_only_ads(
+    page_rows: list[dict[str, Any]],
+    exclude_page_indices: list[int],
+) -> list[int]:
+    exc = set(exclude_page_indices)
+    return sorted({int(r["page"]) for r in page_rows if r.get("page") is not None and int(r["page"]) not in exc})
 
 
 def _validate_rasterized_pages(
@@ -491,16 +500,22 @@ async def start_extract(
         if not pr:
             raise HTTPException(status_code=404, detail="Unknown page_job_id; prepare pages again")
 
-        toc = _parse_index_list(toc_page_indices, field_name="toc_page_indices")
+        toc_from_request = _parse_index_list(toc_page_indices, field_name="toc_page_indices")
         exclude = _parse_index_list(exclude_page_indices, field_name="exclude_page_indices")
 
         page_rows = _build_page_rows(pr.pages)
         if not page_rows:
             raise HTTPException(status_code=400, detail="Page job has no pages")
 
-        if not toc:
-            toc = [page_rows[0]["page"]]
-        body = _compute_body_page_indices(page_rows, toc, exclude)
+        explicit_toc = len(toc_from_request) > 0
+        toc = toc_from_request if explicit_toc else [page_rows[0]["page"]]
+        total_pages = len(page_rows)
+        simple_max = extraction_simple_max_body_pages()
+        # 未选手动目录时仍用第 1 页喂 Flash 目录分析；薄册（≤simple_max）则正文不再排除该页，避免配件在第 1 页却被移出 vision 批次。
+        if not explicit_toc and total_pages <= simple_max:
+            body = _all_body_pages_excluding_only_ads(page_rows, exclude)
+        else:
+            body = _compute_body_page_indices(page_rows, toc, exclude)
         if not body:
             raise HTTPException(
                 status_code=400,
