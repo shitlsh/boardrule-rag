@@ -16,6 +16,16 @@ from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 router = APIRouter(tags=["index"])
 
 
+def _json_safe_float(val: Any) -> float | None:
+    """Rerank / fusion scores may be ``numpy.float32``, which FastAPI cannot JSON-encode."""
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 class DocumentIn(BaseModel):
     text: str = Field(..., min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -117,23 +127,42 @@ async def get_index_manifest(game_id: str) -> IndexManifestResponse:
 async def smoke_retrieve(
     game_id: str,
     q: str = "规则",
+    similarity_top_k: int | None = None,
+    rerank_top_n: int | None = None,
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> dict[str, Any]:
-    """Dev-only sanity check: retrieval + optional rerank without LLM synthesis (NO_TEXT)."""
+    """Sanity check: retrieval + optional rerank without LLM synthesis.
+
+    Optional ``similarity_top_k`` / ``rerank_top_n`` override the index manifest for A/B
+    debugging (same query string, different caps).
+
+    ``merged_context_chars`` is the length of all retrieved bodies joined with newlines —
+    the chat path uses ``SimpleSummarize``, which **truncates to roughly one context
+    window** from the **start** of this string; if this number is large, later nodes may
+    never reach the LLM even when ``rerank_top_n`` is high.
+    """
     try:
         with boardrule_ai_runtime(_ai):
-            nodes = load_hybrid_reranked_nodes(game_id, q)
+            nodes = load_hybrid_reranked_nodes(
+                game_id,
+                q,
+                similarity_top_k=similarity_top_k,
+                rerank_top_n=rerank_top_n,
+            )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     sources: list[dict[str, Any]] = []
+    full_texts: list[str] = []
     for sn in nodes:
         meta = getattr(sn.node, "metadata", {}) or {}
+        body = sn.node.get_content() or ""
+        full_texts.append(body)
         sources.append(
             {
-                "score": getattr(sn, "score", None),
-                "text_preview": (sn.node.get_content() or "")[:400],
+                "score": _json_safe_float(getattr(sn, "score", None)),
+                "text_preview": body[:400],
                 "metadata": {
                     "game_id": meta.get("game_id"),
                     "source_file": meta.get("source_file"),
@@ -144,4 +173,12 @@ async def smoke_retrieve(
                 },
             }
         )
-    return {"query": q, "source_nodes": sources}
+    merged = "\n".join(full_texts)
+    return {
+        "query": q,
+        "similarity_top_k_override": similarity_top_k,
+        "rerank_top_n_override": rerank_top_n,
+        "node_count": len(nodes),
+        "merged_context_chars": len(merged),
+        "source_nodes": sources,
+    }
