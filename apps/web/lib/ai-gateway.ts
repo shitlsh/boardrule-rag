@@ -33,6 +33,18 @@ function normalizeRagOptions(raw: unknown): RagOptionsStored | undefined {
   if (r.bm25TokenProfile === "cjk_char" || r.bm25TokenProfile === "latin_word") {
     out.bm25TokenProfile = r.bm25TokenProfile;
   }
+  if (typeof r.similarityTopK === "number" && Number.isFinite(r.similarityTopK) && r.similarityTopK > 0) {
+    out.similarityTopK = Math.trunc(r.similarityTopK);
+  }
+  if (typeof r.rerankTopN === "number" && Number.isFinite(r.rerankTopN) && r.rerankTopN > 0) {
+    out.rerankTopN = Math.trunc(r.rerankTopN);
+  }
+  if (r.retrievalMode === "hybrid" || r.retrievalMode === "vector_only") {
+    out.retrievalMode = r.retrievalMode;
+  }
+  if (typeof r.useRerank === "boolean") {
+    out.useRerank = r.useRerank;
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -82,7 +94,7 @@ function parseStored(raw: string): AiGatewayStored {
           : DEFAULT_CHAT.maxTokens,
     };
     const ragRaw = (o as { ragOptions?: unknown }).ragOptions;
-    const ragOptions = normalizeRagOptions(ragRaw);
+    const ragOptions = normalizeRagOptions(ragRaw) ?? {};
     return { version: 1, credentials, slotBindings, chatOptions, ragOptions };
   } catch {
     return emptyStored();
@@ -294,7 +306,11 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1
     ((ro.rerankModel && ro.rerankModel.trim()) ||
       (typeof ro.chunkSize === "number" && Number.isFinite(ro.chunkSize)) ||
       (typeof ro.chunkOverlap === "number" && Number.isFinite(ro.chunkOverlap)) ||
-      ro.bm25TokenProfile);
+      ro.bm25TokenProfile ||
+      (typeof ro.similarityTopK === "number" && Number.isFinite(ro.similarityTopK)) ||
+      (typeof ro.rerankTopN === "number" && Number.isFinite(ro.rerankTopN)) ||
+      ro.retrievalMode ||
+      typeof ro.useRerank === "boolean");
   return {
     version: 1,
     gemini: {
@@ -453,6 +469,10 @@ export type RagOptionsPatch = {
   chunkSize?: number | null;
   chunkOverlap?: number | null;
   bm25TokenProfile?: "cjk_char" | "latin_word" | null;
+  similarityTopK?: number | null;
+  rerankTopN?: number | null;
+  retrievalMode?: "hybrid" | "vector_only" | null;
+  useRerank?: boolean | null;
 };
 
 export async function patchGatewayRagOptions(patch: RagOptionsPatch): Promise<AiGatewayPublic> {
@@ -493,6 +513,42 @@ export async function patchGatewayRagOptions(patch: RagOptionsPatch): Promise<Ai
       ragOptions = rest;
     } else if (patch.bm25TokenProfile === "cjk_char" || patch.bm25TokenProfile === "latin_word") {
       ragOptions = { ...ragOptions, bm25TokenProfile: patch.bm25TokenProfile };
+    }
+  }
+  if ("similarityTopK" in patch) {
+    if (patch.similarityTopK === null) {
+      const { similarityTopK: _s, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.similarityTopK !== undefined && Number.isFinite(patch.similarityTopK)) {
+      const n = Math.trunc(patch.similarityTopK);
+      if (n < 1) throw new Error("similarityTopK 无效");
+      ragOptions = { ...ragOptions, similarityTopK: n };
+    }
+  }
+  if ("rerankTopN" in patch) {
+    if (patch.rerankTopN === null) {
+      const { rerankTopN: _r, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.rerankTopN !== undefined && Number.isFinite(patch.rerankTopN)) {
+      const n = Math.trunc(patch.rerankTopN);
+      if (n < 1) throw new Error("rerankTopN 无效");
+      ragOptions = { ...ragOptions, rerankTopN: n };
+    }
+  }
+  if ("retrievalMode" in patch) {
+    if (patch.retrievalMode === null) {
+      const { retrievalMode: _r, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (patch.retrievalMode === "hybrid" || patch.retrievalMode === "vector_only") {
+      ragOptions = { ...ragOptions, retrievalMode: patch.retrievalMode };
+    }
+  }
+  if ("useRerank" in patch) {
+    if (patch.useRerank === null) {
+      const { useRerank: _u, ...rest } = ragOptions;
+      ragOptions = rest;
+    } else if (typeof patch.useRerank === "boolean") {
+      ragOptions = { ...ragOptions, useRerank: patch.useRerank };
     }
   }
   return persistStored({ ...cur, ragOptions });

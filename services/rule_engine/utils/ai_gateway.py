@@ -58,6 +58,11 @@ class RagOptions(BaseModel):
         None,
         alias="bm25TokenProfile",
     )
+    # Retrieval defaults for new index builds; query-time behavior is stored in per-game manifest.
+    similarity_top_k: int | None = Field(None, alias="similarityTopK", ge=1, le=200)
+    rerank_top_n: int | None = Field(None, alias="rerankTopN", ge=1, le=100)
+    retrieval_mode: Literal["hybrid", "vector_only"] | None = Field(None, alias="retrievalMode")
+    use_rerank: bool | None = Field(None, alias="useRerank")
 
 
 class BoardruleAiConfig(BaseModel):

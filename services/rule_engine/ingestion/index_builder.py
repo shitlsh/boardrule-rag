@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
-from llama_index.core.schema import QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
 from ingestion.bm25_retriever import BM25_CJK_TOKEN_PATTERN, BoardruleBM25Retriever, default_bm25_from_nodes
@@ -59,6 +61,112 @@ def _bm25_token_pattern() -> str:
     if ro is not None and ro.bm25_token_profile == "latin_word":
         return r"(?u)\b\w\w+\b"
     return BM25_CJK_TOKEN_PATTERN
+
+
+def _env_similarity_top_k() -> int:
+    try:
+        v = int(os.environ.get("RAG_SIMILARITY_TOP_K", "8"))
+        return max(1, min(200, v))
+    except ValueError:
+        return 8
+
+
+def _env_rerank_top_n() -> int:
+    try:
+        v = int(os.environ.get("RAG_RERANK_TOP_N", "5"))
+        return max(1, min(100, v))
+    except ValueError:
+        return 5
+
+
+def _env_retrieval_mode() -> Literal["hybrid", "vector_only"]:
+    v = (os.environ.get("RAG_RETRIEVAL_MODE") or "hybrid").strip().lower()
+    if v == "vector_only":
+        return "vector_only"
+    return "hybrid"
+
+
+def _env_use_rerank() -> bool:
+    return os.environ.get("RAG_USE_RERANK", "true").strip().lower() not in ("0", "false", "no")
+
+
+@dataclass(frozen=True)
+class RetrievalConfig:
+    """Per-index retrieval behavior (persisted in manifest, read at query time)."""
+
+    similarity_top_k: int
+    rerank_top_n: int
+    retrieval_mode: Literal["hybrid", "vector_only"]
+    use_rerank: bool
+
+
+def retrieval_config_from_manifest(manifest: dict[str, Any]) -> RetrievalConfig:
+    """Defaults match pre-manifest behavior: hybrid, rerank on, top_k=8, rerank_n=5."""
+    mode_raw = manifest.get("retrieval_mode") or "hybrid"
+    mode: Literal["hybrid", "vector_only"] = (
+        "vector_only" if mode_raw == "vector_only" else "hybrid"
+    )
+    ur_raw = manifest.get("use_rerank")
+    use_r = True if ur_raw is None else bool(ur_raw)
+    try:
+        sk = int(manifest["similarity_top_k"]) if manifest.get("similarity_top_k") is not None else _env_similarity_top_k()
+    except (TypeError, ValueError):
+        sk = _env_similarity_top_k()
+    sk = max(1, min(200, sk))
+    try:
+        rrn = int(manifest["rerank_top_n"]) if manifest.get("rerank_top_n") is not None else _env_rerank_top_n()
+    except (TypeError, ValueError):
+        rrn = _env_rerank_top_n()
+    rrn = max(1, min(100, rrn))
+    return RetrievalConfig(
+        similarity_top_k=sk,
+        rerank_top_n=rrn,
+        retrieval_mode=mode,
+        use_rerank=use_r,
+    )
+
+
+def _resolve_retrieval_for_build(
+    explicit_sk: int | None,
+    explicit_rrn: int | None,
+    explicit_mode: str | None,
+    explicit_ur: bool | None,
+) -> tuple[int, int, Literal["hybrid", "vector_only"], bool]:
+    """
+    Precedence: explicit build args > AI Gateway ``ragOptions`` > process env > built-in default.
+
+    Query-time behavior is always taken from the manifest written at build time.
+    """
+    ro = _try_rag_options()
+    sk = explicit_sk
+    if sk is None and ro is not None and ro.similarity_top_k is not None:
+        sk = ro.similarity_top_k
+    if sk is None:
+        sk = _env_similarity_top_k()
+    sk = max(1, min(200, int(sk)))
+
+    rrn = explicit_rrn
+    if rrn is None and ro is not None and ro.rerank_top_n is not None:
+        rrn = ro.rerank_top_n
+    if rrn is None:
+        rrn = _env_rerank_top_n()
+    rrn = max(1, min(100, int(rrn)))
+
+    mode: str | None = explicit_mode
+    if mode is None and ro is not None and ro.retrieval_mode is not None:
+        mode = ro.retrieval_mode
+    if mode is None:
+        mode = _env_retrieval_mode()
+    if mode not in ("hybrid", "vector_only"):
+        mode = "hybrid"
+    mode_t: Literal["hybrid", "vector_only"] = mode  # type: ignore[assignment]
+
+    ur = explicit_ur
+    if ur is None and ro is not None and ro.use_rerank is not None:
+        ur = ro.use_rerank
+    if ur is None:
+        ur = _env_use_rerank()
+    return sk, rrn, mode_t, ur
 
 
 def _index_root() -> Path:
@@ -209,13 +317,27 @@ def build_and_persist_index(
     merged_markdown: str | None = None,
     documents: list[Document] | None = None,
     source_file: str = "",
+    similarity_top_k: int | None = None,
+    rerank_top_n: int | None = None,
+    retrieval_mode: Literal["hybrid", "vector_only"] | None = None,
+    use_rerank: bool | None = None,
 ) -> dict[str, Any]:
     """
-    Build per-game dense + BM25 indexes.
+    Build per-game dense index; optionally persist BM25 for hybrid retrieval.
+
+    ``retrieval_mode=vector_only`` skips BM25 (smaller footprint). To enable hybrid later, rebuild
+    with ``hybrid``. Rerank is query-only (no rebuild to toggle if manifest is updated—by default
+    it is fixed at build time from these parameters).
 
     Vectors: PostgreSQL + pgvector when `DATABASE_URL` / `PGVECTOR_DATABASE_URL` is set and
     `USE_PGVECTOR` is not disabled; otherwise SimpleVectorStore on disk under `vector_storage/`.
     """
+    sk, rrn, mode, use_rr = _resolve_retrieval_for_build(
+        similarity_top_k,
+        rerank_top_n,
+        retrieval_mode,
+        use_rerank,
+    )
     configure_embedding_settings()
     root = game_index_dir(game_id)
     root.mkdir(parents=True, exist_ok=True)
@@ -285,15 +407,18 @@ def build_and_persist_index(
         vector_backend = "disk"
         pg_table = None
 
-    bm25 = default_bm25_from_nodes(
-        nodes,
-        similarity_top_k=12,
-        token_pattern=_bm25_token_pattern(),
-    )
-    bm25.persist(str(bm25_dir))
+    bm25_path: str | None = None
+    if mode == "hybrid":
+        bm25 = default_bm25_from_nodes(
+            nodes,
+            similarity_top_k=sk,
+            token_pattern=_bm25_token_pattern(),
+        )
+        bm25.persist(str(bm25_dir))
+        bm25_path = str(bm25_dir)
 
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "game_id": game_id,
         "source_file": source_file,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -303,6 +428,10 @@ def build_and_persist_index(
         "node_count": len(nodes),
         "vector_backend": vector_backend,
         "pg_table": pg_table,
+        "similarity_top_k": sk,
+        "rerank_top_n": rrn,
+        "retrieval_mode": mode,
+        "use_rerank": use_rr,
         "metadata_contract": [
             "game_id",
             "source_file",
@@ -311,9 +440,13 @@ def build_and_persist_index(
             "page_start",
             "page_end",
             "header_path",
+            "similarity_top_k",
+            "rerank_top_n",
+            "retrieval_mode",
+            "use_rerank",
         ],
         "vector_storage": str(vec_dir) if vector_backend == "disk" else None,
-        "bm25_storage": str(bm25_dir),
+        "bm25_storage": bm25_path,
     }
     (root / _MANIFEST_NAME).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest
@@ -372,28 +505,50 @@ def load_hybrid_reranked_nodes(
     game_id: str,
     query: str,
     *,
-    similarity_top_k: int = 8,
-    rerank_top_n: int = 5,
-):
-    """Load persisted index; hybrid BM25+dense + cross-encoder rerank (no LLM answer)."""
-    configure_embedding_settings()
-    root = game_index_dir(game_id)
-    bm25_dir = root / _BM25_SUBDIR
-    if not bm25_dir.is_dir():
-        raise FileNotFoundError(f"Missing BM25 persist dir at {bm25_dir}")
+    similarity_top_k: int | None = None,
+    rerank_top_n: int | None = None,
+) -> list[NodeWithScore]:
+    """
+    Retrieve nodes for a query using per-index settings from ``manifest.json``.
 
+    Optional ``similarity_top_k`` / ``rerank_top_n`` override manifest (for tests only); production
+    callers should omit them so the index controls behavior.
+    """
+    manifest = load_manifest(game_id)
+    if not manifest:
+        raise FileNotFoundError(f"No index manifest for game_id={game_id}")
+    cfg = retrieval_config_from_manifest(manifest)
+    sk = cfg.similarity_top_k if similarity_top_k is None else max(1, min(200, int(similarity_top_k)))
+    rrn = cfg.rerank_top_n if rerank_top_n is None else max(1, min(100, int(rerank_top_n)))
+
+    configure_embedding_settings()
     index = load_vector_index(game_id)
-    bm25 = BoardruleBM25Retriever.from_persist_dir(str(bm25_dir))
-    vector_retriever = index.as_retriever(similarity_top_k=similarity_top_k)
-    hybrid = HybridFusionRetriever(
-        bm25,
-        vector_retriever,
-        similarity_top_k=similarity_top_k,
-    )
+    bundle = QueryBundle(query_str=query)
+    vector_retriever = index.as_retriever(similarity_top_k=sk)
+
+    if cfg.retrieval_mode == "vector_only":
+        merged = vector_retriever.retrieve(bundle)
+    else:
+        root = game_index_dir(game_id)
+        bm25_dir = root / _BM25_SUBDIR
+        if not bm25_dir.is_dir():
+            raise FileNotFoundError(
+                "Hybrid retrieval requires BM25 data under the index directory. "
+                "Rebuild with retrieval mode «hybrid» (vector-only indexes omit BM25)."
+            )
+        bm25 = BoardruleBM25Retriever.from_persist_dir(str(bm25_dir))
+        hybrid = HybridFusionRetriever(
+            bm25,
+            vector_retriever,
+            similarity_top_k=sk,
+        )
+        merged = hybrid.retrieve(bundle)
+
+    if not cfg.use_rerank:
+        return merged[:rrn]
+
     rerank = get_cached_sentence_transformer_rerank(
         model=_rerank_model_name(),
-        top_n=rerank_top_n,
+        top_n=rrn,
     )
-    bundle = QueryBundle(query_str=query)
-    merged = hybrid.retrieve(bundle)
     return rerank.postprocess_nodes(merged, query_bundle=bundle)

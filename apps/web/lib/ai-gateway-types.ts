@@ -22,6 +22,14 @@ export type RagOptionsStored = {
   chunkSize?: number;
   chunkOverlap?: number;
   bm25TokenProfile?: "cjk_char" | "latin_word";
+  /** Default recall pool size for new index builds (manifest stores the chosen value). */
+  similarityTopK?: number;
+  /** Default cap on chunks passed to the LLM after retrieval/rerank. */
+  rerankTopN?: number;
+  /** hybrid = BM25 + vector + RRF; vector_only = dense only (no BM25 on disk). */
+  retrievalMode?: "hybrid" | "vector_only";
+  /** If false, skip cross-encoder rerank (lower memory; vector or hybrid retrieval only). */
+  useRerank?: boolean;
 };
 
 export type AiGatewayStored = {

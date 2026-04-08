@@ -26,6 +26,10 @@ class BuildIndexRequest(BaseModel):
     merged_markdown: str | None = None
     documents: list[DocumentIn] | None = None
     source_file: str | None = None
+    similarity_top_k: int | None = Field(None, ge=1, le=200)
+    rerank_top_n: int | None = Field(None, ge=1, le=100)
+    retrieval_mode: Literal["hybrid", "vector_only"] | None = None
+    use_rerank: bool | None = None
 
     @model_validator(mode="after")
     def _md_or_docs(self) -> "BuildIndexRequest":
@@ -67,6 +71,10 @@ def _run_build_index_job(job_id: str, body: BuildIndexRequest, ai_snapshot: dict
                 merged_markdown=body.merged_markdown,
                 documents=docs,
                 source_file=body.source_file or "",
+                similarity_top_k=body.similarity_top_k,
+                rerank_top_n=body.rerank_top_n,
+                retrieval_mode=body.retrieval_mode,
+                use_rerank=body.use_rerank,
             )
         index_jobs.set_completed(job_id, manifest)
     except Exception as e:  # noqa: BLE001
@@ -111,7 +119,7 @@ async def smoke_retrieve(
     q: str = "规则",
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> dict[str, Any]:
-    """Dev-only sanity check: hybrid + rerank without LLM synthesis (NO_TEXT)."""
+    """Dev-only sanity check: retrieval + optional rerank without LLM synthesis (NO_TEXT)."""
     try:
         with boardrule_ai_runtime(_ai):
             nodes = load_hybrid_reranked_nodes(game_id, q)

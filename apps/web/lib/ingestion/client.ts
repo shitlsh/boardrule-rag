@@ -121,17 +121,27 @@ export async function startBuildIndex(params: {
   gameId: string;
   mergedMarkdown: string;
   sourceFile?: string;
+  /** Omitted keys fall back to rule engine env / AI Gateway ragOptions on the server. */
+  similarityTopK?: number;
+  rerankTopN?: number;
+  retrievalMode?: "hybrid" | "vector_only";
+  useRerank?: boolean;
 }): Promise<BuildIndexStartResponse> {
   const base = getRuleEngineBaseUrl();
   const ai = await getEngineAiHeaders();
+  const payload: Record<string, unknown> = {
+    game_id: params.gameId,
+    merged_markdown: params.mergedMarkdown,
+    source_file: params.sourceFile ?? "",
+  };
+  if (params.similarityTopK != null) payload.similarity_top_k = params.similarityTopK;
+  if (params.rerankTopN != null) payload.rerank_top_n = params.rerankTopN;
+  if (params.retrievalMode != null) payload.retrieval_mode = params.retrievalMode;
+  if (params.useRerank != null) payload.use_rerank = params.useRerank;
   const res = await fetch(`${base}/build-index/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...ai },
-    body: JSON.stringify({
-      game_id: params.gameId,
-      merged_markdown: params.mergedMarkdown,
-      source_file: params.sourceFile ?? "",
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const text = await res.text();
