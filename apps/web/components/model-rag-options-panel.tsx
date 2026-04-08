@@ -117,7 +117,7 @@ export function ModelRagOptionsPanel({ data, onUpdated }: Props) {
               <Field className="min-w-0">
                 <FieldLabel>Rerank 模型（sentence-transformers）</FieldLabel>
                 <Input
-                  placeholder="默认：cross-encoder/ms-marco-MiniLM-L-12-v2"
+                  placeholder="默认：BAAI/bge-reranker-base"
                   value={rerankModel}
                   onChange={(e) => setRerankModel(e.target.value)}
                   onBlur={() => void flush()}

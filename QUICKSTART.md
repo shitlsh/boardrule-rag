@@ -85,7 +85,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | `INDEX_STORAGE_ROOT` | No | Per-game **BM25** + manifests (default `services/rule_engine/data/indexes/`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | No | PDF page render quality for `/extract/pages`. |
 | `EMBEDDING_DIM` | No | Vector width for pgvector / indexing (default `3072`). **Must match** the embedding model chosen in **AI Gateway** (Embed slot). |
-| `RERANK_MODEL` | No | Cross-encoder name for reranking (default `cross-encoder/ms-marco-MiniLM-L-6-v2`; first run may download weights). |
+| `RERANK_MODEL` | No | Cross-encoder name for reranking (default `BAAI/bge-reranker-base`; first run may download weights). |
 
 See `services/rule_engine/.env.example` for the full list (commented blocks for index, vision graph, etc.).
 
