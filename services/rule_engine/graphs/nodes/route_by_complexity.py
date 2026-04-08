@@ -19,12 +19,7 @@ def run(state: ExtractionState) -> dict:
     n_sections = len(sections) if isinstance(sections, list) else 0
     body = state.get("body_page_indices") or []
     body_pages = len(body)
-    parsed_len = len(state.get("parsed_text") or "")
-
-    if body_pages > 0:
-        effective = body_pages * 3500
-    else:
-        effective = parsed_len
+    effective = body_pages * 3500
 
     threshold = _complexity_threshold_pages()
     # Single source of truth for "heavy / needs splitting" (replaces batch_splitter heuristics).

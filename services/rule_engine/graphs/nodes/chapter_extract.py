@@ -1,4 +1,4 @@
-"""Node 4: Chapter-level structured extraction (Gemini Pro) — vision batches or legacy text."""
+"""Node 4: Chapter-level structured extraction (Gemini Pro) — vision batches only."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from utils.gemini import (
     PRO_EXTRACT,
     GeminiCallMeta,
     build_labeled_image_parts,
-    generate_pro,
     generate_pro_vision,
     pro_max_output_tokens,
 )
@@ -146,7 +145,6 @@ def run(state: ExtractionState) -> dict:
             "retry_count": prev_retry + merge_retries,
         }
 
-    # Vision pipeline expected for body pages but batch_splitter produced no vision batches
     body_pages = state.get("body_page_indices") or []
     if page_rows and not vision_batches and body_pages:
         return {
@@ -154,45 +152,15 @@ def run(state: ExtractionState) -> dict:
             "errors": errs
             + [
                 "chapter_extract: body pages and page_rows present but vision_batches is empty; "
-                "cannot fall back to chapter_extract_strict without rasterized page images. "
-                "Check page paths in page_rows, VISION_BATCH_PAGES, and batch_splitter output.",
+                "check page paths in page_rows, VISION_BATCH_PAGES, and batch_splitter output.",
             ],
         }
 
-    batches = state.get("batches") or []
-    if not batches:
-        return {
-            "chapter_outputs": [],
-            "errors": errs + ["chapter_extract: no vision_batches and no text batches"],
-        }
-
-    outputs = []
-    for i, batch in enumerate(batches):
-        filled = render_prompt(
-            "chapter_extract_strict.md",
-            state,
-            rule_style_core=rule_style_core,
-            batch_text=batch[:180_000],
-        )
-        prompt = f"{filled}\n\n（本批为第 {i + 1}/{len(batches)} 批）"
-        try:
-
-            def _call() -> str:
-                return generate_pro(
-                    prompt,
-                    preset=PRO_EXTRACT,
-                    max_output_tokens=_mot,
-                    meta=GeminiCallMeta(
-                        node="chapter_extract",
-                        prompt_file="chapter_extract_strict.md",
-                        call_tag=f"text_batch_{i + 1}_of_{len(batches)}",
-                    ),
-                )
-
-            out = retry(_call, attempts=3)
-            outputs.append(out)
-        except Exception as e:  # noqa: BLE001
-            errs.append(f"chapter_extract batch {i + 1}: {e}")
-            outputs.append(f"<!-- extract failed batch {i + 1}: {e} -->")
-
-    return {"chapter_outputs": outputs, "errors": errs}
+    return {
+        "chapter_outputs": [],
+        "errors": errs
+        + [
+            "chapter_extract: vision extraction requires non-empty vision_batches from rasterized body pages; "
+            "text-only extraction is disabled.",
+        ],
+    }

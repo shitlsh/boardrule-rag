@@ -36,33 +36,6 @@ def _split_body_into_vision_batches(
     return batches[:_MAX_BATCHES]
 
 
-def _legacy_char_batches(text: str) -> list[str]:
-    _BATCH_TARGET = 14_000
-    _MAX_BATCHES = 16
-    if len(text) <= _BATCH_TARGET:
-        return [text]
-    batches: list[str] = []
-    start = 0
-    while start < len(text) and len(batches) < _MAX_BATCHES:
-        end = min(start + _BATCH_TARGET, len(text))
-        if end < len(text):
-            nl = text.rfind("\n\n", start, end)
-            if nl > start + _BATCH_TARGET // 2:
-                end = nl
-        chunk = text[start:end].strip()
-        if chunk:
-            batches.append(chunk)
-        start = end
-    if start < len(text):
-        rest = text[start:].strip()
-        if rest:
-            if batches:
-                batches[-1] = batches[-1] + "\n\n" + rest
-            else:
-                batches.append(rest)
-    return batches or [text]
-
-
 def run(state: ExtractionState) -> dict:
     needs_batching = bool(state.get("needs_batching"))
     body = sorted(set(state.get("body_page_indices") or []))
@@ -83,11 +56,4 @@ def run(state: ExtractionState) -> dict:
             vb = _split_body_into_vision_batches(body, by_page, max(per, len(body)))
         return {"vision_batches": vb, "batches": []}
 
-    text = state.get("parsed_text") or ""
-
-    if not needs_batching and len(text) < 14_000:
-        batches = [text]
-    else:
-        batches = _legacy_char_batches(text)
-
-    return {"vision_batches": [], "batches": batches}
+    return {"vision_batches": [], "batches": []}

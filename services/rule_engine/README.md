@@ -2,9 +2,9 @@
 
 Python service for board-game rule extraction: **PDF → per-page images** (`pdf2image` + poppler) or ordered images, **Gemini vision** chapter extraction, **LangGraph** orchestration (TOC → routing → batching → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind `POST /build-index` (dense vectors in **PostgreSQL + pgvector** when configured, else on-disk `VectorStoreIndex`, plus **BM25**, **RRF fusion**, **cross-encoder rerank**).
 
-### Vision-first prompts
+### Vision-only extraction
 
-When there are **body pages** to extract and rasterized **`page_rows`** from `POST /extract/pages`, the graph uses **`prompts/toc_analyzer_vision.md`** and **`prompts/chapter_extract_vision.md`** as the **primary** extraction path. Text-only templates such as `chapter_extract_strict.md` and non-vision TOC prompts are **legacy** fallbacks (for example parsed text without per-page images, or TOC-only uploads with no body pages).
+Rule extraction **requires** rasterized page images from **`POST /extract/pages`** (and `POST /extract` with `page_job_id`). The graph uses **`prompts/toc_analyzer_vision.md`** and **`prompts/chapter_extract_vision.md`** only. The API validates that every **TOC** and **body** page index has a non-empty image path in `page_rows`.
 
 ## Requirements
 
@@ -154,7 +154,7 @@ services/rule_engine/
   api/              # FastAPI app and routers
   graphs/           # LangGraph state and nodes
   ingestion/        # Page raster, node builders, index_builder, rulebook_query (Phase 3 Q&A)
-  prompts/          # Markdown prompts — vision path: toc_analyzer_vision, chapter_extract_vision; text legacy: *_strict
+  prompts/          # Markdown prompts (vision TOC/chapter, merge, quickstart, chat, …)
   utils/            # Gemini client, pagination, retries, progress
   eval/             # Fixtures and evaluation notes
 ```

@@ -119,6 +119,35 @@ def _compute_body_page_indices(
     return [p for p in all_pages if p not in exc and p not in toc]
 
 
+def _validate_rasterized_pages(
+    page_rows: list[dict[str, Any]],
+    toc_page_indices: list[int],
+    body_page_indices: list[int],
+) -> None:
+    """Require every TOC and body page to have a non-empty image path (vision-only pipeline)."""
+    by_page: dict[int, str] = {}
+    for r in page_rows:
+        p = r.get("page")
+        if p is None:
+            continue
+        path = r.get("path")
+        by_page[int(p)] = str(path).strip() if path else ""
+
+    missing_toc = [p for p in sorted(set(toc_page_indices)) if not by_page.get(p)]
+    missing_body = [p for p in sorted(set(body_page_indices)) if not by_page.get(p)]
+    if missing_toc or missing_body:
+        parts: list[str] = []
+        if missing_toc:
+            parts.append(
+                f"TOC pages must have rasterized images (missing path for pages: {missing_toc})",
+            )
+        if missing_body:
+            parts.append(
+                f"Body pages must have rasterized images (missing path for pages: {missing_body})",
+            )
+        raise HTTPException(status_code=400, detail="; ".join(parts))
+
+
 def _build_page_rows(assets: list[Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for a in assets:
@@ -416,6 +445,11 @@ async def start_extract(
             "errors": [],
             "retry_count": 0,
         }
+        _validate_rasterized_pages(
+            list(initial["page_rows"]),
+            list(initial["toc_page_indices"]),
+            list(initial["body_page_indices"]),
+        )
         with _jobs_lock:
             job = _jobs.get(jid)
         if not job:
@@ -453,6 +487,7 @@ async def start_extract(
                 status_code=400,
                 detail="No body pages after excluding TOC and ads; adjust toc_page_indices / exclude_page_indices",
             )
+        _validate_rasterized_pages(page_rows, toc, body)
 
         gn = game_name or ""
         tc = terminology_context if terminology_context is not None else ""
