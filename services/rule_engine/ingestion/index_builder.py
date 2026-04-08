@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -48,14 +49,51 @@ def _rerank_model_name() -> str:
 
 
 def _embedding_dim() -> int:
-    raw = os.environ.get("EMBEDDING_DIM", "3072").strip()
-    return int(raw) if raw.isdigit() else 3072
+    raw = (os.environ.get("EMBEDDING_DIM") or "3072").strip().lower()
+    if raw in ("", "none", "null") or not raw.isdigit():
+        return 3072
+    return int(raw)
+
+
+def _sanitize_postgresql_dsn(url: str) -> str:
+    """
+    SQLAlchemy rejects URLs where the port was serialized as the literal string ``None``
+    (e.g. ``...@host:None/db`` → ``int('None')``). Strip that bogus segment.
+    """
+    t = url.strip()
+    if ":None" not in t and ":none" not in t:
+        return t
+    return re.sub(r":[Nn]one(?=/|\?|#|$)", "", t, count=1)
+
+
+def _paired_pgvector_uris(dsn: str) -> tuple[str, str]:
+    """
+    LlamaIndex ``PGVectorStore.from_params`` builds ``async_connection_string`` from host/user/port
+    kwargs when ``async_connection_string`` is omitted; those default to None and produce
+    ``postgresql+asyncpg://None:None@None:None/None``, which fails with ``int('None')`` on connect.
+
+    Return explicit (sync_sqlalchemy_uri, async_sqlalchemy_uri) with the same netloc/path/query.
+    """
+    s = _sanitize_postgresql_dsn(dsn.strip())
+    if not s.startswith("postgresql"):
+        return s, s
+    if s.startswith("postgresql+psycopg2://"):
+        rest = s.split("postgresql+psycopg2://", 1)[1]
+        return s, f"postgresql+asyncpg://{rest}"
+    if s.startswith("postgresql+asyncpg://"):
+        rest = s.split("postgresql+asyncpg://", 1)[1]
+        return f"postgresql+psycopg2://{rest}", s
+    # ``postgresql://`` — split once; keep query/fragment
+    if s.startswith("postgresql://"):
+        rest = s[len("postgresql://") :]
+        return f"postgresql+psycopg2://{rest}", f"postgresql+asyncpg://{rest}"
+    return s, s
 
 
 def _pgvector_connection_string() -> str | None:
     raw = (os.environ.get("PGVECTOR_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
     if raw.startswith("postgresql"):
-        return raw
+        return _sanitize_postgresql_dsn(raw)
     return None
 
 
@@ -157,13 +195,15 @@ def build_and_persist_index(
         from llama_index.vector_stores.postgres import PGVectorStore
 
         table = _safe_table_name(game_id)
-        engine = create_engine(pg_uri, future=True)
+        sync_uri, async_uri = _paired_pgvector_uris(pg_uri)
+        engine = create_engine(sync_uri, future=True)
         with engine.connect() as conn:
             conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
             conn.commit()
 
         vector_store = PGVectorStore.from_params(
-            connection_string=pg_uri,
+            connection_string=sync_uri,
+            async_connection_string=async_uri,
             table_name=table,
             embed_dim=embed_dim,
         )
@@ -229,11 +269,17 @@ def load_vector_index(game_id: str) -> VectorStoreIndex:
         table = manifest.get("pg_table")
         if not table:
             raise RuntimeError("Manifest missing pg_table for pgvector index")
-        embed_dim = int(manifest.get("embedding_dim") or _embedding_dim())
+        raw_ed = manifest.get("embedding_dim")
+        if raw_ed is None or str(raw_ed).strip().lower() in ("none", "null", ""):
+            embed_dim = _embedding_dim()
+        else:
+            embed_dim = int(raw_ed) if str(raw_ed).strip().isdigit() else _embedding_dim()
         from llama_index.vector_stores.postgres import PGVectorStore
 
+        sync_uri, async_uri = _paired_pgvector_uris(pg_uri)
         vector_store = PGVectorStore.from_params(
-            connection_string=pg_uri,
+            connection_string=sync_uri,
+            async_connection_string=async_uri,
             table_name=str(table),
             embed_dim=embed_dim,
             perform_setup=False,
