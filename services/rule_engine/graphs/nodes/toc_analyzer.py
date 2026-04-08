@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import FLASH_TOC, build_labeled_image_parts, generate_flash_vision
+from utils.gemini import FLASH_TOC, GeminiCallMeta, build_labeled_image_parts, generate_flash_vision
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -32,7 +32,11 @@ def run(state: ExtractionState) -> dict:
         try:
 
             def _call() -> str:
-                return generate_flash_vision(parts, preset=FLASH_TOC)
+                return generate_flash_vision(
+                    parts,
+                    preset=FLASH_TOC,
+                    meta=GeminiCallMeta(node="toc_analyzer", prompt_file="toc_analyzer_vision.md"),
+                )
 
             raw = retry(_call, attempts=3)
             toc = parse_json_object(raw)
@@ -52,7 +56,11 @@ def run(state: ExtractionState) -> dict:
         from utils.gemini import generate_flash
 
         def _call() -> str:
-            return generate_flash(prompt, preset=FLASH_TOC)
+            return generate_flash(
+                prompt,
+                preset=FLASH_TOC,
+                meta=GeminiCallMeta(node="toc_analyzer", prompt_file="toc_analyzer.md"),
+            )
 
         raw = retry(_call, attempts=3)
         toc = parse_json_object(raw)

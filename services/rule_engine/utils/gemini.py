@@ -1,11 +1,18 @@
 """Gemini client wrapper (Flash / Pro, text + multimodal vision).
 
 All generation uses named presets for temperature and max_output_tokens (from env).
+
+When LangSmith tracing is enabled (``LANGCHAIN_TRACING_V2`` / ``LANGSMITH_TRACING_V2``
+and a LangSmith API key), optional :class:`GeminiCallMeta` attaches node / prompt file /
+SHA-256 to a child ``llm`` run via ``langsmith.run_helpers.trace``. If tracing is off or
+``meta`` is omitted, behavior matches untraced calls (no extra imports or network).
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -19,6 +26,16 @@ PRO_MERGE = "pro_merge"
 
 FlashPreset = Literal["flash_toc", "flash_quickstart"]
 ProPreset = Literal["pro_extract", "pro_merge"]
+
+
+@dataclass(frozen=True)
+class GeminiCallMeta:
+    """Per-call metadata for LangSmith (optional; see module docstring)."""
+
+    node: str
+    prompt_file: str | None = None
+    prompt_sha256: str | None = None
+    call_tag: str | None = None
 
 
 def _configure() -> None:
@@ -65,12 +82,91 @@ def _generation_config(*, temperature: float, max_output_tokens: int) -> genai.G
     )
 
 
+def _tracing_enabled_for_gemini() -> bool:
+    """Match LangSmith expectations: TRACING_V2 truthy + API key present."""
+    v = (
+        os.environ.get("LANGSMITH_TRACING_V2")
+        or os.environ.get("LANGCHAIN_TRACING_V2")
+        or ""
+    ).strip().lower()
+    if v not in ("true", "1"):
+        return False
+    key = (os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY") or "").strip()
+    return bool(key)
+
+
+def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    if isinstance(contents, str):
+        return hashlib.sha256(contents.encode("utf-8")).hexdigest()
+    h = hashlib.sha256()
+    for p in contents:
+        if isinstance(p, str):
+            h.update(p.encode("utf-8"))
+        else:
+            h.update(b"<non-text-part>")
+    return h.hexdigest()
+
+
+def _generate_with_optional_trace(
+    model: genai.GenerativeModel,
+    contents: str | list[Any],
+    *,
+    meta: GeminiCallMeta | None,
+    empty_error: str,
+) -> str:
+    def _call() -> str:
+        response = model.generate_content(contents)
+        if not response.text:
+            raise RuntimeError(empty_error)
+        return response.text
+
+    if meta is None or not _tracing_enabled_for_gemini():
+        return _call()
+
+    try:
+        from langsmith.run_helpers import trace
+    except ImportError:
+        return _call()
+
+    sha = _sha256_for_content(contents, meta.prompt_sha256)
+    md: dict[str, Any] = {
+        "gemini_node": meta.node,
+        "prompt_sha256": sha,
+    }
+    if meta.prompt_file:
+        md["prompt_file"] = meta.prompt_file
+    if meta.call_tag:
+        md["call_tag"] = meta.call_tag
+
+    trace_name = f"gemini:{meta.node}"
+    with trace(
+        trace_name,
+        run_type="llm",
+        metadata=md,
+        inputs={
+            "prompt_file": meta.prompt_file or "",
+            "prompt_sha256": sha,
+            "call_tag": meta.call_tag or "",
+        },
+    ) as run:
+        try:
+            out = _call()
+            run.end(outputs={"response_chars": len(out)})
+            return out
+        except Exception as e:
+            run.end(error=repr(e))
+            raise
+
+
 def generate_flash(
     prompt: str,
     *,
     preset: FlashPreset,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    meta: GeminiCallMeta | None = None,
 ) -> str:
     _configure()
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
@@ -79,10 +175,12 @@ def generate_flash(
         flash_model_name(),
         generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
-    response = model.generate_content(prompt)
-    if not response.text:
-        raise RuntimeError("Gemini Flash returned empty response")
-    return response.text
+    return _generate_with_optional_trace(
+        model,
+        prompt,
+        meta=meta,
+        empty_error="Gemini Flash returned empty response",
+    )
 
 
 def generate_pro(
@@ -91,6 +189,7 @@ def generate_pro(
     preset: ProPreset,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    meta: GeminiCallMeta | None = None,
 ) -> str:
     _configure()
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
@@ -99,10 +198,12 @@ def generate_pro(
         pro_model_name(),
         generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
-    response = model.generate_content(prompt)
-    if not response.text:
-        raise RuntimeError("Gemini Pro returned empty response")
-    return response.text
+    return _generate_with_optional_trace(
+        model,
+        prompt,
+        meta=meta,
+        empty_error="Gemini Pro returned empty response",
+    )
 
 
 def _pil_open(path: Path | str):
@@ -140,6 +241,7 @@ def generate_flash_vision(
     preset: FlashPreset = "flash_toc",
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Flash (images + text parts)."""
     _configure()
@@ -149,10 +251,12 @@ def generate_flash_vision(
         flash_model_name(),
         generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
-    response = model.generate_content(parts)
-    if not response.text:
-        raise RuntimeError("Gemini Flash returned empty response (vision)")
-    return response.text
+    return _generate_with_optional_trace(
+        model,
+        parts,
+        meta=meta,
+        empty_error="Gemini Flash returned empty response (vision)",
+    )
 
 
 def generate_pro_vision(
@@ -161,6 +265,7 @@ def generate_pro_vision(
     preset: ProPreset = "pro_extract",
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Pro (images + text parts)."""
     _configure()
@@ -170,7 +275,9 @@ def generate_pro_vision(
         pro_model_name(),
         generation_config=_generation_config(temperature=temp, max_output_tokens=mot),
     )
-    response = model.generate_content(parts)
-    if not response.text:
-        raise RuntimeError("Gemini Pro returned empty response (vision)")
-    return response.text
+    return _generate_with_optional_trace(
+        model,
+        parts,
+        meta=meta,
+        empty_error="Gemini Pro returned empty response (vision)",
+    )

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import FLASH_QUICKSTART, flash_max_output_tokens, generate_flash
+from utils.gemini import FLASH_QUICKSTART, GeminiCallMeta, flash_max_output_tokens, generate_flash
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -22,7 +22,12 @@ def run(state: ExtractionState) -> dict:
     try:
 
         def _call() -> str:
-            return generate_flash(prompt, preset=FLASH_QUICKSTART, max_output_tokens=_mot)
+            return generate_flash(
+                prompt,
+                preset=FLASH_QUICKSTART,
+                max_output_tokens=_mot,
+                meta=GeminiCallMeta(node="quickstart_and_questions", prompt_file="quickstart_and_questions.md"),
+            )
 
         raw = retry(_call, attempts=3)
         data = parse_json_object(raw)

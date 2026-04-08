@@ -9,6 +9,7 @@ from typing import Any
 from graphs.state import ExtractionState
 from utils.gemini import (
     PRO_EXTRACT,
+    GeminiCallMeta,
     build_labeled_image_parts,
     generate_pro,
     generate_pro_vision,
@@ -68,7 +69,16 @@ def run(state: ExtractionState) -> dict:
             )
 
             def _call() -> str:
-                return generate_pro_vision(parts, preset=PRO_EXTRACT, max_output_tokens=_mot)
+                return generate_pro_vision(
+                    parts,
+                    preset=PRO_EXTRACT,
+                    max_output_tokens=_mot,
+                    meta=GeminiCallMeta(
+                        node="chapter_extract",
+                        prompt_file="chapter_extract_vision.md",
+                        call_tag=f"batch_{i + 1}_of_{len(batch_list)}",
+                    ),
+                )
 
             try:
                 out = retry(_call, attempts=3)
@@ -103,7 +113,16 @@ def run(state: ExtractionState) -> dict:
                 )
 
                 def _call_merged() -> str:
-                    return generate_pro_vision(parts, preset=PRO_EXTRACT, max_output_tokens=_mot)
+                    return generate_pro_vision(
+                        parts,
+                        preset=PRO_EXTRACT,
+                        max_output_tokens=_mot,
+                        meta=GeminiCallMeta(
+                            node="chapter_extract",
+                            prompt_file="chapter_extract_vision.md",
+                            call_tag=f"merged_from_batch_{i + 1}_step_{steps}",
+                        ),
+                    )
 
                 try:
                     out = retry(_call_merged, attempts=3)
@@ -159,7 +178,16 @@ def run(state: ExtractionState) -> dict:
         try:
 
             def _call() -> str:
-                return generate_pro(prompt, preset=PRO_EXTRACT, max_output_tokens=_mot)
+                return generate_pro(
+                    prompt,
+                    preset=PRO_EXTRACT,
+                    max_output_tokens=_mot,
+                    meta=GeminiCallMeta(
+                        node="chapter_extract",
+                        prompt_file="chapter_extract_strict.md",
+                        call_tag=f"text_batch_{i + 1}_of_{len(batches)}",
+                    ),
+                )
 
             out = retry(_call, attempts=3)
             outputs.append(out)

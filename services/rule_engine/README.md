@@ -81,7 +81,15 @@ export LANGCHAIN_API_KEY=your-langsmith-key
 export LANGCHAIN_PROJECT=boardrule-rag
 ```
 
-Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`.
+Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`. When tracing is off, or the API key is missing, the rule engine does not open LangSmith runs around native `google.generativeai` calls (no extra imports or network for Gemini).
+
+When tracing is on **and** a LangSmith API key is set (`LANGCHAIN_API_KEY` or `LANGSMITH_API_KEY`), each Gemini call from graph nodes records a child **`llm`** run (via `langsmith.run_helpers.trace`) with metadata such as **`gemini_node`** (graph node name), **`prompt_file`** (template basename when applicable), **`prompt_sha256`** (hash of the rendered prompt or multimodal text parts), and optional **`call_tag`** (for example batch index or merge stage). This does not send full prompts to LangSmith—only hashes and short labels.
+
+## Batching and concurrency
+
+The graph **sequentially** calls Gemini once per batch **inside** a single node implementation: for example `chapter_extract` iterates over `vision_batches` or text `batches` in a `for` loop, and `merge_and_refine` may issue multiple merge calls when outputs are long. That keeps memory use and API rate limits easy to reason about.
+
+**Optional future work** (not implemented here): parallel batch requests with `asyncio.gather` plus a semaphore or token bucket for rate limiting, or refactoring to LangGraph **`Send`** so each batch is a mapped child run—either approach would require careful handling of ordering when assembling `chapter_outputs` and merged text.
 
 ## LangGraph Studio (CLI)
 
