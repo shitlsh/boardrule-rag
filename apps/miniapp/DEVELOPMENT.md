@@ -8,6 +8,7 @@
 
 1. [前置条件](#1-前置条件)
 2. [项目结构说明](#2-项目结构说明)
+   - [微信登录与每日限流](#微信登录与每日限流)
 3. [第一步：确认 BFF（后台服务）已启动](#3-第一步确认-bff后台服务已启动)
 4. [第二步：注册微信小程序账号（申请 AppID）](#4-第二步注册微信小程序账号申请-appid)
 5. [第三步：安装微信开发者工具](#5-第三步安装微信开发者工具)
@@ -39,10 +40,12 @@
 ```
 apps/miniapp/
 ├── src/
-│   ├── api/bff.ts          # 调用 Next.js BFF 的 HTTP 封装
+│   ├── api/bff.ts          # 调用 Next.js BFF 的 HTTP 封装（含 x-user-id header）
 │   ├── store/chat.ts       # Pinia 状态管理（含本地持久化）
 │   ├── types/index.ts      # TypeScript 类型定义
-│   ├── utils/env.ts        # BFF 地址配置
+│   ├── utils/
+│   │   ├── env.ts          # BFF 地址配置
+│   │   └── auth.ts         # 微信登录 & openid 缓存（getOrFetchUserId）
 │   ├── pages/
 │   │   ├── index/          # 游戏列表页（小程序首页）
 │   │   └── chat/           # 规则问答对话页
@@ -59,13 +62,47 @@ apps/miniapp/
 
 ```
 微信小程序 (UniApp)
-    ↓  uni.request (HTTP)
+    ↓  uni.login() → code
+POST /api/wx-login  ──→  微信 jscode2session API
+    ↓  openid (userId) 缓存到 storage
+    ↓  后续请求携带 x-user-id: {openid}
 Next.js BFF (apps/web，运行在你的电脑或服务器上)
+    ↓  检查每日限额（RateLimit 表）
     ↓  内部 HTTP
 rule_engine (Python FastAPI)
     ↓
 Gemini AI + pgvector
 ```
+
+---
+
+## 微信登录与每日限流
+
+小程序在进入对话页（`onShow`）时会自动执行以下流程，用于限制每位用户每天的提问次数：
+
+### 登录流程
+
+1. `utils/auth.ts` 的 `getOrFetchUserId()` 先检查本地 storage（key: `wx_user_id`）
+2. 若无缓存，调用 `uni.login()` 获取临时 `code`
+3. 向 `POST /api/wx-login` 发送 `{ code }`，BFF 调用微信 `jscode2session` 换取 **openid**
+4. openid 缓存到本地 storage，后续请求无需重新登录
+
+### 限流机制
+
+- 每次发送消息时，`sendChatMessage` 会在请求头中附加 `x-user-id: {openid}`
+- BFF 读取此 header，在 `RateLimit` 表中对当天的计数做 upsert
+- 达到每日上限时，BFF 返回 **HTTP 429**，小程序在对话中展示：`⏰ 今日提问次数（N 次）已用完，明天再来吧`
+
+### 对本地开发的影响
+
+**不影响。** 如果 `uni.login()` 失败或 BFF 未配置微信 AppID/AppSecret，`getOrFetchUserId()` 返回 `null`，请求不带 `x-user-id` header，BFF 直接跳过限流。
+
+### 管理限额
+
+在 Next.js 管理后台 **系统设置 → 微信小程序**：
+
+- 填写 AppID 和 AppSecret（AppSecret 加密存储，不明文保存）
+- 设置「每日对话次数上限」（默认 20，填 0 表示不限制）
 
 ---
 
@@ -302,6 +339,26 @@ rm -rf node_modules
 npm install
 npm run dev:mp-weixin
 ```
+
+### ❌ 对话框出现「⏰ 今日提问次数已用完」
+
+**原因**：该微信账号当天已达到每日限额。
+
+**排查步骤**：
+1. 打开 Next.js 管理后台 → **系统设置 → 微信小程序**
+2. 将「每日对话次数上限」调大或设为 `0`（不限制）后保存
+3. 若想立即重置计数，可在数据库中删除对应 `RateLimit` 行（key 格式：`wx:{openid}:{YYYY-MM-DD}`）
+
+> 开发调试时建议直接将限额设为 `0` 避免干扰。
+
+### ❌ 微信登录失败（控制台报 `/api/wx-login` 返回 503）
+
+**原因**：BFF 中未配置微信 AppID / AppSecret。
+
+**处理方法**：
+1. 打开 Next.js 管理后台 → **系统设置 → 微信小程序**
+2. 填写 AppID 和 AppSecret 后保存
+3. 确认 `apps/web/.env` 中已设置 `AI_CONFIG_SECRET`（32 字节十六进制，用于加密存储 AppSecret）
 
 ---
 

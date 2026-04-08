@@ -168,6 +168,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useChatStore } from '../../store/chat'
 import { fetchGame, sendChatMessage } from '../../api/bff'
+import { getOrFetchUserId } from '../../utils/auth'
 import type { Game, SourceRef } from '../../types/index'
 
 // towxml 解析器（原生小程序 CommonJS 模块，通过 require 加载）
@@ -188,6 +189,11 @@ onLoad((options) => {
   gameName.value = decodeURIComponent(options?.gameName ?? '游戏')
   uni.setNavigationBarTitle({ title: gameName.value })
 })
+
+// -------------------------------------------------------
+// User identity (for rate limiting via x-user-id header)
+// -------------------------------------------------------
+const userId = ref<string | null>(null)
 
 // -------------------------------------------------------
 // Store
@@ -223,6 +229,10 @@ onShow(() => {
     chatStore.enterGame(gameId.value)
     loadGame()
   }
+  // Ensure we have a userId for rate-limit header (no-op if already cached)
+  getOrFetchUserId().then((id) => {
+    if (id) userId.value = id
+  })
 })
 
 // -------------------------------------------------------
@@ -327,11 +337,14 @@ async function handleSend() {
 
   chatStore.isLoading = true
   try {
-    const resp = await sendChatMessage({
-      gameId: gameId.value,
-      message: text,
-      messages: historyWithoutCurrent,
-    })
+    const resp = await sendChatMessage(
+      {
+        gameId: gameId.value,
+        message: text,
+        messages: historyWithoutCurrent,
+      },
+      userId.value,
+    )
 
     const assistantMsg = {
       id: resp.message?.id ?? `ast_${Date.now()}`,
@@ -343,10 +356,12 @@ async function handleSend() {
     chatStore.addMessage(assistantMsg)
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : '请求失败，请重试'
+    // 429 rate-limit error — the BFF message is already user-friendly
+    const isRateLimit = /今日提问次数/.test(errMsg) || /429/.test(errMsg)
     chatStore.addMessage({
       id: `err_${Date.now()}`,
       role: 'assistant',
-      content: `⚠️ ${errMsg}`,
+      content: isRateLimit ? `⏰ ${errMsg}` : `⚠️ ${errMsg}`,
       createdAt: new Date().toISOString(),
       sources: [],
     })
