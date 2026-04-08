@@ -36,13 +36,18 @@ supabase start
 **Migrations (two layers):**
 
 1. **Supabase SQL** (`supabase/migrations/`) — applied when the local stack starts or on `supabase db reset`: enables **pgvector**, creates **`rulebook-raw`** and **`game-exports`** storage buckets.
-2. **Prisma** (`apps/web/prisma/`) — application tables (`Game`, `Task`). Apply after the DB is up:
+2. **Prisma** (`apps/web/prisma/`) — application tables (`Game`, `Task`, `AppSettings`, `RateLimit`). Apply after the DB is up:
 
    ```bash
    cd apps/web
    cp .env.example .env   # set DATABASE_URL from `supabase status`
    npx prisma migrate deploy   # or: prisma migrate dev — when iterating on schema
    ```
+
+   The migration `20260408000000_add_wechat_and_rate_limit` adds:
+   - `AppSettings.wechatConfigJson` — AES-256-GCM encrypted WeChat AppID/AppSecret blob
+   - `AppSettings.dailyChatLimit` — per-user daily chat quota (default `20`; `0` = unlimited)
+   - `RateLimit` table — per-user daily counter keyed `wx:{openid}:{YYYY-MM-DD}`
 
 Production: point `DATABASE_URL` at your hosted Supabase project’s connection string; run `prisma migrate deploy` in CI or release. Set **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** so **`apps/web`** uses **Supabase Storage** for uploads and exports (recommended). Without them, files fall back to `apps/web/storage/` on disk. The database stores **paths/keys only**, not file bodies.
 
@@ -146,6 +151,7 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 | `AI_CONFIG_SECRET` | Yes | Long random string used to **AES-256-GCM** encrypt Gemini API keys stored in app settings. Required before saving credentials on **`/models`**. |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Strongly recommended | Use **raw** + **exports** buckets (`SUPABASE_STORAGE_BUCKET_RAW` / `SUPABASE_STORAGE_BUCKET_EXPORTS`, see `apps/web/.env.example`). Raw uploads can be removed after extraction completes. **Presigned upload**: `POST /api/games/[gameId]/upload-sign` then JSON `POST .../upload` with `storageKey`. Without Supabase, files use `apps/web/storage/`. |
 | Storage | No | Defaults to `apps/web/storage/` if Supabase env vars are unset. |
+| `AI_CONFIG_SECRET` | Yes (for AI Gateway + WeChat config) | 32-byte hex string used for AES-256-GCM encryption of stored API keys and WeChat AppSecret. Generate with `openssl rand -hex 32`. |
 
 ### 4.1.1 AI Gateway (Gemini credentials & models)
 
@@ -182,7 +188,26 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 6. **Web**：游戏详情页在提取完成后可预览 Markdown，并手动 **建立索引**；**Chat** 未建索引时返回 **409**。
 7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`（同样需要 AI 配置头）。
 
-## 6. Common issues
+## 6. WeChat miniapp rate limiting
+
+`POST /api/chat` supports per-user daily quotas when requests come from the miniapp. The flow:
+
+1. Miniapp calls `POST /api/wx-login` with a fresh `uni.login()` code → BFF exchanges it for a WeChat `openid` via `jscode2session` → miniapp caches the openid locally and sends it as `x-user-id` on every chat request.
+2. BFF reads `x-user-id`, looks up `AppSettings.dailyChatLimit`, and increments a counter in the `RateLimit` table (`wx:{openid}:{YYYY-MM-DD}`). When the counter reaches the limit a **429** is returned with a user-friendly message.
+3. If `x-user-id` is absent (e.g. direct API calls, browser dev tools) the check is **skipped entirely** — no impact on local development.
+4. If the DB check throws (e.g. `RateLimit` table missing before migration) the route **fails open** and the chat request proceeds normally.
+
+**Configuration** (in the web admin UI at `/settings`):
+
+| Setting | Where stored | Default | Notes |
+|---------|--------------|---------|-------|
+| WeChat AppID | `AppSettings.wechatConfigJson` | — | Plain text inside the encrypted blob |
+| WeChat AppSecret | `AppSettings.wechatConfigJson` | — | AES-256-GCM encrypted via `AI_CONFIG_SECRET` |
+| Daily chat limit | `AppSettings.dailyChatLimit` | `20` | `0` = unlimited |
+
+To enable for the first time: navigate to **系统设置 → 微信小程序**, fill in AppID and AppSecret, then save.
+
+## 7. Common issues
 
 | Symptom | What to check |
 |--------|----------------|
@@ -194,8 +219,11 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 | **Gemini / AI errors** | Configure **`/models`** in the web app: valid API key, slots saved, models allowed for that slot. Enable **Generative Language API** billing as needed. The rule engine does not use `GOOGLE_API_KEY` from `services/rule_engine/.env` for BFF-driven calls. |
 | **Port already in use** | Change `--port` for uvicorn or Next’s port via `-p` / `PORT`. |
 | **Prisma / DB errors** | `DATABASE_URL` correct; run `prisma migrate dev` after schema changes. |
+| **WeChat login returns 503** | WeChat AppID / AppSecret not configured. Open `/settings` → 微信小程序 and fill them in. |
+| **Chat returns 429** | Daily quota reached for that openid. Adjust `dailyChatLimit` in `/settings` → 微信小程序 (set to `0` to disable during testing), or wait until UTC midnight for the counter to reset. |
+| **Rate limit not triggering** | `RateLimit` table missing — run `npx prisma migrate deploy` in `apps/web`. |
 
-## 7. Further reading
+## 8. Further reading
 
 - [services/rule_engine/README.md](./services/rule_engine/README.md) — Python tooling and running the engine in isolation.
 - [services/rule_engine/EXTRACTION_FLOW.md](./services/rule_engine/EXTRACTION_FLOW.md) — extract pipeline, diagrams, and how index/chat consume outputs.

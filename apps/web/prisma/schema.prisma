@@ -64,6 +64,20 @@ model AppSettings {
   pageRasterMaxSide  Int @default(2048)
   /// JSON: LLM Gateway (credentials with encrypted keys, slot bindings). See lib/ai-gateway.ts.
   aiGatewayJson      String @default("{}")
+  /// JSON: WeChat miniapp config (appId + encrypted appSecret). See lib/wechat-settings.ts.
+  wechatConfigJson   String @default("{}")
+  /// Max chat messages per WeChat user per day. 0 = unlimited.
+  dailyChatLimit     Int    @default(20)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Per-user daily chat usage counter. Key format: "wx:{openid}:{YYYY-MM-DD}".
+model RateLimit {
+  id        String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -58,12 +58,19 @@ export async function fetchGame(gameId: string): Promise<Game> {
 // Chat API
 // -------------------------------------------------------
 
-/** 发送消息，返回完整 BFF 响应 */
-export async function sendChatMessage(payload: ChatRequest): Promise<ChatBffResponse> {
+/** 发送消息，返回完整 BFF 响应。userId 若存在则作为 x-user-id 请求头传递（限流用）。 */
+export async function sendChatMessage(
+  payload: ChatRequest,
+  userId?: string | null,
+): Promise<ChatBffResponse> {
+  const header: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (userId) {
+    header['x-user-id'] = userId
+  }
   return request<ChatBffResponse>({
     url: `${BFF_BASE_URL}/api/chat`,
     method: 'POST',
-    header: { 'Content-Type': 'application/json' },
+    header,
     data: payload,
   })
 }

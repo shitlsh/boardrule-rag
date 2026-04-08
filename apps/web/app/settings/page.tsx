@@ -1,6 +1,7 @@
 import { Cpu, Database, Info, Server, Settings } from "lucide-react";
 
 import { SettingsLimitsForm } from "@/components/settings-limits-form";
+import { SettingsWechatForm } from "@/components/settings-wechat-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -81,6 +82,8 @@ export default function SettingsPage() {
         </Card>
 
         <SettingsLimitsForm />
+
+        <SettingsWechatForm />
       </div>
     </div>
   );

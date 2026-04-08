@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { chatRules } from "@/lib/ingestion/client";
+import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
+import { getWechatConfigPublic } from "@/lib/wechat-settings";
 import type { ChatMessage } from "@/lib/types";
 
 type ChatBody = {
@@ -26,6 +28,21 @@ export async function POST(req: Request) {
   if (!gameId || !message) {
     return NextResponse.json({ message: "gameId and message are required" }, { status: 400 });
   }
+
+  // ── Rate limiting ────────────────────────────────────────────────────────────
+  const userId = req.headers.get("x-user-id")?.trim() ?? "";
+  if (userId) {
+    try {
+      const { dailyChatLimit } = await getWechatConfigPublic();
+      const result = await checkAndIncrementChatLimit(userId, dailyChatLimit);
+      if (!result.allowed) {
+        return NextResponse.json({ message: result.message }, { status: 429 });
+      }
+    } catch {
+      // Rate-limit check failure should not block the request — fail open.
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {

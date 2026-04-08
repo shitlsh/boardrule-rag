@@ -18,6 +18,7 @@ cp .env.example .env
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 建议配置；桶 **`rulebook-raw`**（上传）与 **`game-exports`**（导出）由迁移创建；大文件可 **pre-sign 直传**；未设置时使用本地 `storage/` |
 | `SUPABASE_STORAGE_BUCKET_RAW` | 可选；覆盖默认 `rulebook-raw` |
 | `SUPABASE_STORAGE_BUCKET_EXPORTS` | 可选；覆盖默认 `game-exports` |
+| `AI_CONFIG_SECRET` | **必填**；32 字节十六进制字符串，用于 AES-256-GCM 加密存储 AI Gateway API Key 和微信 AppSecret。生成方式：`openssl rand -hex 32` |
 
 数据库 URL 同时用于 **`prisma.config.ts`**（Prisma ORM 7）。客户端生成到 `generated/prisma/`（`postinstall` / `build` 时生成）。
 
@@ -41,6 +42,25 @@ npm run dev               # 默认 http://localhost:3000
 - **上传 / 任务**：`POST /api/tasks`（multipart：`gameId`、`file`，可选 `terminologyContext`）→ 调用规则引擎 `POST /extract`（附带 **`X-Boardrule-Ai-Config`**）。
 - **轮询**：任务详情 `GET /api/tasks/[taskId]` 会同步规则引擎任务状态并写回导出文件路径。
 - **问答**：`POST /api/chat` 代理规则引擎 `POST /chat`；**需先**对该 `game_id` 在引擎侧执行 `POST /build-index`（见仓库根目录 **QUICKSTART.md** 与 `services/rule_engine/eval/README.md`）。当前 Web **不会**在提取完成后自动建索引。
+
+## 微信小程序 & 每日限流
+
+`POST /api/chat` 支持按微信用户（openid）的每日对话次数限制：
+
+| 路由 | 说明 |
+|------|------|
+| `POST /api/wx-login` | 接收小程序 `uni.login()` 返回的 `code`，调用微信 `jscode2session` 换取 openid，返回 `{ userId }` |
+| `GET /api/settings/wechat` | 读取微信配置公开信息（AppID、hasSecret、secretLast4、dailyChatLimit） |
+| `PATCH /api/settings/wechat` | 更新 `{ appId?, appSecret?, dailyChatLimit? }`；AppSecret 加密后存入 `AppSettings.wechatConfigJson` |
+
+**限流逻辑**（`lib/rate-limit.ts`）：
+
+- 请求携带 `x-user-id` header（值为 openid）时触发检查；无此 header 则跳过（本地直接调用不受影响）
+- 每次请求对 `RateLimit` 表做 upsert（key 格式：`wx:{openid}:{YYYY-MM-DD}`），超过 `dailyChatLimit` 则返回 **429**
+- `dailyChatLimit = 0` 表示不限制
+- DB 异常时 fail open（请求照常通过），不影响正常使用
+
+**配置入口**：系统设置页（`/settings`）→「微信小程序」卡片，填写 AppID / AppSecret 并设置每日限额。
 
 ## 存储
 
