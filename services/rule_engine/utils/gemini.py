@@ -73,6 +73,26 @@ def _tracing_enabled_for_gemini() -> bool:
     return bool(key)
 
 
+def _gemini_http_timeout_ms() -> int | None:
+    """Bound HTTP wait for ``generate_content``; unset SDK default can hang indefinitely on bad networks."""
+    raw = (os.environ.get("GEMINI_HTTP_TIMEOUT_MS") or "").strip()
+    if raw == "":
+        return 120_000  # 2 minutes (ms) per attempt; ``retry()`` may run up to 3 times in nodes like toc_analyzer
+    if raw.lower() in ("none", "0", "unlimited"):
+        return None
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 120_000
+
+
+def _genai_client(api_key: str) -> genai.Client:
+    timeout_ms = _gemini_http_timeout_ms()
+    if timeout_ms is None:
+        return genai.Client(api_key=api_key)
+    return genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_ms))
+
+
 def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
     if explicit:
         return explicit
@@ -95,7 +115,7 @@ def _generate_once(
     gen_config: types.GenerateContentConfig,
     empty_error: str,
 ) -> str:
-    client = genai.Client(api_key=api_key)
+    client = _genai_client(api_key)
     response = client.models.generate_content(
         model=model,
         contents=contents,
