@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from graphs.state import ExtractionState
 from ingestion.node_builders import merged_markdown_to_documents
-from utils.gemini import PRO_MERGE, generate_pro, pro_max_output_tokens
+from utils.gemini import PRO_MERGE, GeminiCallMeta, generate_pro, pro_max_output_tokens
 from utils.page_markers import (
     page_continuity_warnings,
     supplement_chapter_page_metadata,
@@ -68,7 +68,16 @@ def run(state: ExtractionState) -> dict:
                     rule_style_core=rule_style_core,
                     chunks=first_half[:120_000],
                 )
-                return generate_pro(p, preset=PRO_MERGE, max_output_tokens=_mot)
+                return generate_pro(
+                    p,
+                    preset=PRO_MERGE,
+                    max_output_tokens=_mot,
+                    meta=GeminiCallMeta(
+                        node="merge_and_refine",
+                        prompt_file="merge_refine.md",
+                        call_tag="split_merge_first_half",
+                    ),
+                )
 
             def _merge_b() -> str:
                 p = render_prompt(
@@ -77,7 +86,16 @@ def run(state: ExtractionState) -> dict:
                     rule_style_core=rule_style_core,
                     chunks=second_half[:120_000],
                 )
-                return generate_pro(p, preset=PRO_MERGE, max_output_tokens=_mot)
+                return generate_pro(
+                    p,
+                    preset=PRO_MERGE,
+                    max_output_tokens=_mot,
+                    meta=GeminiCallMeta(
+                        node="merge_and_refine",
+                        prompt_file="merge_refine.md",
+                        call_tag="split_merge_second_half",
+                    ),
+                )
 
             part_a = retry(_merge_a, attempts=2)
             part_b = retry(_merge_b, attempts=2)
@@ -100,7 +118,12 @@ def run(state: ExtractionState) -> dict:
     try:
 
         def _final() -> str:
-            return generate_pro(prompt, preset=PRO_MERGE, max_output_tokens=_mot)
+            return generate_pro(
+                prompt,
+                preset=PRO_MERGE,
+                max_output_tokens=_mot,
+                meta=GeminiCallMeta(node="merge_and_refine", prompt_file="merge_refine.md", call_tag="final"),
+            )
 
         merged_md = retry(_final, attempts=3)
     except Exception as e:  # noqa: BLE001
