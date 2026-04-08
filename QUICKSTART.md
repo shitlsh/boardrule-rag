@@ -187,3 +187,4 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 ## 7. Further reading
 
 - [services/rule_engine/README.md](./services/rule_engine/README.md) — Python tooling and running the engine in isolation.
+- [services/rule_engine/EXTRACTION_FLOW.md](./services/rule_engine/EXTRACTION_FLOW.md) — extract pipeline, diagrams, and how index/chat consume outputs.
