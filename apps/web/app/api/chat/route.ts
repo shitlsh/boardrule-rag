@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
 import { chatRules } from "@/lib/ingestion/client";
+import { prisma } from "@/lib/prisma";
 import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
 import { getWechatConfigPublic } from "@/lib/wechat-settings";
 import type { ChatMessage } from "@/lib/types";
+
+/** Same idea as build-index: first chat may load cross-encoder weights (sentence-transformers) + RAG + Gemini. */
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type ChatBody = {
   gameId?: string;
@@ -48,6 +52,22 @@ export async function POST(req: Request) {
   if (!game) {
     return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
   }
+
+  const indexBuildInFlight = await prisma.task.findFirst({
+    where: {
+      gameId,
+      type: "INDEX_BUILD",
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+    select: { id: true },
+  });
+  if (indexBuildInFlight) {
+    return NextResponse.json(
+      { message: "索引正在建立或更新中，请稍后再试。可在游戏详情页查看任务进度。" },
+      { status: 409 },
+    );
+  }
+
   if (!game.indexId && !game.vectorStoreId) {
     return NextResponse.json(
       { message: "尚未建立规则索引。请在游戏详情页提取完成后点击「建立索引」。" },

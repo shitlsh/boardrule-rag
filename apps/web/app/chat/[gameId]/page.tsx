@@ -97,7 +97,10 @@ export default function GameChatPage() {
       });
 
       if (res.status === 409) {
-        throw new Error("游戏尚未建立索引，请先完成提取并建立索引");
+        const err = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(
+          err.message || "游戏尚未建立索引，请先完成提取并建立索引",
+        );
       }
 
       if (!res.ok) {
@@ -164,6 +167,7 @@ export default function GameChatPage() {
   }
 
   if (!game.isIndexed) {
+    const indexBuilding = Boolean(game.indexBuilding);
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -174,13 +178,19 @@ export default function GameChatPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-semibold">{game.name}</h1>
-            <p className="text-muted-foreground">该游戏尚未建立索引，无法使用问答功能</p>
+            <p className="text-muted-foreground">
+              {indexBuilding
+                ? "索引正在建立或更新中，暂时无法问答"
+                : "该游戏尚未建立索引，无法使用问答功能"}
+            </p>
           </div>
         </div>
         <Card className="max-w-lg">
           <CardContent className="pt-6">
             <p className="mb-4 text-muted-foreground">
-              请先在游戏详情页完成规则提取并建立索引后再使用问答功能。
+              {indexBuilding
+                ? "请等待游戏详情页中的建索引任务完成后再试。"
+                : "请先在游戏详情页完成规则提取并建立索引后再使用问答功能。"}
             </p>
             <Button asChild>
               <Link href={`/games/${game.id}`}>前往游戏详情</Link>

@@ -48,3 +48,17 @@ export type ChatResponse = {
   game_id: string;
   sources: ChatSourceRef[];
 };
+
+/** `POST /build-index/start` */
+export type BuildIndexStartResponse = {
+  job_id: string;
+  status: ExtractJobStatus;
+};
+
+/** `GET /build-index/jobs/{job_id}` */
+export type BuildIndexJobPollResponse = {
+  job_id: string;
+  status: ExtractJobStatus;
+  manifest: Record<string, unknown> | null;
+  error: string | null;
+};

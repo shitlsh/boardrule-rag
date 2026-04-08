@@ -18,7 +18,7 @@ flowchart TB
     EP[POST /extract/pages 光栅化]
     EX[POST /extract 启动图]
     G[LangGraph 六节点]
-    BI[POST /build-index]
+    BI[POST /build-index/start]
     CH[POST /chat]
   end
 
@@ -141,7 +141,7 @@ flowchart LR
   poll["GET /extract/job_id"]
   disk["sync 写入 exports rules.md"]
   fail["completed 且无 merged_markdown 则失败"]
-  bi["POST /build-index"]
+  bi["POST /build-index/start → GET /build-index/jobs"]
   chat["POST /chat"]
   idx[(BM25 + Vector)]
 

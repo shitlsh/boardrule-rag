@@ -79,7 +79,7 @@ export default function GamesPage() {
                       <ExtractionStatusBadge status={game.extractionStatus} />
                     </TableCell>
                     <TableCell>
-                      <IndexStatusBadge isIndexed={game.isIndexed} />
+                      <IndexStatusBadge isIndexed={game.isIndexed} indexBuilding={game.indexBuilding} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" asChild>

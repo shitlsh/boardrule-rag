@@ -1,6 +1,8 @@
 import { getEngineAiHeaders } from "@/lib/engine-ai";
 
 import type {
+  BuildIndexJobPollResponse,
+  BuildIndexStartResponse,
   ChatResponse,
   ExtractPagesResponse,
   ExtractPollResponse,
@@ -86,6 +88,42 @@ export async function getExtractJob(jobId: string): Promise<ExtractPollResponse>
     throw new Error(text || `Poll failed: ${res.status}`);
   }
   return (await res.json()) as ExtractPollResponse;
+}
+
+export async function startBuildIndex(params: {
+  gameId: string;
+  mergedMarkdown: string;
+  sourceFile?: string;
+}): Promise<BuildIndexStartResponse> {
+  const base = getRuleEngineBaseUrl();
+  const ai = await getEngineAiHeaders();
+  const res = await fetch(`${base}/build-index/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...ai },
+    body: JSON.stringify({
+      game_id: params.gameId,
+      merged_markdown: params.mergedMarkdown,
+      source_file: params.sourceFile ?? "",
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Build index start failed: ${res.status}`);
+  }
+  return (await res.json()) as BuildIndexStartResponse;
+}
+
+export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPollResponse> {
+  const base = getRuleEngineBaseUrl();
+  const res = await fetch(`${base}/build-index/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Build index poll failed: ${res.status}`);
+  }
+  return (await res.json()) as BuildIndexJobPollResponse;
 }
 
 export async function chatRules(params: {

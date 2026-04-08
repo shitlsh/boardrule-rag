@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
-import { getEngineAiHeaders } from "@/lib/engine-ai";
 import { prisma } from "@/lib/prisma";
 import { readStorageText } from "@/lib/storage";
+import { startBuildIndex } from "@/lib/ingestion";
+import { getEngineAiHeaders } from "@/lib/engine-ai";
 
 export const runtime = "nodejs";
-/** Vercel / 部分托管：允许较长建索引时间（向量 + BM25 + 可选 rerank 模型加载）。 */
-export const maxDuration = 300;
+/** Submit-only: engine runs build in background; long work is not bound to this request. */
+export const maxDuration = 60;
 
 function messageFromRuleEngineBody(text: string, status: number): string {
   const trimmed = text.trim();
@@ -50,10 +50,8 @@ export async function POST(_req: Request, { params }: RouteParams) {
     return NextResponse.json({ message: "规则文件为空" }, { status: 400 });
   }
 
-  const base = getRuleEngineBaseUrl();
-  let ai: Record<string, string>;
   try {
-    ai = await getEngineAiHeaders();
+    await getEngineAiHeaders();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
@@ -63,36 +61,57 @@ export async function POST(_req: Request, { params }: RouteParams) {
       { status: 400 },
     );
   }
-  const res = await fetch(`${base}/build-index`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...ai },
-    body: JSON.stringify({
-      game_id: game.id,
-      merged_markdown: merged,
-      source_file: game.slug,
-    }),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    return NextResponse.json(
-      { message: messageFromRuleEngineBody(text, res.status) },
-      { status: res.status },
-    );
-  }
 
-  const body = JSON.parse(text) as { index_id?: string; manifest?: { game_id?: string } };
-  const indexId = body.index_id ?? body.manifest?.game_id ?? game.id;
-
-  await prisma.game.update({
-    where: { id: game.id },
+  const task = await prisma.task.create({
     data: {
-      indexId,
-      vectorStoreId: indexId,
+      gameId,
+      status: "PENDING",
+      type: "INDEX_BUILD",
+      progressJson: JSON.stringify({ stage: "queued", detail: "已提交建索引任务" }),
     },
   });
 
-  return NextResponse.json({
-    message: "索引建立成功",
-    indexId,
-  });
+  try {
+    const start = await startBuildIndex({
+      gameId: game.id,
+      mergedMarkdown: merged,
+      sourceFile: game.slug,
+    });
+
+    await prisma.$transaction([
+      prisma.task.update({
+        where: { id: task.id },
+        data: {
+          jobId: start.job_id,
+          status: "PROCESSING",
+          progressJson: JSON.stringify({
+            stage: start.status,
+            detail: "规则引擎已接收建索引任务",
+            engineJobId: start.job_id,
+          }),
+        },
+      }),
+      prisma.game.update({
+        where: { id: gameId },
+        data: { indexId: null, vectorStoreId: null },
+      }),
+    ]);
+
+    return NextResponse.json({
+      message: "建索引任务已启动",
+      taskId: task.id,
+      engineJobId: start.job_id,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        status: "FAILED",
+        errorMsg: messageFromRuleEngineBody(msg, 502),
+        progressJson: JSON.stringify({ stage: "submit_error", detail: msg }),
+      },
+    });
+    return NextResponse.json({ message: messageFromRuleEngineBody(msg, 502) }, { status: 502 });
+  }
 }

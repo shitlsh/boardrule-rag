@@ -43,15 +43,24 @@ export function TaskStatusBadge({ status }: TaskStatusBadgeProps) {
 
 interface IndexStatusBadgeProps {
   isIndexed: boolean
+  /** True while a first-time or rebuild index job is running (not chat-ready). */
+  indexBuilding?: boolean
 }
 
-export function IndexStatusBadge({ isIndexed }: IndexStatusBadgeProps) {
+export function IndexStatusBadge({ isIndexed, indexBuilding }: IndexStatusBadgeProps) {
+  if (indexBuilding) {
+    return (
+      <Badge variant="outline" aria-label="索引更新中">
+        更新中
+      </Badge>
+    );
+  }
   return (
-    <Badge 
+    <Badge
       variant={isIndexed ? 'default' : 'secondary'}
       aria-label={isIndexed ? '已建索引' : '未建索引'}
     >
       {isIndexed ? '已索引' : '未索引'}
     </Badge>
-  )
+  );
 }

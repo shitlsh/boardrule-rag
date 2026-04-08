@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { deleteRawUploadsForGame, writeGameExports } from "@/lib/storage";
-import { getExtractJob } from "./client";
+import { getBuildIndexJob, getExtractJob } from "./client";
 import type { ExtractJobStatus } from "./types";
 
 const TERMINAL_TASK = new Set(["COMPLETED", "FAILED"]);
@@ -43,6 +43,18 @@ function progressFromEngine(status: ExtractJobStatus, pollError: string | null):
         ? "合并与导出完成"
         : status === "processing"
           ? "规则抽取进行中"
+          : "排队或等待规则引擎";
+  return JSON.stringify({ stage: status, detail });
+}
+
+function progressFromIndexEngine(status: ExtractJobStatus, pollError: string | null): string {
+  const detail =
+    status === "failed" && pollError
+      ? pollError
+      : status === "completed"
+        ? "向量索引已就绪"
+        : status === "processing"
+          ? "正在建立向量索引（嵌入、BM25、可选 rerank）"
           : "排队或等待规则引擎";
   return JSON.stringify({ stage: status, detail });
 }
@@ -167,6 +179,104 @@ export async function syncTaskFromRuleEngine(taskId: string) {
         extractionJobId: task.jobId,
       },
     });
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: taskStatus,
+        errorMsg: poll.error,
+        progressJson,
+      },
+    });
+  }
+
+  return prisma.task.findUnique({ where: { id: taskId }, include: { game: true } });
+}
+
+/**
+ * Polls `GET /build-index/jobs/{job_id}` and updates `Task` / `Game.indexId` when completed.
+ */
+export async function syncIndexBuildTask(taskId: string) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { game: true },
+  });
+  if (!task) {
+    return null;
+  }
+  if (task.type !== "INDEX_BUILD") {
+    return task;
+  }
+  if (!task.jobId) {
+    return task;
+  }
+  if (TERMINAL_TASK.has(task.status)) {
+    return task;
+  }
+
+  let poll;
+  try {
+    poll = await getBuildIndexJob(task.jobId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "FAILED",
+        errorMsg: msg,
+        progressJson: JSON.stringify({ stage: "sync_error", detail: msg }),
+      },
+    });
+    return prisma.task.findUnique({ where: { id: taskId }, include: { game: true } });
+  }
+
+  const taskStatus = mapEngineToTaskStatus(poll.status);
+  const progressJson = progressFromIndexEngine(poll.status, poll.error);
+
+  if (poll.status === "completed" && !poll.manifest) {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "FAILED",
+        errorMsg: "规则引擎返回完成但缺少 manifest",
+        progressJson: JSON.stringify({
+          stage: "completed_empty",
+          detail: "missing manifest",
+        }),
+      },
+    });
+    return prisma.task.findUnique({ where: { id: taskId }, include: { game: true } });
+  }
+
+  if (poll.status === "completed" && poll.manifest) {
+    const rawGid = poll.manifest.game_id;
+    const indexId = typeof rawGid === "string" && rawGid.trim() ? rawGid.trim() : task.gameId;
+
+    await prisma.game.update({
+      where: { id: task.gameId },
+      data: {
+        indexId,
+        vectorStoreId: indexId,
+      },
+    });
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "COMPLETED",
+        errorMsg: null,
+        progressJson,
+      },
+    });
+  } else if (poll.status === "failed") {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "FAILED",
+        errorMsg: poll.error ?? "建索引失败",
+        progressJson,
+      },
+    });
+  } else {
     await prisma.task.update({
       where: { id: taskId },
       data: {

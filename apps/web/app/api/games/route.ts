@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { prismaGameToDto } from "@/lib/game-dto";
+import { gameIdsWithActiveIndexBuild, prismaGameToDto } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
 import { uniqueSlugForGame } from "@/lib/slug";
 
@@ -8,7 +8,10 @@ export async function GET() {
   const games = await prisma.game.findMany({
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json(games.map((g) => prismaGameToDto(g)));
+  const buildingIds = await gameIdsWithActiveIndexBuild(games.map((g) => g.id));
+  return NextResponse.json(
+    games.map((g) => prismaGameToDto(g, undefined, { indexBuilding: buildingIds.has(g.id) })),
+  );
 }
 
 export async function POST(req: Request) {
