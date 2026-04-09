@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import { PageThumbnailPicker, type PagePickRole } from "@/components/page-thumbnail-picker";
 import { PageThumbnails } from "@/components/page-thumbnails";
-import { TaskList } from "@/components/task-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +13,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useExtractionTasks, usePageThumbnails } from "@/hooks/use-game";
+import { usePageThumbnails } from "@/hooks/use-game";
 import type { Game } from "@/lib/types";
 
 interface ExtractionPanelProps {
@@ -42,8 +41,6 @@ function cycleRole(current: PagePickRole): PagePickRole {
 
 export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
   const { pages, isLoading: pagesLoading, mutate: mutatePages } = usePageThumbnails(game.id);
-  const { tasks, isLoading: tasksLoading } = useExtractionTasks(game.id);
-
   const [tab, setTab] = useState<SourceTab>("pdf");
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -561,15 +558,6 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>任务状态</CardTitle>
-          <CardDescription>查看提取任务的执行进度</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TaskList tasks={tasks} isLoading={tasksLoading} />
-        </CardContent>
-      </Card>
     </div>
   );
 }

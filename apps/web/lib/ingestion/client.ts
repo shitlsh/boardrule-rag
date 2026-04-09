@@ -124,6 +124,8 @@ export async function startBuildIndex(params: {
   /** Omitted keys fall back to rule engine env / AI Gateway ragOptions on the server. */
   similarityTopK?: number;
   rerankTopN?: number;
+  chunkSize?: number;
+  chunkOverlap?: number;
   retrievalMode?: "hybrid" | "vector_only";
   useRerank?: boolean;
 }): Promise<BuildIndexStartResponse> {
@@ -136,6 +138,8 @@ export async function startBuildIndex(params: {
   };
   if (params.similarityTopK != null) payload.similarity_top_k = params.similarityTopK;
   if (params.rerankTopN != null) payload.rerank_top_n = params.rerankTopN;
+  if (params.chunkSize != null) payload.chunk_size = params.chunkSize;
+  if (params.chunkOverlap != null) payload.chunk_overlap = params.chunkOverlap;
   if (params.retrievalMode != null) payload.retrieval_mode = params.retrievalMode;
   if (params.useRerank != null) payload.use_rerank = params.useRerank;
   const res = await fetch(`${base}/build-index/start`, {
