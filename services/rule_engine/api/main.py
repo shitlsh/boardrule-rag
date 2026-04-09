@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from psycopg import Connection
+from psycopg.rows import dict_row
 
 from api.middleware_api_key import RuleEngineApiKeyMiddleware
 from api.routers import chat, extract, health
@@ -68,7 +70,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     from langgraph.checkpoint.postgres import PostgresSaver
 
-    with PostgresSaver.from_conn_string(pg_uri) as checkpointer:
+    # Transaction poolers (PgBouncer, e.g. Supabase port 6543) multiplex backends; psycopg3
+    # prepared statements then collide (DuplicatePreparedStatement). Use prepare_threshold=None
+    # to disable them — safer than PostgresSaver.from_conn_string(), which may use prepare_threshold=0.
+    with Connection.connect(
+        pg_uri,
+        autocommit=True,
+        prepare_threshold=None,
+        row_factory=dict_row,
+    ) as conn:
+        checkpointer = PostgresSaver(conn)
         checkpointer.setup()
         _compiled_graph = build_extraction_graph(checkpointer)
         yield
