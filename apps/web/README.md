@@ -79,22 +79,24 @@ npm run db:apply-migration    # 执行 migration.sql + migrate resolve --applied
 
 ## C 端登录 & 每日限流（小程序 / H5）
 
-`POST /api/chat` 在 **miniapp JWT**（`Authorization: Bearer`）场景下，按 **客户端 IP** 与后台 **`dailyChatLimit`** 做每日对话次数限制（与 JWT `sub` 无关）。
+`POST /api/chat` 在 **miniapp JWT**（`Authorization: Bearer`）场景下，按 **`AppSettings.dailyChatLimit`（每 IP）** 与 **`AppSettings.dailyChatLimitGlobal`（全站 C 端合计）** 做每日（UTC）限制；与 JWT `sub` 无关。
 
 | 路由 | 说明 |
 |------|------|
 | `POST /api/wx-login` | 小程序：`uni.login()` 的 `code` → 微信 `jscode2session` → openid，签发 miniapp JWT `{ userId, accessToken, expiresIn }` |
 | `POST /api/h5-auth` | H5 / 浏览器：签发匿名 `userId`（`h5_…`）与同结构的 JWT |
-| `GET /api/settings/wechat` | 读取微信配置公开信息（AppID、hasSecret、secretLast4、dailyChatLimit） |
-| `PATCH /api/settings/wechat` | 更新 `{ appId?, appSecret?, dailyChatLimit? }`；AppSecret 加密后存入 `AppSettings.wechatConfigJson` |
+| `GET /api/settings/c-end-chat` | 读取 C 端限额：`dailyChatLimitPerIp`、`dailyChatLimitGlobal`（默认 20 / 1000） |
+| `PATCH /api/settings/c-end-chat` | 更新上述两项（管理员）；`0` = 不限制该项 |
+| `GET /api/settings/wechat` | 读取微信配置（AppID、hasSecret、secretLast4） |
+| `PATCH /api/settings/wechat` | 更新 `{ appId?, appSecret? }`；AppSecret 加密后存入 `wechatConfigJson` |
 
-**限流逻辑**（`lib/rate-limit.ts` + `lib/client-ip.ts`）：
+**限流逻辑**（`lib/rate-limit.ts` + `lib/client-ip.ts` + `lib/c-end-chat-settings.ts`）：
 
-- 从 `x-forwarded-for` / `x-real-ip` 等解析客户端 IP，键格式：`ip:{normalized_ip}:{YYYY-MM-DD}`（UTC）
-- 超过 `dailyChatLimit` 则返回 **429**；`dailyChatLimit = 0` 表示不限制
-- 无法解析 IP 时跳过限流（fail open）；DB 异常时 fail open
+- 同一事务内先记 **每 IP**（`ip:…`），再记 **全站**（`global:c_end:…`）；任一超限即 **429**
+- `dailyChatLimitPerIp = 0` 或 `dailyChatLimitGlobal = 0` 表示对应维度不限制
+- 无法解析 IP 时仅跳过每 IP 计数，全站仍可能生效；DB 异常时 fail open
 
-**配置入口**：系统设置页（`/settings`）→「微信小程序」卡片（限额与小程序配置同页）；H5 仅依赖 JWT 与 IP，不要求配置微信 AppID。
+**配置入口**：`/settings` →「**C 端对话限额**」；微信 AppID/Secret →「微信小程序」。
 
 ## 存储
 

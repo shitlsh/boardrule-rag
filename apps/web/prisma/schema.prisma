@@ -71,8 +71,10 @@ model AppSettings {
   aiGatewayJson      String @default("{}")
   /// JSON: WeChat miniapp config (appId + encrypted appSecret). See lib/wechat-settings.ts.
   wechatConfigJson   String @default("{}")
-  /// Max chat messages per WeChat user per day. 0 = unlimited.
+  /// C-end (H5/小程序 JWT)：每个客户端 IP 每 UTC 日最多对话次数。0 = 不限制。
   dailyChatLimit     Int    @default(20)
+  /// C-end 全站每 UTC 日对话总次数上限（所有 IP 合计）。0 = 不限制。默认 1000 防止用量失控。
+  dailyChatLimitGlobal Int @default(1000)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,7 +82,7 @@ model AppSettings {
   @@schema("app")
 }
 
-/// Per-IP daily chat usage counter. Key format: "ip:{normalized_ip}:{YYYY-MM-DD}".
+/// Daily chat usage counters. Keys: "ip:{ip}:{YYYY-MM-DD}", "global:c_end:{YYYY-MM-DD}" (UTC).
 model RateLimit {
   id        String   @id
   count     Int      @default(1)
