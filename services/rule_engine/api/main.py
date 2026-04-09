@@ -58,7 +58,6 @@ def _postgres_checkpoint_uri() -> str | None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _compiled_graph
     _configure_boardrule_logging()
-    page_assets_root().mkdir(parents=True, exist_ok=True)
     pg_uri = _postgres_checkpoint_uri()
     if not pg_uri:
         raise RuntimeError(
@@ -123,6 +122,8 @@ app.include_router(extract.router)
 app.include_router(index_api.router)
 app.include_router(chat.router)
 
+# StaticFiles validates the directory at import time; mkdir must run before mount (lifespan runs later).
+page_assets_root().mkdir(parents=True, exist_ok=True)
 app.mount(
     "/page-assets",
     StaticFiles(directory=str(page_assets_root())),
