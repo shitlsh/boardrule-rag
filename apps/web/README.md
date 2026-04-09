@@ -41,6 +41,29 @@ npx prisma migrate dev   # 改 schema 后生成并应用迁移；全新库也可
 npm run dev               # 默认 http://localhost:3000
 ```
 
+### Supabase `config.toml` 里的 `[api].schemas`
+
+只影响 **PostgREST**（`http://127.0.0.1:54321` 的自动 REST）和 **Studio 里对哪些 schema 建 API/展示**，**不会**替你执行 `supabase/migrations` 或 Prisma 迁移。  
+`next_auth` 若库里早就有该 schema（例如装过 Auth 相关迁移），即使暂不重启，只要没改 PostgREST 配置或没打到缺失的 schema，往往不会暴露问题；**`app`** 若在配置里写了但库里尚未 `CREATE SCHEMA app`，PostgREST 一加载配置就会报错（见仓库根 `supabase/config.toml` 注释）。
+
+### `db push` 之后 `migrate dev` / `migrate deploy` 报 P3005、drift
+
+`db push` 只把结构推到数据库，**不写** `_prisma_migrations` 历史。之后 Migrate 会认为「库非空却没有任何已应用迁移」。本地可任选：
+
+- **保留当前结构、只补历史记录**（结构与迁移文件一致时）：  
+  `npx prisma migrate resolve --applied 20260411120000_consolidated_app_and_next_auth`
+
+### `migrate deploy` / `migrate reset` 一直 P3005（Supabase 共用库 + `schemas = ["app"]`）
+
+Prisma 在 **multi-schema** 下对「是否空库」的判断容易与共用库冲突；**仅删迁移表、DROP `app` 后，`migrate deploy` 仍可能 P3005**。可靠做法：
+
+```bash
+npm run db:reset-app-schema   # 删 public._prisma_migrations + DROP SCHEMA app（不预建空 app）
+npm run db:apply-migration    # 执行 migration.sql + migrate resolve --applied
+```
+
+`db:apply-migration` 等价于手工跑迁移 SQL 再登记历史，不依赖 `deploy` 的首次校验。**之后**新增迁移可再试 `npx prisma migrate dev` / `deploy`。
+
 ## 规则书流程（步骤一 / 二）
 
 - **步骤一**：来源三选一 — **PDF**、**多图**、**集石 URL**（`POST /api/games/[gameId]/rule-image-preview` 拉取图片 URL 列表）。点「确认并分页」后调用 `POST /api/games/[gameId]/upload`（或直传 Storage 后 JSON `finalize`），由规则引擎 `POST /extract/pages` 生成分页缩略图 URL（存 `Game.pagePreviewJson`）。
