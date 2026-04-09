@@ -80,7 +80,7 @@ model AppSettings {
   @@schema("app")
 }
 
-/// Per-user daily chat usage counter. Key format: "wx:{openid}:{YYYY-MM-DD}".
+/// Per-IP daily chat usage counter. Key format: "ip:{normalized_ip}:{YYYY-MM-DD}".
 model RateLimit {
   id        String   @id
   count     Int      @default(1)

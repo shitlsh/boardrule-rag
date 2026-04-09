@@ -21,12 +21,16 @@
           </text>
         </view>
         <view v-if="quickStartOpen" class="quickstart-card__body">
-          <!-- towxml 渲染 Markdown -->
+          <!-- #ifdef MP-WEIXIN -->
           <towxml
             :nodes="quickStartNodes"
             type="markdown"
             :custom-attrs="towxmlAttrs"
           />
+          <!-- #endif -->
+          <!-- #ifdef H5 -->
+          <view class="quickstart-md markdown-body" v-html="quickStartHtml" />
+          <!-- #endif -->
         </view>
       </view>
 
@@ -81,13 +85,21 @@
             >
               <!-- 用户消息：纯文本 -->
               <text v-if="msg.role === 'user'" class="bubble__text">{{ msg.content }}</text>
-              <!-- 助手消息：towxml Markdown -->
+              <!-- #ifdef MP-WEIXIN -->
               <towxml
                 v-else
                 :nodes="getOrBuildNodes(msg.id, msg.content)"
                 type="markdown"
                 :custom-attrs="towxmlAttrs"
               />
+              <!-- #endif -->
+              <!-- #ifdef H5 -->
+              <view
+                v-else
+                class="bubble__md markdown-body"
+                v-html="getOrBuildHtml(msg.id, msg.content)"
+              />
+              <!-- #endif -->
             </view>
 
             <!-- 来源标签 -->
@@ -171,12 +183,17 @@ import { fetchGame, sendChatMessage } from '../../api/bff'
 import { getOrFetchUserId } from '../../utils/auth'
 import type { Game, SourceRef } from '../../types/index'
 
+// #ifdef H5
+import { renderMarkdownToHtml } from '../../utils/markdown'
+// #endif
+
+// #ifdef MP-WEIXIN
 // towxml 解析器（原生小程序 CommonJS 模块，通过 require 加载）
-// 返回类型声明为 any 以兼容 @dcloudio/types 对 usingComponents 的 prop 类型约束
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TowxmlParser = (content: string, type: 'markdown' | 'html', options?: Record<string, unknown>) => any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const towxml = (require as any)('../../wxcomponents/towxml/index.js') as TowxmlParser
+// #endif
 
 // -------------------------------------------------------
 // 路由参数
@@ -191,7 +208,7 @@ onLoad((options) => {
 })
 
 // -------------------------------------------------------
-// User identity (for rate limiting via x-user-id header)
+// User identity (Bearer JWT for BFF; chat rate limit is by IP on server)
 // -------------------------------------------------------
 const userId = ref<string | null>(null)
 
@@ -244,14 +261,12 @@ function toggleQuickStart() {
   quickStartOpen.value = !quickStartOpen.value
 }
 
+// #ifdef MP-WEIXIN
 const quickStartNodes = computed(() => {
   if (!game.value?.quickStart) return null
   return towxml(game.value.quickStart, 'markdown', { theme: 'light' })
 })
 
-// -------------------------------------------------------
-// towxml 节点缓存（避免 computed 中每次重建）
-// -------------------------------------------------------
 const towxmlAttrs = { theme: 'light' }
 const nodeCache = new Map<string, unknown>()
 
@@ -261,6 +276,23 @@ function getOrBuildNodes(msgId: string, content: string) {
   }
   return nodeCache.get(msgId)
 }
+// #endif
+
+// #ifdef H5
+const quickStartHtml = computed(() => {
+  if (!game.value?.quickStart) return ''
+  return renderMarkdownToHtml(game.value.quickStart)
+})
+
+const htmlCache = new Map<string, string>()
+
+function getOrBuildHtml(msgId: string, content: string) {
+  if (!htmlCache.has(msgId)) {
+    htmlCache.set(msgId, renderMarkdownToHtml(content))
+  }
+  return htmlCache.get(msgId) ?? ''
+}
+// #endif
 
 // -------------------------------------------------------
 // 来源标签格式化
@@ -384,7 +416,12 @@ function confirmClear() {
     success: (res) => {
       if (res.confirm) {
         chatStore.clearMessages()
+        // #ifdef MP-WEIXIN
         nodeCache.clear()
+        // #endif
+        // #ifdef H5
+        htmlCache.clear()
+        // #endif
       }
     },
   })
@@ -689,4 +726,63 @@ function confirmClear() {
     color: #bbb;
   }
 }
+
+/* #ifdef H5 */
+/* markdown-it 输出 */
+.markdown-body {
+  font-size: 28rpx;
+  line-height: 1.65;
+  color: #1a1a2e;
+  word-break: break-word;
+}
+
+.bubble__md {
+  width: 100%;
+}
+
+.quickstart-md {
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #333;
+}
+/* #endif */
 </style>
+
+<!-- #ifdef H5 -->
+<style lang="scss">
+/* v-html 内部节点（H5 专用；无 scoped 以便选子元素） */
+.chat-page .markdown-body p {
+  margin: 0 0 0.5em;
+}
+.chat-page .markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.chat-page .markdown-body ul,
+.chat-page .markdown-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.2em;
+}
+.chat-page .markdown-body pre {
+  margin: 0.5em 0;
+  padding: 12rpx 16rpx;
+  background: #f4f6f9;
+  border-radius: 8rpx;
+  overflow-x: auto;
+  font-size: 24rpx;
+}
+.chat-page .markdown-body code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.92em;
+}
+.chat-page .markdown-body pre code {
+  background: transparent;
+  padding: 0;
+}
+.chat-page .markdown-body a {
+  color: #1a6dd9;
+}
+.chat-page .bubble--assistant .markdown-body {
+  color: #1a1a2e;
+}
+</style>
+<!-- #endif -->
