@@ -4,6 +4,8 @@ from ingestion.index_builder import (
     _embedding_models_equivalent,
     _normalize_embedding_model_id,
     _paired_pgvector_uris,
+    _pgvector_physical_table_name,
+    _safe_table_name,
     _sanitize_postgresql_dsn,
 )
 
@@ -29,6 +31,12 @@ def test_normalize_embedding_model_id_strips_models_prefix() -> None:
 def test_embedding_models_equivalent() -> None:
     assert _embedding_models_equivalent("models/foo", "foo") is True
     assert _embedding_models_equivalent("models/a", "models/b") is False
+
+
+def test_pgvector_physical_table_is_data_prefix_plus_logical() -> None:
+    """LlamaIndex stores rows in ``data_{logical}``, not ``logical`` alone."""
+    gid = "cmnq3i2eh000aksjrprpoiyoj"
+    assert _pgvector_physical_table_name(gid) == f"data_{_safe_table_name(gid).lower()}"
 
 
 def test_paired_uris_for_plain_postgresql() -> None:

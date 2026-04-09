@@ -284,6 +284,18 @@ def _safe_table_name(game_id: str) -> str:
     return f"li_{safe}"[:63]
 
 
+def _pgvector_physical_table_name(game_id: str) -> str:
+    """
+    Actual PostgreSQL table created by LlamaIndex ``PGVectorStore``.
+
+    The store lowercases the logical ``table_name`` and builds the model as
+    ``data_{index_name}`` (see ``llama_index.vector_stores.postgres.get_data_model``).
+    Manifest still stores the logical name (``li_<game_id>``); vectors live in ``data_li_...``.
+    """
+    logical = _safe_table_name(game_id).lower()
+    return f"data_{logical}"
+
+
 def configure_embedding_settings() -> None:
     """Set global LlamaIndex embedding model (Gemini)."""
     g = get_gemini().embed
@@ -384,10 +396,15 @@ def build_and_persist_index(
         from llama_index.vector_stores.postgres import PGVectorStore
 
         table = _safe_table_name(game_id)
+        physical = _pgvector_physical_table_name(game_id)
         sync_uri, async_uri = _paired_pgvector_uris(pg_uri)
         engine = create_engine(sync_uri, future=True)
         with engine.connect() as conn:
-            conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+            # Must match LlamaIndex table name ``data_{logical_name}``; dropping only ``li_*`` misses
+            # the real table and rebuilds append rows (duplicate vectors / doubled counts).
+            conn.execute(text(f'DROP TABLE IF EXISTS public."{physical}" CASCADE'))
+            # Legacy mistake: older builds used the wrong name here; remove empty orphan if any.
+            conn.execute(text(f'DROP TABLE IF EXISTS public."{table.lower()}" CASCADE'))
             conn.commit()
 
         vector_store = PGVectorStore.from_params(

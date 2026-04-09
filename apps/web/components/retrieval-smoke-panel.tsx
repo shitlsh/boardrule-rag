@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { Copy, Download, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,6 +101,50 @@ export function RetrievalSmokePanel({ game }: RetrievalSmokePanelProps) {
     }
   }, [game.id, q, similarityTopK, rerankTopN]);
 
+  const buildExportPayload = useCallback(() => {
+    return {
+      exportedAt: new Date().toISOString(),
+      tool: "smoke-retrieve",
+      game: {
+        id: game.id,
+        name: game.name,
+        slug: game.slug,
+      },
+      request: {
+        q: q.trim(),
+        similarityTopK: similarityTopK.trim() || null,
+        rerankTopN: rerankTopN.trim() || null,
+      },
+      response: result,
+    };
+  }, [game.id, game.name, game.slug, q, result, similarityTopK, rerankTopN]);
+
+  const copyExport = useCallback(async () => {
+    if (!result) return;
+    const text = JSON.stringify(buildExportPayload(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("已复制 JSON 到剪贴板");
+    } catch {
+      toast.error("复制失败，请改用下载");
+    }
+  }, [buildExportPayload, result]);
+
+  const downloadExport = useCallback(() => {
+    if (!result) return;
+    const text = JSON.stringify(buildExportPayload(), null, 2);
+    const safeSlug = game.slug.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 32) || "game";
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `smoke-retrieve_${game.id.slice(0, 12)}_${safeSlug}_${stamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("已下载 JSON 文件");
+  }, [buildExportPayload, game.id, game.slug, result]);
+
   if (!game.isIndexed) {
     return (
       <Card className="border-dashed">
@@ -179,28 +223,40 @@ export function RetrievalSmokePanel({ game }: RetrievalSmokePanelProps) {
 
         {result && !result.message && (
           <div className="space-y-3 rounded-md border bg-muted/30 p-4 text-sm">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
-              {result.query != null && (
-                <span>
-                  问句：<span className="text-foreground">{result.query}</span>
-                </span>
-              )}
-              {result.node_count != null && (
-                <span>
-                  命中条数：<span className="font-mono text-foreground">{result.node_count}</span>
-                </span>
-              )}
-              {result.merged_context_chars != null && (
-                <span>
-                  合并长度（字符）：<span className="font-mono text-foreground">{result.merged_context_chars}</span>
-                </span>
-              )}
-              {(result.similarity_top_k_override != null || result.rerank_top_n_override != null) && (
-                <span>
-                  覆盖：top_k={String(result.similarity_top_k_override ?? "—")} / rerank_n=
-                  {String(result.rerank_top_n_override ?? "—")}
-                </span>
-              )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+                {result.query != null && (
+                  <span>
+                    问句：<span className="text-foreground">{result.query}</span>
+                  </span>
+                )}
+                {result.node_count != null && (
+                  <span>
+                    命中条数：<span className="font-mono text-foreground">{result.node_count}</span>
+                  </span>
+                )}
+                {result.merged_context_chars != null && (
+                  <span>
+                    合并长度（字符）：<span className="font-mono text-foreground">{result.merged_context_chars}</span>
+                  </span>
+                )}
+                {(result.similarity_top_k_override != null || result.rerank_top_n_override != null) && (
+                  <span>
+                    覆盖：top_k={String(result.similarity_top_k_override ?? "—")} / rerank_n=
+                    {String(result.rerank_top_n_override ?? "—")}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => void copyExport()}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  复制 JSON
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => downloadExport()}>
+                  <Download className="mr-2 h-4 w-4" />
+                  下载 JSON
+                </Button>
+              </div>
             </div>
 
             <ul className="space-y-3">
@@ -228,7 +284,19 @@ export function RetrievalSmokePanel({ game }: RetrievalSmokePanelProps) {
         )}
 
         {result?.message && !result.source_nodes && (
-          <p className="text-sm text-destructive">{result.message}</p>
+          <div className="space-y-3">
+            <p className="text-sm text-destructive">{result.message}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => void copyExport()}>
+                <Copy className="mr-2 h-4 w-4" />
+                复制错误信息（JSON）
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => downloadExport()}>
+                <Download className="mr-2 h-4 w-4" />
+                下载 JSON
+              </Button>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -8,7 +8,7 @@ from typing import Any
 from llama_index.core import Document
 from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.core.node_parser.text.sentence import CHUNKING_REGEX
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import MetadataMode, TextNode
 
 # Matches <!-- pages: 12-15 -->, <!-- pages: 12 -->, <!-- pages: ? -->
 _PAGE_ANCHOR_RE = re.compile(
@@ -19,6 +19,34 @@ _SPLIT_RE = re.compile(
     r"(<!--\s*pages:\s*[^>]+\s*-->)",
     re.IGNORECASE,
 )
+# ATX headings with 3+ hashes split too finely in ``MarkdownNodeParser`` (each ### becomes its own
+# node). Demote to bold lines so only ``#`` / ``##`` drive structure; section content stays coherent.
+_DEEP_ATX_HEADER_RE = re.compile(r"^(#{3,6})\s+(.*)$")
+
+
+def demote_h3_plus_markdown_headings_to_bold(text: str) -> str:
+    """
+    Replace ``###`` … ``######`` line headers with ``**title**`` (code-fence aware).
+
+    ``MarkdownNodeParser`` splits on every ``#`` line; this keeps e.g. sub-auction rules under one
+    ``##`` section instead of one tiny node per ``###``.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    code_block = False
+    for line in lines:
+        if line.lstrip().startswith("```"):
+            code_block = not code_block
+            out.append(line)
+            continue
+        if not code_block:
+            m = _DEEP_ATX_HEADER_RE.match(line)
+            if m:
+                title = (m.group(2) or "").strip()
+                out.append(f"**{title}**" if title else line)
+                continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def _parse_page_token(raw: str) -> tuple[int | None, int | None, str]:
@@ -128,8 +156,16 @@ def documents_to_nodes(
     if not documents:
         return []
 
+    coarser_docs = [
+        Document(
+            text=demote_h3_plus_markdown_headings_to_bold(d.get_content(metadata_mode=MetadataMode.NONE)),
+            metadata=dict(d.metadata or {}),
+        )
+        for d in documents
+    ]
+
     md_parser = MarkdownNodeParser.from_defaults()
-    md_nodes = md_parser.get_nodes_from_documents(documents)
+    md_nodes = md_parser.get_nodes_from_documents(coarser_docs)
     if not md_nodes:
         return []
 
