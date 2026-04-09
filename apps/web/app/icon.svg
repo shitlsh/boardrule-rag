@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F2F8FF" />
+      <stop offset="100%" stop-color="#D9EBFF" />
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4B96F3" />
+      <stop offset="100%" stop-color="#1B55B0" />
+    </linearGradient>
+  </defs>
+
+  <rect width="200" height="200" rx="40" fill="url(#bgGrad)" />
+
+  <path d="M 100 25 C 145 25 180 55 180 100 C 180 145 145 175 100 175 C 80 175 60 168 45 175 L 35 180 L 40 155 C 28 140 20 120 20 100 C 20 55 55 25 100 25 Z" fill="none" stroke="url(#blueGrad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M 100 35 C 135 35 165 60 165 100 C 165 140 135 165 100 165 C 80 165 65 155 55 165 L 50 170 L 53 150 C 42 135 35 118 35 100 C 35 60 65 35 100 35 Z" fill="#CDE4FF" opacity="0.5" />
+
+  <path d="M 65 50 A 45 45 0 0 0 45 70" fill="none" stroke="#1B55B0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 55 40 A 60 60 0 0 0 32 68" fill="none" stroke="#1B55B0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 135 50 A 45 45 0 0 1 155 70" fill="none" stroke="#1B55B0" stroke-width="4" stroke-linecap="round" />
+  <path d="M 145 40 A 60 60 0 0 1 168 68" fill="none" stroke="#1B55B0" stroke-width="4" stroke-linecap="round" />
+
+  <line x1="62" y1="70" x2="72" y2="85" stroke="#1B55B0" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="60" cy="68" r="5" fill="#4B96F3" stroke="#1B55B0" stroke-width="2"/>
+  <line x1="138" y1="70" x2="128" y2="85" stroke="#1B55B0" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="140" cy="68" r="5" fill="#4B96F3" stroke="#1B55B0" stroke-width="2"/>
+
+  <rect x="92" y="110" width="16" height="20" fill="#FFC107" stroke="#1B55B0" stroke-width="4" rx="2" />
+
+  <rect x="65" y="65" width="70" height="50" rx="20" fill="#FFFFFF" stroke="#1B55B0" stroke-width="6" />
+  <path d="M 85 68 L 115 68 L 110 75 L 90 75 Z" fill="#FFC107" />
+
+  <rect x="73" y="76" width="54" height="32" rx="12" fill="#1B55B0" />
+
+  <circle cx="88" cy="90" r="5" fill="#00E5FF" />
+  <circle cx="112" cy="90" r="5" fill="#00E5FF" />
+
+  <path d="M 92 100 Q 100 106 108 100" fill="none" stroke="#00E5FF" stroke-width="3" stroke-linecap="round" />
+
+  <g transform="rotate(-15 100 145)">
+    <rect x="75" y="120" width="50" height="50" rx="10" fill="#FFFFFF" stroke="#1B55B0" stroke-width="6" />
+    <path d="M 78 123 L 122 123" stroke="#E1F0FF" stroke-width="4" stroke-linecap="round"/> <circle cx="90" cy="135" r="5" fill="#4B96F3" />
+    <circle cx="100" cy="145" r="5" fill="#4B96F3" />
+    <circle cx="110" cy="155" r="5" fill="#4B96F3" />
+  </g>
+</svg>
