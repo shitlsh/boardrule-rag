@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: indigo
 sdk: docker
 app_port: 7860
-short_description: FastAPI rule engine — Docker Space builds from this directory (git subtree sync).
+short_description: FastAPI rule engine — extract rules & hybrid RAG (Docker).
 ---
 
 # Rule engine service
