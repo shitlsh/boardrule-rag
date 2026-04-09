@@ -16,6 +16,9 @@ class RuleEngineApiKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path == "/health":
             return await call_next(request)
+        # Rasterized page PNGs for <img src>; browsers cannot send Bearer / X-API-Key.
+        if path == "/page-assets" or path.startswith("/page-assets/"):
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
         expected = (os.environ.get("RULE_ENGINE_API_KEY") or "").strip()
