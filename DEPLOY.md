@@ -21,7 +21,7 @@ Two layers apply to the **same** PostgreSQL database (Supabase hosted or local):
 
 Supabase offers:
 
-- **Transaction pooler** (PgBouncer, often port **6543** / pooler hostname) — good for **runtime** app traffic (Prisma in Next.js, serverless).
+- **Transaction pooler** (PgBouncer, often port **6543** / pooler hostname) — good for **runtime** app traffic (Prisma in Next.js, serverless). For **`services/rule_engine`** LangGraph checkpoints, the app disables psycopg prepared statements so this URL can work; if you still see DB errors, switch the engine’s **`DATABASE_URL`** to **direct** (5432).
 - **Direct** connection (often port **5432**, session mode or direct host) — use for **`prisma migrate deploy`** and for DDL that poolers may not handle well.
 
 Set **`DATABASE_URL`** in each environment to match the intended use. For CI migration jobs, prefer the **direct** URL in secrets (often labeled “Session” or “Direct” in the Supabase dashboard).
