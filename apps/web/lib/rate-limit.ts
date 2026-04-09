@@ -1,7 +1,7 @@
 /**
- * Per-user daily chat rate limiter backed by Postgres (RateLimit table).
+ * Per-IP daily chat rate limiter backed by Postgres (RateLimit table).
  *
- * Key format: "wx:{openid}:{YYYY-MM-DD}" (UTC date).
+ * Key format: "ip:{normalized_ip}:{YYYY-MM-DD}" (UTC date).
  * Uses a single upsert per request — safe under concurrent calls because
  * Postgres serialises the UPDATE on an existing row.
  */
@@ -24,25 +24,23 @@ function todayUTC(): string {
 }
 
 /**
- * Check and increment the rate limit counter for a given user.
+ * Check and increment the rate limit counter for a client IP (already normalized).
  * If limit === 0, always returns allowed (unlimited).
  */
 export async function checkAndIncrementChatLimit(
-  openid: string,
+  normalizedClientIp: string,
   limit: number,
 ): Promise<RateLimitResult> {
   if (limit === 0) {
     return { allowed: true, count: 0, remaining: Infinity, limit: 0 };
   }
 
-  const key = `wx:${openid}:${todayUTC()}`;
+  const key = `ip:${normalizedClientIp}:${todayUTC()}`;
   const expiresAt = nextMidnightUTC();
 
-  // Attempt to find an existing record for today
   const existing = await prisma.rateLimit.findUnique({ where: { id: key } });
 
   if (!existing) {
-    // First message today — create the counter
     await prisma.rateLimit.create({
       data: { id: key, count: 1, expiresAt },
     });
@@ -57,7 +55,6 @@ export async function checkAndIncrementChatLimit(
     };
   }
 
-  // Increment
   const updated = await prisma.rateLimit.update({
     where: { id: key },
     data: { count: { increment: 1 }, expiresAt },

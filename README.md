@@ -12,7 +12,8 @@ The **`dify-boardgame-rule-agent`** project is **not** integrated here. Treat it
 
 ```text
 boardrule-rag/
-  apps/web/                 # Next.js admin UI, Prisma, task APIs
+  apps/web/                 # Next.js admin UI + BFF, Prisma, task APIs
+  apps/miniapp/             # uni-app C 端（默认 H5；可选微信小程序）— 见 apps/miniapp/README.md
   services/rule_engine/     # FastAPI, LangGraph extraction, LlamaIndex, Gemini vision
   docs/                     # Optional extra docs (see QUICKSTART.md at repo root)
 ```
@@ -40,6 +41,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 ## Documentation
 
 - **[QUICKSTART.md](./QUICKSTART.md)** — clone, dependencies, `.env`, ports, health check, and troubleshooting.
+- **[apps/miniapp/README.md](./apps/miniapp/README.md)** — C 端 H5 / 小程序、本地调试与 Vercel 静态部署入口。
 - **[services/rule_engine/README.md](./services/rule_engine/README.md)** — Python env, running the API alone, LangSmith toggles.
 
 ## Syncing `.env` with `.env.example`

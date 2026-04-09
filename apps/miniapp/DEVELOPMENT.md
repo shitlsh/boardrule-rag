@@ -1,14 +1,15 @@
-# 微信小程序开发调试指南
+# 桌游规则助手 · 开发调试指南（H5 与微信小程序）
 
-本文档面向第一次开发微信小程序的开发者，完整说明如何在本地调试并最终发布这个基于 UniApp 的桌游规则助手小程序。
+项目默认以 **H5**（浏览器 / 微信内置浏览器）为主要发布形态；仍可通过 **微信小程序** 构建与发布。更短的入口说明见同目录 **[README.md](./README.md)**。
 
 ---
 
 ## 目录
 
+0. [H5 本地运行与调试](#0-h5-本地运行与调试)
 1. [前置条件](#1-前置条件)
 2. [项目结构说明](#2-项目结构说明)
-   - [微信登录与每日限流](#微信登录与每日限流)
+   - [登录与每日限流](#登录与每日限流)
 3. [第一步：确认 BFF（后台服务）已启动](#3-第一步确认-bff后台服务已启动)
 4. [第二步：注册微信小程序账号（申请 AppID）](#4-第二步注册微信小程序账号申请-appid)
 5. [第三步：安装微信开发者工具](#5-第三步安装微信开发者工具)
@@ -18,6 +19,18 @@
 9. [环境变量说明](#9-环境变量说明)
 10. [常见问题排查](#10-常见问题排查)
 11. [生产部署（上线）](#11-生产部署上线)
+
+---
+
+## 0. H5 本地运行与调试
+
+1. 按根目录 `QUICKSTART.md` 启动数据库、rule_engine 与 `apps/web`（默认 `http://localhost:3000`）。
+2. 在 `apps/miniapp` 执行 `npm run dev:h5`（Vite 开发服务；`vite.config.ts` 已设 `host: 0.0.0.0`，便于手机访问局域网 IP）。
+3. 配置 **跨域**：在 `apps/web/.env.local` 设置 `MINIAPP_ALLOWED_ORIGIN` 为 H5 地址栏的 **完整 origin**（含端口），例如本机 `http://localhost:5173`（以终端实际端口为准）；手机访问电脑时改为 `http://192.168.x.x:5173`。
+4. 配置 **BFF 地址**：`apps/miniapp/.env.development` 中 `VITE_BFF_BASE_URL` 指向可访问的 BFF（本机用 `http://localhost:3000`；手机访问时需填电脑的局域网 IP，如 `http://192.168.1.10:3000`）。
+5. 浏览器打开终端提示的 Local / Network URL 即可调试；微信内打开 Network URL 可验证内置浏览器。
+
+H5 使用 `POST /api/h5-auth` 获取匿名 JWT；聊天页 Markdown 在 H5 由 `markdown-it` 渲染，小程序仍使用 towxml。
 
 ---
 
@@ -40,12 +53,13 @@
 ```
 apps/miniapp/
 ├── src/
-│   ├── api/bff.ts          # 调用 Next.js BFF 的 HTTP 封装（含 x-user-id header）
+│   ├── api/bff.ts          # 调用 Next.js BFF（Authorization: Bearer miniapp JWT）
 │   ├── store/chat.ts       # Pinia 状态管理（含本地持久化）
 │   ├── types/index.ts      # TypeScript 类型定义
 │   ├── utils/
 │   │   ├── env.ts          # BFF 地址配置
-│   │   └── auth.ts         # 微信登录 & openid 缓存（getOrFetchUserId）
+│   │   ├── auth.ts         # 登录：小程序 wx-login；H5 h5-auth（getOrFetchUserId）
+│   │   └── markdown.ts     # H5 Markdown → HTML（markdown-it）
 │   ├── pages/
 │   │   ├── index/          # 游戏列表页（小程序首页）
 │   │   └── chat/           # 规则问答对话页
@@ -58,44 +72,47 @@ apps/miniapp/
 └── package.json
 ```
 
-**数据流向：**
+**数据流向（概念）：**
 
 ```
-微信小程序 (UniApp)
-    ↓  uni.login() → code
-POST /api/wx-login  ──→  微信 jscode2session API
-    ↓  openid (userId) 缓存到 storage
-    ↓  后续请求携带 x-user-id: {openid}
-Next.js BFF (apps/web，运行在你的电脑或服务器上)
-    ↓  检查每日限额（RateLimit 表）
-    ↓  内部 HTTP
-rule_engine (Python FastAPI)
-    ↓
-Gemini AI + pgvector
+uni-app 客户端（微信小程序 或 H5）
+    ↓  小程序：uni.login → code → POST /api/wx-login → openid
+    ↓  H5：POST /api/h5-auth → 匿名 userId（h5_…）
+    ↓  miniapp JWT 缓存到 storage
+    ↓  后续请求：Authorization: Bearer <JWT>
+Next.js BFF (apps/web)
+    ↓  /api/chat：按客户端 IP + 当日 UTC 计数（RateLimit 表，键 ip:…）
+    ↓  限额来自后台「每日对话次数上限」
+    ↓  内部 HTTP → rule_engine (FastAPI) → RAG / AI
 ```
 
 ---
 
-## 微信登录与每日限流
+## 登录与每日限流
 
-小程序在进入对话页（`onShow`）时会自动执行以下流程，用于限制每位用户每天的提问次数：
+对话页在 `onShow` 时会调用 `getOrFetchUserId()`，用于获取 **miniapp JWT**（`/api/games`、`/api/chat` 等接口需要登录）。
 
-### 登录流程
+### 微信小程序登录流程
 
-1. `utils/auth.ts` 的 `getOrFetchUserId()` 先检查本地 storage（key: `wx_user_id`）
-2. 若无缓存，调用 `uni.login()` 获取临时 `code`
-3. 向 `POST /api/wx-login` 发送 `{ code }`，BFF 调用微信 `jscode2session` 换取 **openid**
-4. openid 缓存到本地 storage，后续请求无需重新登录
+1. `utils/auth.ts` 先检查本地 storage（`wx_user_id` / `wx_access_token`）
+2. 若无缓存，调用 `uni.login()` 获取 `code`，`POST /api/wx-login`，BFF 调用微信 `jscode2session` 换取 **openid**
+3. 缓存 `userId`（openid）与 JWT；后续 `bff.ts` 请求携带 `Authorization: Bearer …`
+
+### H5 登录流程
+
+1. 同上先读缓存；若无则 `POST /api/h5-auth`（无 body），BFF 签发匿名 `userId`（`h5_<uuid>`）与同一套 miniapp JWT
+2. 后续请求同样使用 `Authorization: Bearer …`
 
 ### 限流机制
 
-- 每次发送消息时，`sendChatMessage` 会在请求头中附加 `x-user-id: {openid}`
-- BFF 读取此 header，在 `RateLimit` 表中对当天的计数做 upsert
-- 达到每日上限时，BFF 返回 **HTTP 429**，小程序在对话中展示：`⏰ 今日提问次数（N 次）已用完，明天再来吧`
+- **按客户端 IP**（`x-forwarded-for` / `x-real-ip` 等解析）与 **UTC 自然日** 计数；键格式：`ip:{ip}:{YYYY-MM-DD}`
+- 每日上限来自管理后台 **系统设置 → 微信小程序 → 每日对话次数上限**（`dailyChatLimit`，`0` 表示不限制）
+- 达到上限时 BFF 返回 **HTTP 429**，前端展示：`⏰ 今日提问次数（N 次）已用完，明天再来吧`
+- 同一公网 IP（如 NAT 后多用户）**共享**同日额度
 
 ### 对本地开发的影响
 
-**不影响。** 如果 `uni.login()` 失败或 BFF 未配置微信 AppID/AppSecret，`getOrFetchUserId()` 返回 `null`，请求不带 `x-user-id` header，BFF 直接跳过限流。
+若未拿到 JWT（例如 H5 无法连上 `/api/h5-auth`、或小程序未配置微信导致 `wx-login` 失败），`getOrFetchUserId()` 为 `null`，带鉴权的接口会 **401**，需先保证 BFF 可用且 `MINIAPP_JWT_SECRET` 已配置。
 
 ### 管理限额
 
@@ -347,7 +364,7 @@ npm run dev:mp-weixin
 **排查步骤**：
 1. 打开 Next.js 管理后台 → **系统设置 → 微信小程序**
 2. 将「每日对话次数上限」调大或设为 `0`（不限制）后保存
-3. 若想立即重置计数，可在数据库中删除对应 `RateLimit` 行（key 格式：`wx:{openid}:{YYYY-MM-DD}`）
+3. 若想立即重置计数，可在数据库中删除对应 `RateLimit` 行（key 格式：`ip:{normalized_ip}:{YYYY-MM-DD}`）
 
 > 开发调试时建议直接将限额设为 `0` 避免干扰。
 
@@ -406,13 +423,25 @@ npm run build:mp-weixin
 
 ### 11.6 BFF 跨域配置（生产环境，H5 场景）
 
-如果你同时发布 H5 版本，在 `apps/web/.env.local` 中设置：
+若 H5 静态站点与 API **不同源**（例如双 Vercel 项目），在 **API 所在** `apps/web` 环境变量中设置：
 
 ```env
-MINIAPP_ALLOWED_ORIGIN=https://api.yourdomain.com
+MINIAPP_ALLOWED_ORIGIN=https://h5.yourdomain.com
 ```
 
-微信小程序原生（非 H5）不需要此配置。
+须与用户在浏览器中打开 H5 的 **页面 origin** 完全一致（协议 + 主机 + 端口），**不要**填 API 域名。微信小程序原生请求（`uni.request`）不走浏览器 CORS，一般无需此变量。
+
+### 11.7 双 Vercel 项目（H5 静态 + Next API）
+
+推荐两个 Vercel 项目、两个域名（或子域名）：
+
+| 项目 | 根目录 | 构建 / 输出 |
+|------|--------|-------------|
+| H5 静态 | `apps/miniapp` | `npm run build:h5`，静态输出目录 `dist/build/h5`（可参考目录内 `vercel.json`） |
+| API | `apps/web` | Next.js 默认构建（可参考 `vercel.json`） |
+
+- H5 构建时注入 `VITE_BFF_BASE_URL=https://<API 部署 URL>`（无尾部斜杠）。
+- API 环境变量配置 `MINIAPP_ALLOWED_ORIGIN` 为 H5 站点 origin。
 
 ---
 
@@ -424,10 +453,12 @@ MINIAPP_ALLOWED_ORIGIN=https://api.yourdomain.com
 # 安装依赖
 npm install
 
-# 开发模式（监听变化，自动编译）
-npm run dev:mp-weixin
+# H5 开发 / 构建（默认优先）
+npm run dev:h5
+npm run build:h5
 
-# 生产构建
+# 微信小程序：开发 / 生产构建
+npm run dev:mp-weixin
 npm run build:mp-weixin
 
 # TypeScript 类型检查

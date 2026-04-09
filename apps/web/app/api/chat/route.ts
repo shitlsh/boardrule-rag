@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { chatRules, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/client-ip";
 import { assertStaffOrMiniapp } from "@/lib/request-auth";
 import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
 import { getWechatConfigPublic } from "@/lib/wechat-settings";
@@ -41,18 +42,21 @@ export async function POST(req: Request) {
     console.info("[api/chat] request", { gameId });
   }
 
-  // ── Rate limiting (miniapp JWT only; staff preview is unlimited) ───────────
+  // ── Rate limiting by client IP (miniapp JWT only; staff preview is unlimited) ─
   if (gate.kind === "miniapp") {
-    const userId = gate.miniapp.sub;
-    try {
-      const { dailyChatLimit } = await getWechatConfigPublic();
-      const result = await checkAndIncrementChatLimit(userId, dailyChatLimit);
-      if (!result.allowed) {
-        return NextResponse.json({ message: result.message }, { status: 429 });
+    const clientIp = getClientIp(req);
+    if (clientIp) {
+      try {
+        const { dailyChatLimit } = await getWechatConfigPublic();
+        const result = await checkAndIncrementChatLimit(clientIp, dailyChatLimit);
+        if (!result.allowed) {
+          return NextResponse.json({ message: result.message }, { status: 429 });
+        }
+      } catch {
+        // Rate-limit check failure should not block the request — fail open.
       }
-    } catch {
-      // Rate-limit check failure should not block the request — fail open.
     }
+    // No observable client IP → skip limit (fail open).
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
