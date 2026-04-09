@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from psycopg import Connection
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from api.middleware_api_key import RuleEngineApiKeyMiddleware
 from api.routers import chat, extract, health
@@ -70,20 +70,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     from langgraph.checkpoint.postgres import PostgresSaver
 
-    # Transaction poolers (PgBouncer, e.g. Supabase port 6543) multiplex backends; psycopg3
-    # prepared statements then collide (DuplicatePreparedStatement). Use prepare_threshold=None
-    # to disable them — safer than PostgresSaver.from_conn_string(), which may use prepare_threshold=0.
-    with Connection.connect(
+    # A single long-lived Connection can go idle for minutes during Gemini calls between graph
+    # steps; Supabase / PgBouncer / NAT may then close it → "the connection is closed" on the
+    # next checkpoint. Use a pool so each checkpoint borrows a connection; TCP keepalives reduce
+    # idle drops. prepare_threshold=None avoids PgBouncer prepared-statement collisions.
+    pool = ConnectionPool(
         pg_uri,
-        autocommit=True,
-        prepare_threshold=None,
-        row_factory=dict_row,
-    ) as conn:
-        checkpointer = PostgresSaver(conn)
+        min_size=1,
+        max_size=8,
+        open=True,
+        check=ConnectionPool.check_connection,
+        kwargs={
+            "autocommit": True,
+            "prepare_threshold": None,
+            "row_factory": dict_row,
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 3,
+        },
+    )
+    try:
+        checkpointer = PostgresSaver(pool)
         checkpointer.setup()
         _compiled_graph = build_extraction_graph(checkpointer)
         yield
-    _compiled_graph = None
+    finally:
+        _compiled_graph = None
+        pool.close()
 
 
 def _allowed_origins() -> list[str]:
