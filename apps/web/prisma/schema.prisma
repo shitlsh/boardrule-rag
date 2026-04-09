@@ -5,6 +5,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  /// 应用表集中在 `app`，`public` 留给 LangGraph / LlamaIndex（pgvector 等）。
+  schemas  = ["app"]
 }
 
 /// Board game metadata and extraction artifacts.
@@ -33,6 +35,8 @@ model Game {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@schema("app")
 }
 
 model Task {
@@ -49,6 +53,7 @@ model Task {
   updatedAt DateTime @updatedAt
 
   @@index([gameId])
+  @@schema("app")
 }
 
 /// Singleton row (`id = "default"`): ingestion limits and page raster hints for the rule engine.
@@ -71,6 +76,8 @@ model AppSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@schema("app")
 }
 
 /// Per-user daily chat usage counter. Key format: "wx:{openid}:{YYYY-MM-DD}".
@@ -81,4 +88,6 @@ model RateLimit {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@schema("app")
 }

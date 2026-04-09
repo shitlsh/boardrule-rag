@@ -29,7 +29,7 @@ cp .env.example .env
 | `SUPABASE_STORAGE_BUCKET_EXPORTS` | 可选；覆盖默认 `game-exports` |
 | `AI_CONFIG_SECRET` | **必填**；32 字节十六进制字符串，用于 AES-256-GCM 加密存储 AI Gateway API Key 和微信 AppSecret。生成方式：`openssl rand -hex 32` |
 
-数据库 URL 同时用于 **`prisma.config.ts`**（Prisma ORM 7）。客户端生成到 `generated/prisma/`（`postinstall` / `build` 时生成）。
+数据库 URL 同时用于 **`prisma.config.ts`**（Prisma ORM 7）。**业务表**在 PostgreSQL 的 **`app`** schema（`Game` / `Task` / `AppSettings` / `RateLimit`）；`public` 与引擎共用时可放 LangGraph、向量表等。客户端生成到 `generated/prisma/`（`postinstall` / `build` 时生成）。
 
 更完整的本地启动与 AI Gateway 说明见仓库根目录 **[../QUICKSTART.md](../QUICKSTART.md)**。
 
@@ -37,7 +37,7 @@ cp .env.example .env
 
 ```bash
 npm install
-npx prisma migrate dev   # 首次或 schema 变更后
+npx prisma migrate dev   # 改 schema 后生成并应用迁移；全新库也可用 migrate deploy
 npm run dev               # 默认 http://localhost:3000
 ```
 
