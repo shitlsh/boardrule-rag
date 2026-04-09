@@ -19,6 +19,28 @@ function supabaseAdapter() {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.sub ?? "";
+        session.user.role = (token.role as "admin" | "user") ?? "user";
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
+      }
+      const uid = session.user?.id;
+      if (uid) {
+        const r = await authPgPool.query<{ must_change_password: boolean }>(
+          `SELECT must_change_password FROM next_auth.users WHERE id = $1`,
+          [uid],
+        );
+        const db = r.rows[0]?.must_change_password;
+        if (typeof db === "boolean" && session.user) {
+          session.user.mustChangePassword = db;
+        }
+      }
+      return session;
+    },
+  },
   adapter: supabaseAdapter(),
   providers: [
     Credentials({
@@ -40,8 +62,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           password_hash: string | null;
           role: string;
           disabled: boolean;
+          must_change_password: boolean;
         }>(
-          `SELECT id, email, name, image, password_hash, role, disabled
+          `SELECT id, email, name, image, password_hash, role, disabled, must_change_password
            FROM next_auth.users WHERE email = $1`,
           [email],
         );
@@ -56,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: row.name ?? undefined,
           image: row.image ?? undefined,
           role: row.role === "admin" ? "admin" : "user",
+          mustChangePassword: row.must_change_password,
         };
       },
     }),

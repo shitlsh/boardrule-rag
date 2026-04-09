@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { assertAdminSession } from "@/lib/request-auth";
+import { validateNewPassword } from "@/lib/password-policy";
 import { createStaffUser, listStaffUsers } from "@/lib/staff-users";
 
 export const runtime = "nodejs";
@@ -26,6 +27,10 @@ export async function POST(req: Request) {
   const password = body.password?.trim();
   if (!email || !password) {
     return NextResponse.json({ error: "email 与 password 必填" }, { status: 400 });
+  }
+  const pwErr = validateNewPassword(password);
+  if (pwErr) {
+    return NextResponse.json({ error: pwErr }, { status: 400 });
   }
   const role = body.role === "admin" ? "admin" : "user";
   try {

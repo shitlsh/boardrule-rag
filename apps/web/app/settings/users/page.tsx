@@ -21,6 +21,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type UserRow = {
   id: string;
@@ -28,6 +36,7 @@ type UserRow = {
   name: string | null;
   role: "admin" | "user";
   disabled: boolean;
+  mustChangePassword: boolean;
 };
 
 export default function UsersAdminPage() {
@@ -39,6 +48,9 @@ export default function UsersAdminPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
   const [creating, setCreating] = useState(false);
+  const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const [resetPw, setResetPw] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -91,6 +103,30 @@ export default function UsersAdminPage() {
     }
   }
 
+  async function submitReset() {
+    if (!resetUser || !resetPw.trim()) return;
+    setResetting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(resetUser.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: resetPw }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(j.error ?? "重置失败");
+        return;
+      }
+      setResetUser(null);
+      setResetPw("");
+      await load();
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function toggleDisabled(u: UserRow) {
     setError(null);
     const res = await fetch(`/api/admin/users/${encodeURIComponent(u.id)}`, {
@@ -117,7 +153,7 @@ export default function UsersAdminPage() {
       <Card>
         <CardHeader>
           <CardTitle>新建用户</CardTitle>
-          <CardDescription>为新成员设置初始密码，登录后可在后续版本中自行修改（若已支持）。</CardDescription>
+          <CardDescription>为新成员设置初始密码；首次登录须自行修改密码后方可使用系统。</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onCreate} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -185,7 +221,8 @@ export default function UsersAdminPage() {
                   <TableHead>名称</TableHead>
                   <TableHead>角色</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="w-[120px]" />
+                  <TableHead>密码</TableHead>
+                  <TableHead className="w-[220px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -195,7 +232,8 @@ export default function UsersAdminPage() {
                     <TableCell>{u.name ?? "—"}</TableCell>
                     <TableCell>{u.role === "admin" ? "管理员" : "用户"}</TableCell>
                     <TableCell>{u.disabled ? "已停用" : "正常"}</TableCell>
-                    <TableCell>
+                    <TableCell>{u.mustChangePassword ? "须改密" : "已更新"}</TableCell>
+                    <TableCell className="space-x-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -203,6 +241,18 @@ export default function UsersAdminPage() {
                         onClick={() => void toggleDisabled(u)}
                       >
                         {u.disabled ? "启用" : "停用"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setResetUser(u);
+                          setResetPw("");
+                          setError(null);
+                        }}
+                      >
+                        重置初始密码
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -212,6 +262,35 @@ export default function UsersAdminPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={resetUser !== null} onOpenChange={(open) => !open && setResetUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>重置初始密码</DialogTitle>
+            <DialogDescription>
+              将「{resetUser?.email ?? resetUser?.name ?? "该用户"}」的登录密码设为新初始密码；对方下次登录后须先改密。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="reset-pw">新初始密码</Label>
+            <Input
+              id="reset-pw"
+              type="password"
+              autoComplete="new-password"
+              value={resetPw}
+              onChange={(e) => setResetPw(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setResetUser(null)}>
+              取消
+            </Button>
+            <Button type="button" disabled={resetting || !resetPw.trim()} onClick={() => void submitReset()}>
+              {resetting ? "提交中…" : "确认重置"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
