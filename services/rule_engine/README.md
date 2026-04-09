@@ -23,7 +23,7 @@ cp .env.example .env
 | Variable | Purpose |
 |----------|---------|
 | *(none for Gemini keys)* | **Gemini API keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure providers in the web app at **`/models`** (模型与凭证). |
-| `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for indexing when enabled (set `USE_PGVECTOR=false` to keep vectors on disk). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. Optional: `RULE_ENGINE_CHECKPOINT_URL` if checkpoints should use a different URL. |
+| `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for new index vectors (same DSN). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
@@ -33,6 +33,7 @@ cp .env.example .env
 | `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES` | Complex-profile only: `needs_batching` when body pages exceed this (default `15`). |
 | `VISION_BATCH_PAGES` | Pages per vision batch when `needs_batching` is true (default `6`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
+| `INDEX_STORAGE_MODE` + `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Optional. Set `INDEX_STORAGE_MODE=supabase` to store per-game index bundles (zip of BM25 + manifest + on-disk vectors when used) in **Supabase Storage** bucket `INDEX_STORAGE_BUCKET` (default **`boardrule-indexes`**). Use the same URL and service role as **`apps/web`**; local dev uses `supabase start` values. See repo **[DEPLOY.md](../../DEPLOY.md)**. |
 | `EMBEDDING_DIM` | Vector dimension for pgvector / indexing (must match the embedding model chosen in AI Gateway). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `BAAI/bge-reranker-base`). |
 
@@ -57,6 +58,16 @@ uv sync --extra dev
 ```
 
 The `dev` extra includes **`langgraph-cli[inmem]`** for local LangGraph Studio (see below). Use whatever install command your `pyproject.toml` documents; the repo root **QUICKSTART.md** mirrors high-level steps.
+
+## Docker (Hugging Face Spaces / servers)
+
+Build from the **repository root** (paths assume monorepo layout):
+
+```bash
+docker build -f services/rule_engine/Dockerfile .
+```
+
+The image installs **poppler** for PDF rasterization and listens on **`PORT`** (default **7860**, as on Hugging Face). Connect the Space to this GitHub repo so pushes rebuild the image; set **Secrets** for `DATABASE_URL`, `CORS_ORIGINS`, and Storage vars if using `INDEX_STORAGE_MODE=supabase`. Details: **[DEPLOY.md](../../DEPLOY.md)**.
 
 ## Run the API
 
@@ -130,7 +141,7 @@ This is **in addition to** the FastAPI server (`uvicorn api.main:app`, port **80
 | `GET` | `/health` | Liveness. |
 | `POST` | `/extract/pages` | Multipart: `game_id`, `file` or `file_url` or multiple `files` — rasterize to PNGs; returns `job_id` and per-page `url` under `/page-assets/...`。 |
 | `POST` | `/extract` | Multipart: `game_id`, `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON array strings), optional `game_name`, `terminology_context`; optional `resume` + `job_id`。轮询 `GET /extract/{job_id}`。 |
-| `POST` | `/build-index/start` | JSON: `game_id`, and **`merged_markdown` or `documents[]`**, optional `source_file`。立即返回 `job_id`；后台建索引。轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed` 或 `failed`。BM25 + manifest on disk; vectors in pgvector or disk per `DATABASE_URL` / `USE_PGVECTOR`。 |
+| `POST` | `/build-index/start` | JSON: `game_id`, and **`merged_markdown` or `documents[]`**, optional `source_file`。立即返回 `job_id`；后台建索引。轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed` 或 `failed`。BM25 + manifest on disk (or Storage zip); vectors in pgvector when `DATABASE_URL` is Postgres, else on disk。 |
 | `GET` | `/build-index/jobs/{job_id}` | 异步建索引任务状态：`pending` / `processing` / `completed` / `failed`，成功时含 `manifest`。 |
 | `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
 | `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
@@ -170,6 +181,6 @@ services/rule_engine/
 - **Import errors**: Run installs from `services/rule_engine` with the virtualenv activated; ensure `PYTHONPATH` matches the package layout if you run modules manually.
 - **PDF rasterization**: Ensure poppler is installed; check `PAGE_RASTER_DPI` if pages fail to render.
 - **Long jobs**: Extraction is asynchronous; clients should poll job status rather than relying on long HTTP timeouts.
-- **PostgreSQL required**: The API does not start without `DATABASE_URL` (or `RULE_ENGINE_CHECKPOINT_URL`) pointing at PostgreSQL; local SQLite checkpoints were removed.
+- **PostgreSQL required**: The API does not start without `DATABASE_URL` pointing at PostgreSQL; local SQLite checkpoints were removed.
 
 For full-stack local setup (web + engine), see the repository root **[QUICKSTART.md](../../QUICKSTART.md)**.
