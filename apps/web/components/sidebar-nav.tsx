@@ -3,10 +3,11 @@
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut, useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Sparkles } from 'lucide-react'
+import { Gamepad2, List, LogOut, MessageCircle, Settings, Moon, Sun, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -33,6 +34,8 @@ const navItems = [
 
 export function SidebarNav() {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const { theme, setTheme } = useTheme()
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -54,7 +57,7 @@ export function SidebarNav() {
           {navItems.map((item) => {
             const isActive =
               item.href === "/settings"
-                ? pathname === "/settings"
+                ? pathname === "/settings" || pathname.startsWith("/settings/")
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
@@ -72,10 +75,33 @@ export function SidebarNav() {
               </Link>
             )
           })}
+          {isAdmin ? (
+            <Link
+              href="/settings/users"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                pathname === '/settings/users'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <Users className="h-5 w-5" />
+              用户管理
+            </Link>
+          ) : null}
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 space-y-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+          >
+            <LogOut className="h-4 w-4" />
+            退出登录
+          </Button>
           {mounted && (
             <Button
               variant="ghost"

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { signMiniappJwt } from "@/lib/miniapp-jwt";
 import { getWechatCredentials } from "@/lib/wechat-settings";
 
 export const runtime = "nodejs";
@@ -12,7 +13,7 @@ export const runtime = "nodejs";
  * `x-user-id` header on subsequent `/api/chat` requests.
  *
  * Body: { code: string }
- * Response: { userId: string }
+ * Response: { userId: string, accessToken: string, expiresIn: number }
  */
 export async function POST(req: Request) {
   let body: unknown;
@@ -70,5 +71,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "微信未返回 openid" }, { status: 502 });
   }
 
-  return NextResponse.json({ userId: openid });
+  const expiresIn = 7 * 24 * 60 * 60;
+  const accessToken = await signMiniappJwt(openid, expiresIn);
+  return NextResponse.json({ userId: openid, accessToken, expiresIn });
 }

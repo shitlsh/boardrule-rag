@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { assertStaffSession } from "@/lib/request-auth";
 import { createSignedUploadUrl, gameStorageRelative, isSupabaseStorageConfigured } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -15,6 +16,9 @@ function safeFileName(name: string): string {
  * Returns a presigned upload URL for the raw bucket so the browser can PUT without sending bytes through Vercel.
  */
 export async function POST(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const game = await prisma.game.findUnique({ where: { id: gameId }, select: { id: true } });
   if (!game) {

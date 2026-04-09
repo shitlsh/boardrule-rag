@@ -42,6 +42,20 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 - **[QUICKSTART.md](./QUICKSTART.md)** — clone, dependencies, `.env`, ports, health check, and troubleshooting.
 - **[services/rule_engine/README.md](./services/rule_engine/README.md)** — Python env, running the API alone, LangSmith toggles.
 
+## Syncing `.env` with `.env.example`
+
+When `.env.example` gains new keys or comments, use **[scripts/env-sync.sh](./scripts/env-sync.sh)** to refresh your local `.env` **without overwriting existing variable values** (same idea as [Dify’s `dify-env-sync.sh`](https://github.com/langgenius/dify/blob/main/docker/dify-env-sync.sh)): the script writes a new `.env` following `.env.example`’s line order, keeps any `KEY=value` already present in `.env`, fills missing keys from the example, and saves a timestamped backup under `env-backup/`.
+
+```bash
+chmod +x scripts/env-sync.sh   # once
+./scripts/env-sync.sh            # default: apps/web
+./scripts/env-sync.sh services/rule_engine
+./scripts/env-sync.sh --all      # both apps/web and services/rule_engine
+./scripts/env-sync.sh --help
+```
+
+If `.env` does not exist yet, the script copies `.env.example` to `.env`.
+
 ## License
 
 See [LICENSE](./LICENSE).

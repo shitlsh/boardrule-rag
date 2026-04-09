@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCredentialApiKey, getAiGatewayStored, setSlotBinding } from "@/lib/ai-gateway";
 import type { SlotKey } from "@/lib/ai-gateway-types";
 import { fetchGeminiModelsForSlot } from "@/lib/gemini-models-list";
+import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,9 @@ const ALLOWED = new Set<SlotKey>(["flash", "pro", "embed", "chat"]);
 type RouteParams = { params: Promise<{ slot: string }> };
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   const { slot: raw } = await params;
   const slot = raw?.trim() as SlotKey;
   if (!raw || !ALLOWED.has(slot)) {

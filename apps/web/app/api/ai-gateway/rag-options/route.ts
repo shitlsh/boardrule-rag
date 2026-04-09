@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { patchGatewayRagOptions, type RagOptionsPatch } from "@/lib/ai-gateway";
+import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
 export async function PATCH(req: Request) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

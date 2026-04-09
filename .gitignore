@@ -13,6 +13,8 @@ coverage/
 .env
 .env.local
 *.pem
+# scripts/env-sync.sh timestamped backups
+**/env-backup/
 
 # Prisma / SQLite
 **/prisma/dev.db

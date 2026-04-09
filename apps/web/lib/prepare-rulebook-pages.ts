@@ -2,6 +2,7 @@ import { downloadRuleImagesFromUrls, fetchGstoneRuleImageUrls } from "@/lib/gsto
 import type { AppSettingsRecord } from "@/lib/app-settings";
 import { getAppSettings } from "@/lib/app-settings";
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
+import { ruleEngineBearerAuth } from "@/lib/rule-engine-headers";
 import {
   createSignedReadUrl,
   downloadFromRawBucket,
@@ -52,7 +53,11 @@ async function enginePost(
   const settings = await getAppSettings();
   appendRuleEngineFormSettings(form, settings, engineOpts);
 
-  const res = await fetch(`${base}/extract/pages`, { method: "POST", body: form });
+  const res = await fetch(`${base}/extract/pages`, {
+    method: "POST",
+    headers: ruleEngineBearerAuth(),
+    body: form,
+  });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(parseEngineError(text) || `Prepare failed: ${res.status}`);

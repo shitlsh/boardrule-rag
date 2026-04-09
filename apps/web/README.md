@@ -10,6 +10,15 @@ Next.js（App Router）管理端：游戏元数据、规则书上传、任务与
 cp .env.example .env
 ```
 
+仓库根目录提供了 **`scripts/env-sync.sh`**：在保留你本地已配置键的前提下，按最新 **`.env.example`** 同步结构并补全新增变量（会先备份到 `env-backup/`）。在仓库根执行：
+
+```bash
+./scripts/env-sync.sh           # 默认即本目录 apps/web
+./scripts/env-sync.sh --all     # 同时同步 rule_engine 的 .env
+```
+
+详见根目录 [README.md](../../README.md#syncing-env-with-envexample)。
+
 | 变量 | 说明 |
 |------|------|
 | `RULE_ENGINE_URL` | 规则引擎根地址（无尾部斜杠），如 `http://127.0.0.1:8000` |

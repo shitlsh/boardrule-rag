@@ -337,14 +337,11 @@ async function handleSend() {
 
   chatStore.isLoading = true
   try {
-    const resp = await sendChatMessage(
-      {
-        gameId: gameId.value,
-        message: text,
-        messages: historyWithoutCurrent,
-      },
-      userId.value,
-    )
+    const resp = await sendChatMessage({
+      gameId: gameId.value,
+      message: text,
+      messages: historyWithoutCurrent,
+    })
 
     const assistantMsg = {
       id: resp.message?.id ?? `ast_${Date.now()}`,

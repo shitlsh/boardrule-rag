@@ -1,4 +1,4 @@
-import { getEngineAiHeaders } from "@/lib/engine-ai";
+import { ruleEngineAiHeaders, ruleEngineBearerAuth } from "@/lib/rule-engine-headers";
 
 import type {
   BuildIndexJobPollResponse,
@@ -42,6 +42,7 @@ export async function prepareRulebookPages(params: {
 
   const res = await fetch(`${base}/extract/pages`, {
     method: "POST",
+    headers: ruleEngineBearerAuth(),
     body: form,
   });
 
@@ -78,7 +79,7 @@ export async function startExtractionWithPagePlan(params: {
   form.append("force_full_pipeline", params.forceFullPipeline ? "true" : "false");
   form.append("resume", "false");
 
-  const ai = await getEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders();
   const res = await fetch(`${base}/extract`, {
     method: "POST",
     headers: ai,
@@ -99,6 +100,7 @@ export async function getExtractJob(jobId: string): Promise<ExtractPollResponse>
   try {
     res = await fetch(`${base}/extract/${encodeURIComponent(jobId)}`, {
       method: "GET",
+      headers: ruleEngineBearerAuth(),
       cache: "no-store",
       signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
     });
@@ -130,7 +132,7 @@ export async function startBuildIndex(params: {
   useRerank?: boolean;
 }): Promise<BuildIndexStartResponse> {
   const base = getRuleEngineBaseUrl();
-  const ai = await getEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders();
   const payload: Record<string, unknown> = {
     game_id: params.gameId,
     merged_markdown: params.mergedMarkdown,
@@ -160,6 +162,7 @@ export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPoll
   try {
     res = await fetch(`${base}/build-index/jobs/${encodeURIComponent(jobId)}`, {
       method: "GET",
+      headers: ruleEngineBearerAuth(),
       cache: "no-store",
       signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
     });
@@ -185,7 +188,7 @@ export async function chatRules(params: {
   messages?: { role: "user" | "assistant"; content: string }[];
 }): Promise<ChatResponse> {
   const base = getRuleEngineBaseUrl();
-  const ai = await getEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders();
   let res: Response;
   try {
     res = await fetch(`${base}/chat`, {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { chatRules, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
+import { assertStaffOrMiniapp } from "@/lib/request-auth";
 import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
 import { getWechatConfigPublic } from "@/lib/wechat-settings";
 import type { ChatMessage } from "@/lib/types";
@@ -21,6 +22,9 @@ type ChatBody = {
  * Response includes `message` for the v0 chat UI and `answer` / `sources` for compatibility.
  */
 export async function POST(req: Request) {
+  const gate = await assertStaffOrMiniapp(req);
+  if (!("kind" in gate)) return gate;
+
   let body: ChatBody;
   try {
     body = await req.json();
@@ -37,9 +41,9 @@ export async function POST(req: Request) {
     console.info("[api/chat] request", { gameId });
   }
 
-  // ── Rate limiting ────────────────────────────────────────────────────────────
-  const userId = req.headers.get("x-user-id")?.trim() ?? "";
-  if (userId) {
+  // ── Rate limiting (miniapp JWT only; staff preview is unlimited) ───────────
+  if (gate.kind === "miniapp") {
+    const userId = gate.miniapp.sub;
     try {
       const { dailyChatLimit } = await getWechatConfigPublic();
       const result = await checkAndIncrementChatLimit(userId, dailyChatLimit);

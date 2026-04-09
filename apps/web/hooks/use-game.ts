@@ -3,7 +3,8 @@
 import useSWR from 'swr'
 import type { Game, PageThumbnail, ExtractionTask } from '@/lib/types'
 
-const fetcher = (url: string) => fetch(url).then(res => {
+const fetcher = (url: string) =>
+  fetch(url, { credentials: 'include' }).then(res => {
   if (!res.ok) throw new Error('请求失败')
   return res.json()
 })

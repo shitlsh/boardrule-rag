@@ -5,7 +5,7 @@ import nextTypescript from "eslint-config-next/typescript";
 const config = [
   ...coreWebVitals,
   ...nextTypescript,
-  { ignores: ["generated/**"] },
+  { ignores: ["generated/**", "scripts/**"] },
   {
     rules: {
       // Remote / user-supplied cover URLs; next/image needs domains config per host.

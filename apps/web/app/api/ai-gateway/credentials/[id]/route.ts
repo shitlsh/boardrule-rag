@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { removeCredentialById, updateGeminiCredential } from "@/lib/ai-gateway";
+import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   const { id } = await params;
   if (!id?.trim()) {
     return NextResponse.json({ message: "无效 id" }, { status: 400 });
@@ -40,6 +44,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(_req: Request, { params }: RouteParams) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   const { id } = await params;
   if (!id?.trim()) {
     return NextResponse.json({ message: "无效 id" }, { status: 400 });

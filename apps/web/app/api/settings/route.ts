@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { getAppSettings, updateAppSettings, type AppSettingsPatch } from "@/lib/app-settings";
+import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   try {
     const settings = await getAppSettings();
     return NextResponse.json(settings);
@@ -15,6 +19,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();
