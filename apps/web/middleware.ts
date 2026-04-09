@@ -38,7 +38,13 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/change-password", req.url));
   }
 
-  if (path.startsWith("/settings/users") && role !== "admin") {
+  if (path === "/settings/users" || path.startsWith("/settings/users/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/users" + path.slice("/settings/users".length);
+    return NextResponse.redirect(url);
+  }
+
+  if (path.startsWith("/users") && role !== "admin") {
     return NextResponse.redirect(new URL("/games", req.url));
   }
 
