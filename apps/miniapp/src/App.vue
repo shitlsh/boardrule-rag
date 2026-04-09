@@ -10,12 +10,27 @@ onLaunch(() => {
 @import './uni.scss';
 
 page {
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    sans-serif;
   background-color: #f4f6f9;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 移动端点击高亮减弱 */
+view,
+button,
+text {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.06);
 }
 </style>
