@@ -5,7 +5,11 @@ import { auth } from "@/auth";
 import { verifyMiniappJwt, type MiniappJwtPayload } from "@/lib/miniapp-jwt";
 
 export type StaffSession = Session & {
-  user: NonNullable<Session["user"]> & { id: string; role: "admin" | "user" };
+  user: NonNullable<Session["user"]> & {
+    id: string;
+    role: "admin" | "user";
+    mustChangePassword: boolean;
+  };
 };
 
 function authHeader(request: Request): string | null {
@@ -26,15 +30,24 @@ export async function getStaffSession(): Promise<StaffSession | null> {
 const jsonErr = (status: number, message: string) =>
   NextResponse.json({ error: message }, { status });
 
+const mustChangeJson = () =>
+  NextResponse.json(
+    { error: "请先修改初始密码后再使用此功能", code: "MUST_CHANGE_PASSWORD" },
+    { status: 403 },
+  );
+
+/** 除改密接口外，须先完成自助改密（会话由 auth.ts session 回调与 DB 对齐） */
 export async function assertStaffSession(): Promise<NextResponse | null> {
   const s = await getStaffSession();
   if (!s) return jsonErr(401, "未登录或会话已过期");
+  if (s.user.mustChangePassword) return mustChangeJson();
   return null;
 }
 
 export async function assertAdminSession(): Promise<NextResponse | null> {
   const s = await getStaffSession();
   if (!s) return jsonErr(401, "未登录或会话已过期");
+  if (s.user.mustChangePassword) return mustChangeJson();
   if (s.user.role !== "admin") return jsonErr(403, "需要管理员权限");
   return null;
 }
@@ -55,7 +68,10 @@ export type StaffOrMiniapp =
  */
 export async function assertStaffOrMiniapp(request: Request): Promise<NextResponse | StaffOrMiniapp> {
   const staff = await getStaffSession();
-  if (staff) return { kind: "staff", session: staff };
+  if (staff) {
+    if (staff.user.mustChangePassword) return mustChangeJson();
+    return { kind: "staff", session: staff };
+  }
 
   const miniapp = await getMiniappPayload(request);
   if (miniapp) return { kind: "miniapp", miniapp };

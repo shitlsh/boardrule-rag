@@ -9,17 +9,33 @@ const { auth } = NextAuth(authConfig);
 export default auth((req) => {
   const path = req.nextUrl.pathname;
   const loggedIn = !!req.auth;
-  const role = (req.auth?.user as { role?: string } | undefined)?.role;
+  const user = req.auth?.user as
+    | { role?: string; mustChangePassword?: boolean }
+    | undefined;
+  const role = user?.role;
+  const mustChangePassword = Boolean(user?.mustChangePassword);
 
   if (path === "/login") {
     if (loggedIn) {
-      return NextResponse.redirect(new URL("/games", req.url));
+      const dest = mustChangePassword ? "/change-password" : "/games";
+      return NextResponse.redirect(new URL(dest, req.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (path === "/change-password") {
+    if (!loggedIn) {
+      return NextResponse.redirect(new URL("/login", req.url));
     }
     return NextResponse.next();
   }
 
   if (!loggedIn) {
     return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  if (mustChangePassword) {
+    return NextResponse.redirect(new URL("/change-password", req.url));
   }
 
   if (path.startsWith("/settings/users") && role !== "admin") {

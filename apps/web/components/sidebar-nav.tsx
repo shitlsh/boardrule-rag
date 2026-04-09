@@ -7,7 +7,7 @@ import { signOut, useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, LogOut, MessageCircle, Settings, Moon, Sun, Sparkles, Users } from 'lucide-react'
+import { Gamepad2, KeyRound, List, LogOut, MessageCircle, Settings, Moon, Sun, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -89,6 +89,18 @@ export function SidebarNav() {
               用户管理
             </Link>
           ) : null}
+          <Link
+            href="/change-password"
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+              pathname === '/change-password'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <KeyRound className="h-5 w-5" />
+            修改密码
+          </Link>
         </nav>
 
         {/* Footer */}

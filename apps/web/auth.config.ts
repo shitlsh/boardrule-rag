@@ -24,10 +24,19 @@ export const authConfig = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.sub = user.id;
         token.role = (user as { role?: "admin" | "user" }).role ?? "user";
+        token.mustChangePassword = Boolean(
+          (user as { mustChangePassword?: boolean }).mustChangePassword,
+        );
+      }
+      if (trigger === "update" && session && typeof session === "object") {
+        const s = session as { mustChangePassword?: boolean };
+        if (typeof s.mustChangePassword === "boolean") {
+          token.mustChangePassword = s.mustChangePassword;
+        }
       }
       return token;
     },
@@ -35,6 +44,7 @@ export const authConfig = {
       if (session.user) {
         session.user.id = token.sub ?? "";
         session.user.role = (token.role as "admin" | "user") ?? "user";
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;
     },

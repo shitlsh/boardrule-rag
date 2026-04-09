@@ -39,8 +39,8 @@ async function main() {
     }
     const hash = await bcrypt.hash(password, 12);
     await pool.query(
-      `INSERT INTO next_auth.users (id, name, email, "emailVerified", password_hash, role, disabled)
-       VALUES (gen_random_uuid(), $1, $2, NOW(), $3, 'admin', false)`,
+      `INSERT INTO next_auth.users (id, name, email, "emailVerified", password_hash, role, disabled, must_change_password)
+       VALUES (gen_random_uuid(), $1, $2, NOW(), $3, 'admin', false, false)`,
       [name, email, hash],
     );
     console.info(`Created admin user: ${email}`);
