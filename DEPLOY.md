@@ -29,7 +29,11 @@ Set **`DATABASE_URL`** in each environment to match the intended use. For CI mig
 ## 2. GitHub Actions
 
 - **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `master`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`.
-- **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy` (runs on pushes to `master` when migration paths change, or `workflow_dispatch`). Configure repository secrets (see workflow file). You can also run the same commands locally with a linked project.
+- **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy` (runs on pushes to `master` when migration paths change, or `workflow_dispatch`).  
+  - **`SUPABASE_ACCESS_TOKEN`**: Supabase **account** [Personal Access Token](https://supabase.com/dashboard/account/tokens) — must look like `sbp_0102…1920`. **Not** the project **service_role** / **anon** keys (those are JWTs for your app).  
+  - **`SUPABASE_PROJECT_REF`**: project ref from **Dashboard → Project Settings → General**.  
+  - **`DATABASE_URL`**: direct Postgres URL (same idea as Prisma).  
+  You can also run the same commands locally with `supabase link` + `supabase db push`.
 - **[`.github/workflows/seed-admin.yml`](.github/workflows/seed-admin.yml)** — **manual** run: first admin user via `npm run seed:admin`. Reuses the same **`DATABASE_URL`** secret as `migrate.yml`; add **`SEED_ADMIN_EMAIL`** and **`SEED_ADMIN_PASSWORD`** (optional **`SEED_ADMIN_NAME`**). Run from **Actions → Seed admin user → Run workflow** so you do not need the production connection string on a local machine.
 
 **Vercel and Hugging Face** deploy via each platform’s **Git integration** (push to the default branch); this repo does not use GitHub Actions to deploy those surfaces.

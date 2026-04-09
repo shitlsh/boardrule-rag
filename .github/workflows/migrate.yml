@@ -1,7 +1,13 @@
 name: Database migrations
 
 # Applies Supabase SQL migrations, then Prisma migrations, against the linked hosted project.
-# Repository secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, DATABASE_URL (direct Postgres URL).
+#
+# Secrets:
+#   DATABASE_URL — Postgres connection string (direct). Same as Vercel / Prisma.
+#   SUPABASE_PROJECT_REF — Project ID from Dashboard → Project Settings → General (e.g. "abcdxyz").
+#   SUPABASE_ACCESS_TOKEN — MUST be a Supabase *account* Personal Access Token (format "sbp_...").
+#     Create at: https://supabase.com/dashboard/account/tokens
+#     Do NOT use the project's "service_role" or "anon" API keys (JWT) — those are for app runtime, not the CLI.
 
 on:
   workflow_dispatch:
