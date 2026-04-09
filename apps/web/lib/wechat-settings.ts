@@ -23,7 +23,6 @@ export interface WechatConfigPublic {
   hasSecret: boolean;
   /** Last 4 chars of the plain AppSecret, for display only. */
   secretLast4: string | null;
-  dailyChatLimit: number;
 }
 
 /** Patch body accepted by the settings API. */
@@ -31,7 +30,6 @@ export interface WechatConfigPatch {
   appId?: string;
   /** If empty/omitted, keep the current stored secret. */
   appSecret?: string;
-  dailyChatLimit?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,10 +63,9 @@ function secretLast4(plain: string): string | null {
 export async function getWechatConfigPublic(): Promise<WechatConfigPublic> {
   const row = await prisma.appSettings.findUnique({ where: { id: "default" } });
   const stored = parseStored(row?.wechatConfigJson ?? "{}");
-  const dailyChatLimit = row?.dailyChatLimit ?? 20;
 
   if (!stored) {
-    return { appId: "", hasSecret: false, secretLast4: null, dailyChatLimit };
+    return { appId: "", hasSecret: false, secretLast4: null };
   }
 
   let hasSecret = false;
@@ -81,7 +78,7 @@ export async function getWechatConfigPublic(): Promise<WechatConfigPublic> {
     hasSecret = false;
   }
 
-  return { appId: stored.appId, hasSecret, secretLast4: last4, dailyChatLimit };
+  return { appId: stored.appId, hasSecret, secretLast4: last4 };
 }
 
 /**
@@ -128,17 +125,10 @@ export async function updateWechatConfig(patch: WechatConfigPatch): Promise<Wech
 
   const stored: WechatConfigStored = { appId, appSecretEnc };
 
-  // Build DB update data
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: Record<string, any> = {
-    wechatConfigJson: JSON.stringify(stored),
-  };
-  if (patch.dailyChatLimit !== undefined) {
-    const limit = Math.max(0, Math.trunc(patch.dailyChatLimit));
-    data.dailyChatLimit = limit;
-  }
-
-  await prisma.appSettings.update({ where: { id: "default" }, data });
+  await prisma.appSettings.update({
+    where: { id: "default" },
+    data: { wechatConfigJson: JSON.stringify(stored) },
+  });
 
   return getWechatConfigPublic();
 }

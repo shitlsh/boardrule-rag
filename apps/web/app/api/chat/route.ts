@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { chatRules, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
+import { getCEndChatLimitsPublic } from "@/lib/c-end-chat-settings";
 import { getClientIp } from "@/lib/client-ip";
 import { assertStaffOrMiniapp } from "@/lib/request-auth";
-import { checkAndIncrementChatLimit } from "@/lib/rate-limit";
-import { getWechatConfigPublic } from "@/lib/wechat-settings";
+import { checkAndIncrementMiniappChatLimits, MiniappChatRateLimitError } from "@/lib/rate-limit";
 import type { ChatMessage } from "@/lib/types";
 
 /** Same idea as build-index: first chat may load cross-encoder weights (sentence-transformers) + RAG + Gemini. */
@@ -42,21 +42,22 @@ export async function POST(req: Request) {
     console.info("[api/chat] request", { gameId });
   }
 
-  // ── Rate limiting by client IP (miniapp JWT only; staff preview is unlimited) ─
+  // ── C-end rate limits: per-IP + global daily (miniapp JWT only; staff unlimited) ─
   if (gate.kind === "miniapp") {
-    const clientIp = getClientIp(req);
-    if (clientIp) {
-      try {
-        const { dailyChatLimit } = await getWechatConfigPublic();
-        const result = await checkAndIncrementChatLimit(clientIp, dailyChatLimit);
-        if (!result.allowed) {
-          return NextResponse.json({ message: result.message }, { status: 429 });
-        }
-      } catch {
-        // Rate-limit check failure should not block the request — fail open.
+    try {
+      const { dailyChatLimitPerIp, dailyChatLimitGlobal } = await getCEndChatLimitsPublic();
+      const clientIp = getClientIp(req);
+      await checkAndIncrementMiniappChatLimits(
+        clientIp,
+        dailyChatLimitPerIp,
+        dailyChatLimitGlobal,
+      );
+    } catch (e) {
+      if (e instanceof MiniappChatRateLimitError) {
+        return NextResponse.json({ message: e.message }, { status: 429 });
       }
+      // DB / transaction errors — fail open
     }
-    // No observable client IP → skip limit (fail open).
   }
   // ─────────────────────────────────────────────────────────────────────────────
 

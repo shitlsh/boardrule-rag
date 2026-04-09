@@ -7,21 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import type { WechatConfigPublic } from "@/lib/wechat-settings";
 
 type FormState = {
   appId: string;
   appSecret: string; // empty = keep existing
-  dailyChatLimit: number;
 };
 
 export function SettingsWechatForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [remote, setRemote] = useState<WechatConfigPublic | null>(null);
-  const [form, setForm] = useState<FormState>({ appId: "", appSecret: "", dailyChatLimit: 20 });
+  const [form, setForm] = useState<FormState>({ appId: "", appSecret: "" });
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +30,7 @@ export function SettingsWechatForm() {
         const data = (await res.json()) as WechatConfigPublic;
         if (!cancelled) {
           setRemote(data);
-          setForm({ appId: data.appId, appSecret: "", dailyChatLimit: data.dailyChatLimit });
+          setForm({ appId: data.appId, appSecret: "" });
         }
       } catch {
         if (!cancelled) toast.error("无法加载微信小程序设置");
@@ -50,9 +48,7 @@ export function SettingsWechatForm() {
     try {
       const body: Record<string, unknown> = {
         appId: form.appId.trim(),
-        dailyChatLimit: form.dailyChatLimit,
       };
-      // Only send appSecret if the user actually typed something
       if (form.appSecret.trim() !== "") {
         body.appSecret = form.appSecret.trim();
       }
@@ -68,7 +64,7 @@ export function SettingsWechatForm() {
       }
       const updated = data as WechatConfigPublic;
       setRemote(updated);
-      setForm((prev) => ({ ...prev, appSecret: "" })); // clear secret field after save
+      setForm((prev) => ({ ...prev, appSecret: "" }));
       toast.success("已保存");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "保存失败");
@@ -92,8 +88,9 @@ export function SettingsWechatForm() {
       <CardHeader>
         <CardTitle>微信小程序</CardTitle>
         <CardDescription>
-          配置微信小程序的 AppID 和 AppSecret（用于 jscode2session 换取用户 openid），以及每日对话次数上限。AppSecret
-          加密存储，保存后不再明文显示。限额为 0 表示不限制。
+          配置微信小程序的 AppID 与 AppSecret，用于 <code className="text-xs">uni.login</code>{" "}
+          换取用户 openid（<code className="text-xs">jscode2session</code>）。AppSecret 加密存储，保存后不再明文显示。C
+          端对话次数上限请见「C 端对话限额」。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -120,25 +117,6 @@ export function SettingsWechatForm() {
                   : "尚未设置"
               }
             />
-          </Field>
-          <Separator />
-          <Field>
-            <FieldLabel>每日对话次数上限（0 = 不限制）</FieldLabel>
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              value={form.dailyChatLimit}
-              onChange={(e) => {
-                const n = Math.max(0, Math.trunc(Number(e.target.value)));
-                setForm((prev) => ({ ...prev, dailyChatLimit: Number.isFinite(n) ? n : prev.dailyChatLimit }));
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {form.dailyChatLimit === 0
-                ? "当前：不限制次数"
-                : `当前：每位用户每日最多 ${form.dailyChatLimit} 次`}
-            </p>
           </Field>
         </FieldGroup>
         <Button type="button" onClick={handleSave} disabled={saving}>

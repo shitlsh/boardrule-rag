@@ -28,7 +28,7 @@ export async function GET() {
 
 /**
  * PATCH /api/settings/wechat
- * Accepts { appId?, appSecret?, dailyChatLimit? }.
+ * Accepts { appId?, appSecret? }.
  * Validates types, then persists via updateWechatConfig.
  */
 export async function PATCH(req: Request) {
@@ -61,13 +61,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ message: "appSecret 必须是字符串" }, { status: 400 });
     }
     patch.appSecret = o.appSecret;
-  }
-
-  if (o.dailyChatLimit !== undefined) {
-    if (typeof o.dailyChatLimit !== "number" || !Number.isFinite(o.dailyChatLimit)) {
-      return NextResponse.json({ message: "dailyChatLimit 必须是数字" }, { status: 400 });
-    }
-    patch.dailyChatLimit = o.dailyChatLimit;
   }
 
   if (Object.keys(patch).length === 0) {

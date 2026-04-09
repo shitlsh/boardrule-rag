@@ -44,10 +44,10 @@ supabase start
    npx prisma migrate deploy   # or: prisma migrate dev — when iterating on schema
    ```
 
-   The migration `20260408000000_add_wechat_and_rate_limit` adds:
+   Migrations add among other things:
    - `AppSettings.wechatConfigJson` — AES-256-GCM encrypted WeChat AppID/AppSecret blob
-   - `AppSettings.dailyChatLimit` — per-user daily chat quota (default `20`; `0` = unlimited)
-   - `RateLimit` table — per-user daily counter keyed `wx:{openid}:{YYYY-MM-DD}`
+   - `AppSettings.dailyChatLimit` / `dailyChatLimitGlobal` — C-end per-IP and global daily caps (UTC; `0` = unlimited)
+   - `RateLimit` table — daily counters keyed e.g. `ip:…`, `global:c_end:…`
 
 Production: point `DATABASE_URL` at your hosted Supabase project’s connection string; run `prisma migrate deploy` in CI or release. Set **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** so **`apps/web`** uses **Supabase Storage** for uploads and exports (recommended). Without them, files fall back to `apps/web/storage/` on disk. The database stores **paths/keys only**, not file bodies.
 
@@ -189,24 +189,23 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 6. **Web**：游戏详情页在提取完成后可预览 Markdown，并 **建立索引**（BFF 异步提交引擎任务并轮询）；**Chat** 未建索引时返回 **409**。
 7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`（同样需要 AI 配置头）。
 
-## 6. WeChat miniapp rate limiting
+## 6. C-end (H5 / WeChat miniapp) chat rate limiting
 
-`POST /api/chat` supports per-user daily quotas when requests come from the miniapp. The flow:
+`POST /api/chat` applies when the caller uses a **miniapp JWT** (`Authorization: Bearer`). Limits are **per client IP** and **global total per UTC day** (`AppSettings.dailyChatLimit`, `dailyChatLimitGlobal`; default `20` / `1000`). Keys in `RateLimit` include `ip:…` and `global:c_end:…`.
 
-1. Miniapp calls `POST /api/wx-login` with a fresh `uni.login()` code → BFF exchanges it for a WeChat `openid` via `jscode2session` → miniapp caches the openid locally and sends it as `x-user-id` on every chat request.
-2. BFF reads `x-user-id`, looks up `AppSettings.dailyChatLimit`, and increments a counter in the `RateLimit` table (`wx:{openid}:{YYYY-MM-DD}`). When the counter reaches the limit a **429** is returned with a user-friendly message.
-3. If `x-user-id` is absent (e.g. direct API calls, browser dev tools) the check is **skipped entirely** — no impact on local development.
-4. If the DB check throws (e.g. `RateLimit` table missing before migration) the route **fails open** and the chat request proceeds normally.
+1. H5 uses `POST /api/h5-auth`; the mini program uses `POST /api/wx-login` with `uni.login()` → `jscode2session` → openid; both issue the same JWT shape.
+2. BFF increments per-IP and global counters in one transaction; either cap returns **429** when exceeded.
+3. If the DB check throws, the route **fails open** so chat can still proceed.
 
-**Configuration** (in the web admin UI at `/settings`):
+**Configuration** (`/settings`):
 
 | Setting | Where stored | Default | Notes |
 |---------|--------------|---------|-------|
-| WeChat AppID | `AppSettings.wechatConfigJson` | — | Plain text inside the encrypted blob |
-| WeChat AppSecret | `AppSettings.wechatConfigJson` | — | AES-256-GCM encrypted via `AI_CONFIG_SECRET` |
-| Daily chat limit | `AppSettings.dailyChatLimit` | `20` | `0` = unlimited |
+| Per-IP daily cap | `AppSettings.dailyChatLimit` | `20` | `0` = unlimited |
+| Global daily cap (all C-end) | `AppSettings.dailyChatLimitGlobal` | `1000` | `0` = unlimited |
+| WeChat AppID / AppSecret | `AppSettings.wechatConfigJson` | — | For mini program login only |
 
-To enable for the first time: navigate to **系统设置 → 微信小程序**, fill in AppID and AppSecret, then save.
+Edit **C 端对话限额** for caps; **微信小程序** for WeChat credentials.
 
 ## 7. Common issues
 
@@ -221,7 +220,7 @@ To enable for the first time: navigate to **系统设置 → 微信小程序**, 
 | **Port already in use** | Change `--port` for uvicorn or Next’s port via `-p` / `PORT`. |
 | **Prisma / DB errors** | `DATABASE_URL` correct; run `prisma migrate dev` after schema changes. |
 | **WeChat login returns 503** | WeChat AppID / AppSecret not configured. Open `/settings` → 微信小程序 and fill them in. |
-| **Chat returns 429** | Daily quota reached for that openid. Adjust `dailyChatLimit` in `/settings` → 微信小程序 (set to `0` to disable during testing), or wait until UTC midnight for the counter to reset. |
+| **Chat returns 429** | Per-IP or global daily cap reached. Adjust **C 端对话限额** in `/settings` (set to `0` to disable that dimension), or wait until UTC midnight. |
 | **Rate limit not triggering** | `RateLimit` table missing — run `npx prisma migrate deploy` in `apps/web`. |
 
 ## 8. Further reading
