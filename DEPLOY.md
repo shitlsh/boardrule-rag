@@ -59,16 +59,44 @@ After **schema changes**, run migrations (§1) **before** relying on a new Verce
 
 ## 4. Hugging Face Space (`services/rule_engine`)
 
-- Create a **Docker** Space and connect this GitHub repository.
-- Build context must be the **repository root** so paths match the Dockerfile. Use:
+### Repository layout for Hub
+
+- The Space repository only needs the **`services/rule_engine`** tree at its **root** (Dockerfile, `api/`, `pyproject.toml`, etc.). GitHub Actions uses **`git subtree split --prefix=services/rule_engine`** and force-pushes that history to the Space — no symlink or extra Dockerfile at the monorepo root.
+- Space metadata (`sdk: docker`, `app_port`, …) lives in the YAML frontmatter at the top of [`services/rule_engine/README.md`](services/rule_engine/README.md).
+- [`services/rule_engine/Dockerfile`](services/rule_engine/Dockerfile) expects the Docker **build context** to be **`services/rule_engine`** (paths are `COPY api ./api`, etc.). Local check from monorepo root:
 
   ```bash
-  docker build -f services/rule_engine/Dockerfile .
+  docker build -f services/rule_engine/Dockerfile ./services/rule_engine
   ```
 
-- Set **Secrets** in the Space: `DATABASE_URL`, `CORS_ORIGINS` (your Vercel web origin), optional `RULE_ENGINE_API_KEY` to match `apps/web`, and Supabase vars if using **remote index bundles** (`INDEX_STORAGE_MODE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INDEX_STORAGE_BUCKET`). Gemini keys stay in the web app; the engine uses `X-Boardrule-Ai-Config` from the BFF.
+### Create the Space
+
+- **Web:** [Create new Space](https://huggingface.co/new-space) — SDK **Docker**, name it under your namespace (e.g. `youruser/your-space`).
+- **CLI** (with [`hf`](https://huggingface.co/docs/huggingface_hub/guides/cli) and `HF_TOKEN`): `hf repos create youruser/your-space --type space --space-sdk docker --exist-ok`
+
+### Sync from GitHub (recommended)
+
+Workflow **[`.github/workflows/sync-to-hf-space.yml`](.github/workflows/sync-to-hf-space.yml)** runs on pushes to **`master`** that touch **`services/rule_engine/**` (or on **workflow_dispatch**). It subtree-splits that folder and pushes to the Space.
+
+1. In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
+   - **Secret** `HF_TOKEN`: Hugging Face [access token](https://huggingface.co/settings/tokens) with **write** access.
+2. Under **Variables**, add **`HF_SPACE_ID`** = `namespace/space-name` (same path as `https://huggingface.co/spaces/<namespace>/<space-name>`).
+3. Optional: **`HF_SPACE_BRANCH`** — branch name on the Hub (default **`main`**). Use if your Space uses a different default branch.
+4. Push to `master` with changes under `services/rule_engine/`, or run the workflow manually (**Actions → Sync to Hugging Face Space → Run workflow**).
+
+If the workflow is skipped, ensure both `HF_TOKEN` and `HF_SPACE_ID` are set.
+
+### Runtime configuration (Space dashboard)
+
+Set **Variables and secrets** on the Space (not in GitHub) for the running container:
+
+- `DATABASE_URL`, `CORS_ORIGINS` (your Vercel web origin), optional `RULE_ENGINE_API_KEY` to match `apps/web`, and Supabase vars if using **remote index bundles** (`INDEX_STORAGE_MODE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INDEX_STORAGE_BUCKET`). Gemini keys stay in the web app; the engine uses `X-Boardrule-Ai-Config` from the BFF.
 
 - Default listen port follows Hugging Face’s **`PORT`** environment variable (the Dockerfile uses it).
+
+### Point `apps/web` at the Space
+
+Set **`RULE_ENGINE_URL`** in Vercel (and local `.env` when testing) to the Space origin, e.g. `https://youruser-your-space.hf.space` (no trailing slash). Verify: `GET https://…/health`.
 
 ## 5. Rule engine index bundles (Supabase Storage)
 

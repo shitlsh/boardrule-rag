@@ -1,0 +1,50 @@
+# Push only services/rule_engine to a Hugging Face Docker Space via git subtree split (see DEPLOY.md §4).
+# Prerequisites:
+#   - Space exists (SDK: Docker)
+#   - GitHub secret: HF_TOKEN (write)
+#   - GitHub variable: HF_SPACE_ID = namespace/space-name
+#   - Optional variable: HF_SPACE_BRANCH — remote branch on Hub (default: main)
+
+name: Sync to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "services/rule_engine/**"
+  workflow_dispatch:
+
+concurrency:
+  group: huggingface-space-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push services/rule_engine subtree to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+          HF_SPACE_BRANCH: ${{ vars.HF_SPACE_BRANCH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_SPACE_ID:-}" ] || [ -z "${HF_TOKEN:-}" ]; then
+            echo "::notice title=HF sync skipped::Set GitHub Actions secret HF_TOKEN and variable HF_SPACE_ID (e.g. youruser/your-space) to sync."
+            exit 0
+          fi
+          REMOTE_BRANCH="${HF_SPACE_BRANCH:-main}"
+          OWNER="${HF_SPACE_ID%%/*}"
+          git remote remove hf 2>/dev/null || true
+          git remote add hf "https://${OWNER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}"
+          git subtree split --prefix=services/rule_engine -b hf-space-export
+          git push hf hf-space-export:"${REMOTE_BRANCH}" --force
+          git branch -D hf-space-export

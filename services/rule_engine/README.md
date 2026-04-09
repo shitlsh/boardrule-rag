@@ -1,3 +1,13 @@
+---
+title: boardrule-rule-engine
+emoji: 🎲
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+short_description: FastAPI rule engine — Docker Space builds from this directory (git subtree sync).
+---
+
 # Rule engine service
 
 Python service for board-game rule extraction: **PDF → per-page images** (`pdf2image` + poppler) or ordered images, **Gemini vision** chapter extraction, **LangGraph** orchestration (TOC → routing → batching → merge/refine → quick start and suggested questions), and **LlamaIndex** per-game indexing behind **`POST /build-index/start`** (poll **`GET /build-index/jobs/{job_id}`** until `completed`; dense vectors in **PostgreSQL + pgvector** when configured, else on-disk `VectorStoreIndex`, plus **BM25**, **RRF fusion**, **cross-encoder rerank**).
@@ -61,13 +71,20 @@ The `dev` extra includes **`langgraph-cli[inmem]`** for local LangGraph Studio (
 
 ## Docker (Hugging Face Spaces / servers)
 
-Build from the **repository root** (paths assume monorepo layout):
+Build context is **this directory** (`services/rule_engine`):
 
 ```bash
-docker build -f services/rule_engine/Dockerfile .
+cd services/rule_engine
+docker build -f Dockerfile .
 ```
 
-The image installs **poppler** for PDF rasterization and listens on **`PORT`** (default **7860**, as on Hugging Face). Connect the Space to this GitHub repo so pushes rebuild the image; set **Secrets** for `DATABASE_URL`, `CORS_ORIGINS`, and Storage vars if using `INDEX_STORAGE_MODE=supabase`. Details: **[DEPLOY.md](../../DEPLOY.md)**.
+From the **monorepo root**:
+
+```bash
+docker build -f services/rule_engine/Dockerfile ./services/rule_engine
+```
+
+The image installs **poppler** for PDF rasterization and listens on **`PORT`** (default **7860**, as on Hugging Face). CI syncs only this subtree to the Space (see **[DEPLOY.md](../../DEPLOY.md)**); set Space **Secrets** for `DATABASE_URL`, `CORS_ORIGINS`, and Storage vars if using `INDEX_STORAGE_MODE=supabase`.
 
 ## Run the API
 
