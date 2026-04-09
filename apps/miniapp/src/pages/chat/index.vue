@@ -34,23 +34,21 @@
         </view>
       </view>
 
-      <!-- ===== 推荐问题 chips ===== -->
+      <!-- ===== 推荐问题（多行换行，适配窄屏） ===== -->
       <view
         v-if="suggestedQuestions.length > 0 && chatStore.messages.length === 0"
         class="chips-bar"
       >
-        <scroll-view scroll-x class="chips-scroll">
-          <view class="chips-inner">
-            <view
-              v-for="(q, i) in suggestedQuestions"
-              :key="i"
-              class="chip"
-              @tap="sendSuggested(q)"
-            >
-              <text class="chip__text">{{ q }}</text>
-            </view>
+        <view class="chips-wrap">
+          <view
+            v-for="(q, i) in suggestedQuestions"
+            :key="i"
+            class="chip"
+            @tap="sendSuggested(q)"
+          >
+            <text class="chip__text">{{ q }}</text>
           </view>
-        </scroll-view>
+        </view>
       </view>
 
       <!-- ===== 消息列表 ===== -->
@@ -100,23 +98,6 @@
                 v-html="getOrBuildHtml(msg.id, msg.content)"
               />
               <!-- #endif -->
-            </view>
-
-            <!-- 来源标签 -->
-            <view
-              v-if="msg.role === 'assistant' && msg.sources && msg.sources.length > 0"
-              class="source-tags"
-            >
-              <view
-                v-for="(src, si) in msg.sources"
-                :key="si"
-                class="source-tag"
-              >
-                <text class="source-tag__icon">📄</text>
-                <text class="source-tag__text">
-                  {{ formatSource(src) }}
-                </text>
-              </view>
             </view>
           </view>
 
@@ -181,7 +162,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useChatStore } from '../../store/chat'
 import { fetchGame, sendChatMessage } from '../../api/bff'
 import { getOrFetchUserId } from '../../utils/auth'
-import type { Game, SourceRef } from '../../types/index'
+import type { Game } from '../../types/index'
 
 // #ifdef H5
 import { renderMarkdownToHtml } from '../../utils/markdown'
@@ -293,19 +274,6 @@ function getOrBuildHtml(msgId: string, content: string) {
   return htmlCache.get(msgId) ?? ''
 }
 // #endif
-
-// -------------------------------------------------------
-// 来源标签格式化
-// -------------------------------------------------------
-function formatSource(src: SourceRef): string {
-  if (src.pages) return `来源：第 ${src.pages} 页`
-  if (src.page_start != null && src.page_end != null) {
-    return src.page_start === src.page_end
-      ? `来源：第 ${src.page_start} 页`
-      : `来源：第 ${src.page_start}–${src.page_end} 页`
-  }
-  return '查看来源'
-}
 
 // -------------------------------------------------------
 // 滚动控制
@@ -433,8 +401,10 @@ function confirmClear() {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   background: #f4f6f9;
   overflow: hidden;
+  max-width: 100%;
 }
 
 /* ---- 游戏加载 ---- */
@@ -453,7 +423,8 @@ function confirmClear() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 24rpx 32rpx;
+    padding: 28rpx 28rpx 24rpx;
+    min-height: 96rpx;
   }
 
   &__title {
@@ -491,57 +462,63 @@ function confirmClear() {
   }
 }
 
-/* ---- 推荐问题 ---- */
+/* ---- 推荐问题（flex 换行，窄屏多行展示） ---- */
 .chips-bar {
   background: #fff;
   border-bottom: 1rpx solid #eee;
-  padding: 16rpx 0;
+  padding: 20rpx 24rpx 24rpx;
+  flex-shrink: 0;
 }
 
-.chips-scroll {
-  width: 100%;
-  white-space: nowrap;
-}
-
-.chips-inner {
+.chips-wrap {
   display: flex;
   flex-direction: row;
-  padding: 0 24rpx;
-  gap: 16rpx;
+  flex-wrap: wrap;
+  gap: 16rpx 12rpx;
+  align-items: flex-start;
 }
 
 .chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  padding: 12rpx 24rpx;
+  justify-content: flex-start;
+  max-width: 100%;
+  padding: 18rpx 22rpx;
+  min-height: 72rpx;
   background: #eef4ff;
-  border: 1rpx solid #b8d0f5;
-  border-radius: 40rpx;
-  flex-shrink: 0;
+  border: 1rpx solid #c7d9f5;
+  border-radius: 12rpx;
+  box-sizing: border-box;
 
   &__text {
-    font-size: 24rpx;
-    color: #2a6dd9;
-    white-space: nowrap;
+    font-size: 26rpx;
+    color: #1e4d8c;
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-word;
   }
 }
 
 /* ---- 消息列表 ---- */
 .message-list {
   flex: 1;
-  padding: 20rpx 20rpx 0;
+  padding: 16rpx 24rpx 12rpx;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .empty-hint {
   display: flex;
   justify-content: center;
-  padding: 60rpx 40rpx;
+  padding: 48rpx 32rpx;
 
   &__text {
     font-size: 26rpx;
-    color: #aaa;
+    color: #94a3b8;
     text-align: center;
-    line-height: 1.6;
+    line-height: 1.55;
+    max-width: 92%;
   }
 }
 
@@ -549,8 +526,8 @@ function confirmClear() {
 .msg-row {
   display: flex;
   align-items: flex-end;
-  margin-bottom: 24rpx;
-  gap: 12rpx;
+  margin-bottom: 28rpx;
+  gap: 14rpx;
 
   &--user {
     flex-direction: row-reverse;
@@ -563,13 +540,13 @@ function confirmClear() {
 
 /* ---- 头像 ---- */
 .avatar {
-  width: 64rpx;
-  height: 64rpx;
+  width: 72rpx;
+  height: 72rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36rpx;
+  font-size: 34rpx;
   flex-shrink: 0;
 
   &--assistant {
@@ -585,13 +562,13 @@ function confirmClear() {
 .bubble-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 74%;
-  gap: 8rpx;
+  max-width: 85%;
+  gap: 0;
 }
 
 .bubble {
-  padding: 20rpx 24rpx;
-  border-radius: 20rpx;
+  padding: 22rpx 26rpx;
+  border-radius: 22rpx;
   word-break: break-word;
 
   &--user {
@@ -612,36 +589,9 @@ function confirmClear() {
 }
 
 .bubble__text {
-  font-size: 28rpx;
-  line-height: 1.65;
+  font-size: 30rpx;
+  line-height: 1.55;
   color: #fff;
-}
-
-/* ---- 来源标签 ---- */
-.source-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  padding-left: 4rpx;
-}
-
-.source-tag {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 6rpx 16rpx;
-  background: #f0f4ff;
-  border: 1rpx solid #d0deff;
-  border-radius: 24rpx;
-
-  &__icon {
-    font-size: 20rpx;
-  }
-
-  &__text {
-    font-size: 20rpx;
-    color: #4a6fa5;
-  }
 }
 
 /* ---- Loading dots ---- */
@@ -670,34 +620,35 @@ function confirmClear() {
 /* ---- 输入栏 ---- */
 .input-bar {
   background: #fff;
-  border-top: 1rpx solid #eee;
-  padding-top: 16rpx;
-  padding-left: 20rpx;
-  padding-right: 20rpx;
+  border-top: 1rpx solid #e8ecf1;
+  padding: 16rpx 24rpx 12rpx;
+  flex-shrink: 0;
+  box-shadow: 0 -4rpx 24rpx rgba(0, 0, 0, 0.04);
 
   &__inner {
     display: flex;
     align-items: flex-end;
     gap: 16rpx;
-    min-height: 80rpx;
+    min-height: 88rpx;
   }
 
   &__textarea {
     flex: 1;
-    background: #f4f6f9;
-    border-radius: 20rpx;
-    padding: 16rpx 20rpx;
-    font-size: 28rpx;
-    line-height: 1.5;
-    max-height: 200rpx;
+    background: #f1f5f9;
+    border-radius: 22rpx;
+    padding: 18rpx 22rpx;
+    font-size: 30rpx;
+    line-height: 1.45;
+    max-height: 220rpx;
+    min-height: 80rpx;
     color: #1a1a2e;
   }
 
   &__send {
-    width: 72rpx;
-    height: 72rpx;
+    width: 80rpx;
+    height: 80rpx;
     border-radius: 50%;
-    background: #ddd;
+    background: #e2e8f0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -710,7 +661,7 @@ function confirmClear() {
   }
 
   &__send-icon {
-    font-size: 36rpx;
+    font-size: 34rpx;
     color: #fff;
     font-weight: 700;
   }
@@ -718,20 +669,21 @@ function confirmClear() {
   &__clear {
     display: flex;
     justify-content: center;
-    padding: 12rpx 0 4rpx;
+    padding: 10rpx 0 0;
   }
 
   &__clear-text {
-    font-size: 22rpx;
-    color: #bbb;
+    font-size: 24rpx;
+    color: #94a3b8;
+    padding: 12rpx 20rpx;
   }
 }
 
 /* #ifdef H5 */
 /* markdown-it 输出 */
 .markdown-body {
-  font-size: 28rpx;
-  line-height: 1.65;
+  font-size: 30rpx;
+  line-height: 1.55;
   color: #1a1a2e;
   word-break: break-word;
 }
