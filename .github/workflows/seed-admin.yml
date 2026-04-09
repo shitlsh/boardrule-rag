@@ -1,0 +1,36 @@
+# Create first admin in next_auth.users if that email does not exist (same as: npm run seed:admin).
+# Uses the same repository secret DATABASE_URL as migrate.yml — no production DB password needed on your laptop.
+#
+# Secrets: DATABASE_URL (same as migrations), SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+# Optional: SEED_ADMIN_NAME
+#
+# Run: Actions → Seed admin user → Run workflow
+
+name: Seed admin user
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Run seed-admin
+        working-directory: apps/web
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEED_ADMIN_EMAIL: ${{ secrets.SEED_ADMIN_EMAIL }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+          SEED_ADMIN_NAME: ${{ secrets.SEED_ADMIN_NAME }}
+        run: |
+          npm ci
+          npm run seed:admin
