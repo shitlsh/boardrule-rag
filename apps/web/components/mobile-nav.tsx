@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,8 +13,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { UserMenu } from '@/components/user-menu'
 import { cn } from '@/lib/utils'
-import { Gamepad2, KeyRound, List, LogOut, MessageCircle, Settings, Moon, Sun, Menu, Sparkles, Users } from 'lucide-react'
+import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -32,11 +33,6 @@ const navItems = [
     href: '/models',
     icon: Sparkles,
   },
-  {
-    title: '系统设置',
-    href: '/settings',
-    icon: Settings,
-  },
 ]
 
 export function MobileNav() {
@@ -51,6 +47,17 @@ export function MobileNav() {
     () => false,
   )
 
+  const settingsExact = pathname === '/settings'
+  const usersActive = pathname === '/users'
+
+  const linkClass = (active: boolean) =>
+    cn(
+      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+      active
+        ? 'bg-primary/10 text-primary'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    )
+
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
       <div className="flex items-center gap-2">
@@ -58,7 +65,7 @@ export function MobileNav() {
         <span className="font-semibold">boardrule-rag</span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {mounted && (
           <Button
             variant="ghost"
@@ -70,6 +77,8 @@ export function MobileNav() {
             <span className="sr-only">切换主题</span>
           </Button>
         )}
+
+        <UserMenu />
 
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
@@ -86,67 +95,49 @@ export function MobileNav() {
               </SheetTitle>
             </SheetHeader>
             <nav className="space-y-1 p-3">
-              {navItems.map((item) => {
+              <Link
+                href="/games"
+                onClick={() => setOpen(false)}
+                className={linkClass(
+                  pathname === '/games' || pathname.startsWith('/games/'),
+                )}
+              >
+                <List className="h-5 w-5" />
+                游戏列表
+              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/users"
+                  onClick={() => setOpen(false)}
+                  className={linkClass(usersActive)}
+                >
+                  <Users className="h-5 w-5" />
+                  用户管理
+                </Link>
+              ) : null}
+              {navItems.slice(1).map((item) => {
                 const isActive =
-                  item.href === "/settings"
-                    ? pathname === "/settings" || pathname.startsWith("/settings/")
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
+                    className={linkClass(isActive)}
                   >
                     <item.icon className="h-5 w-5" />
                     {item.title}
                   </Link>
                 )
               })}
-              {isAdmin ? (
-                <Link
-                  href="/settings/users"
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    pathname === '/settings/users'
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )}
-                >
-                  <Users className="h-5 w-5" />
-                  用户管理
-                </Link>
-              ) : null}
               <Link
-                href="/change-password"
+                href="/settings"
                 onClick={() => setOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  pathname === '/change-password'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
+                className={linkClass(settingsExact)}
               >
-                <KeyRound className="h-5 w-5" />
-                修改密码
+                <Settings className="h-5 w-5" />
+                系统设置
               </Link>
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-3 px-3"
-                onClick={() => {
-                  setOpen(false)
-                  void signOut({ callbackUrl: '/login' })
-                }}
-              >
-                <LogOut className="h-5 w-5" />
-                退出登录
-              </Button>
             </nav>
           </SheetContent>
         </Sheet>
