@@ -30,6 +30,7 @@ Set **`DATABASE_URL`** in each environment to match the intended use. For CI mig
 
 - **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `master`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`.
 - **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy` (runs on pushes to `master` when migration paths change, or `workflow_dispatch`). Configure repository secrets (see workflow file). You can also run the same commands locally with a linked project.
+- **[`.github/workflows/seed-admin.yml`](.github/workflows/seed-admin.yml)** — **manual** run: first admin user via `npm run seed:admin`. Reuses the same **`DATABASE_URL`** secret as `migrate.yml`; add **`SEED_ADMIN_EMAIL`** and **`SEED_ADMIN_PASSWORD`** (optional **`SEED_ADMIN_NAME`**). Run from **Actions → Seed admin user → Run workflow** so you do not need the production connection string on a local machine.
 
 **Vercel and Hugging Face** deploy via each platform’s **Git integration** (push to the default branch); this repo does not use GitHub Actions to deploy those surfaces.
 
@@ -50,7 +51,7 @@ Set environment variables in the Vercel dashboard (Production / Preview as neede
 
 After **schema changes**, run migrations (§1) **before** relying on a new Vercel deployment that expects the new columns.
 
-**First admin user:** the app does not create one at deploy time. After migrations, insert an admin row into `next_auth.users` yourself (e.g. Supabase SQL Editor). Password must be stored as a bcrypt hash compatible with Auth.js login; column layout is illustrated in [`apps/web/scripts/seed-admin.cjs`](apps/web/scripts/seed-admin.cjs) if you need a reference.
+**First admin user:** the app does not create one at deploy time. After migrations, either run **[`seed-admin.yml`](.github/workflows/seed-admin.yml)** in GitHub Actions (recommended if `DATABASE_URL` is already a secret for migrations), or insert into `next_auth.users` manually (e.g. Supabase SQL Editor with a bcrypt hash). The script [`apps/web/scripts/seed-admin.cjs`](apps/web/scripts/seed-admin.cjs) is idempotent and documents the expected columns.
 
 ## 4. Hugging Face Space (`services/rule_engine`)
 
