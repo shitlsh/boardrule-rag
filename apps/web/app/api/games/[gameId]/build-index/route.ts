@@ -93,6 +93,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   const ro = gw.ragOptions ?? {};
   const similarityTopK = asInt(body.similarityTopK) ?? ro.similarityTopK;
   const rerankTopN = asInt(body.rerankTopN) ?? ro.rerankTopN;
+  const chunkSize = asInt(body.chunkSize) ?? ro.chunkSize;
+  const chunkOverlap = asInt(body.chunkOverlap) ?? ro.chunkOverlap;
   const retrievalMode =
     body.retrievalMode === "vector_only" || body.retrievalMode === "hybrid"
       ? body.retrievalMode
@@ -106,6 +108,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       sourceFile: game.slug,
       ...(similarityTopK != null && { similarityTopK }),
       ...(rerankTopN != null && { rerankTopN }),
+      ...(chunkSize != null && { chunkSize }),
+      ...(chunkOverlap != null && { chunkOverlap }),
       ...(retrievalMode != null && { retrievalMode }),
       ...(useRerank != null && { useRerank }),
     });

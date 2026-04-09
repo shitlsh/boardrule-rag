@@ -30,6 +30,8 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
   const [advOpen, setAdvOpen] = useState(false)
   const [similarityTopK, setSimilarityTopK] = useState('8')
   const [rerankTopN, setRerankTopN] = useState('5')
+  const [chunkSize, setChunkSize] = useState('1024')
+  const [chunkOverlap, setChunkOverlap] = useState('128')
   const [retrievalMode, setRetrievalMode] = useState<'hybrid' | 'vector_only'>('hybrid')
   const [useRerank, setUseRerank] = useState(true)
   const { tasks } = useExtractionTasks(game.id)
@@ -51,6 +53,8 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
       const ro = d.ragOptions ?? {}
       if (ro.similarityTopK != null) setSimilarityTopK(String(ro.similarityTopK))
       if (ro.rerankTopN != null) setRerankTopN(String(ro.rerankTopN))
+      if (ro.chunkSize != null) setChunkSize(String(ro.chunkSize))
+      if (ro.chunkOverlap != null) setChunkOverlap(String(ro.chunkOverlap))
       if (ro.retrievalMode === 'hybrid' || ro.retrievalMode === 'vector_only') {
         setRetrievalMode(ro.retrievalMode)
       }
@@ -71,11 +75,30 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
               if (typeof m.rerank_top_n === 'number') {
                 setRerankTopN(String(m.rerank_top_n))
               }
+              if (typeof m.chunk_size === 'number') {
+                setChunkSize(String(m.chunk_size))
+              }
+              if (typeof m.chunk_overlap === 'number') {
+                setChunkOverlap(String(m.chunk_overlap))
+              }
               if (m.retrieval_mode === 'hybrid' || m.retrieval_mode === 'vector_only') {
                 setRetrievalMode(m.retrieval_mode)
               }
               if (typeof m.use_rerank === 'boolean') {
                 setUseRerank(m.use_rerank)
+              }
+              if (typeof m.chunk_size !== 'number' || typeof m.chunk_overlap !== 'number') {
+                const res = await fetch('/api/ai-gateway')
+                if (!cancelled && res.ok) {
+                  const d = (await res.json()) as AiGatewayPublic
+                  const ro = d.ragOptions ?? {}
+                  if (typeof m.chunk_size !== 'number' && ro.chunkSize != null) {
+                    setChunkSize(String(ro.chunkSize))
+                  }
+                  if (typeof m.chunk_overlap !== 'number' && ro.chunkOverlap != null) {
+                    setChunkOverlap(String(ro.chunkOverlap))
+                  }
+                }
               }
               return
             }
@@ -99,12 +122,16 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
     try {
       const sk = Number.parseInt(similarityTopK, 10)
       const rn = Number.parseInt(rerankTopN, 10)
+      const cs = Number.parseInt(chunkSize, 10)
+      const cco = Number.parseInt(chunkOverlap, 10)
       const payload: Record<string, unknown> = {
         retrievalMode,
         useRerank,
       }
       if (Number.isFinite(sk) && sk > 0) payload.similarityTopK = sk
       if (Number.isFinite(rn) && rn > 0) payload.rerankTopN = rn
+      if (Number.isFinite(cs) && cs > 0) payload.chunkSize = cs
+      if (Number.isFinite(cco) && cco >= 0) payload.chunkOverlap = cco
 
       const res = await fetch(`/api/games/${game.id}/build-index`, {
         method: 'POST',
@@ -127,6 +154,8 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
   }, [
     game.id,
     onUpdate,
+    chunkOverlap,
+    chunkSize,
     rerankTopN,
     retrievalMode,
     similarityTopK,
@@ -143,10 +172,11 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
           向量索引
         </CardTitle>
         <CardDescription>
-          建立向量索引以启用规则问答。展开「索引选项」可分别设置<strong className="font-medium text-foreground">召回</strong>
+          建立向量索引以启用规则问答。展开「索引选项」可分别设置<strong className="font-medium text-foreground">切片</strong>、
+          <strong className="font-medium text-foreground">召回</strong>
           与<strong className="font-medium text-foreground">精排</strong>
           。已建立索引时，下列选项会与规则引擎磁盘上的 <span className="font-mono">manifest.json</span>{' '}
-          同步显示（非仅网关默认）。全局默认见「模型管理 → 检索与索引」。
+          同步显示（含切片大小；旧索引未存时从网关补全）。全局默认见「模型管理 → 检索与索引」。
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -165,14 +195,47 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
           <CollapsibleContent className="pt-3">
             <div className="flex max-w-xl flex-col gap-5">
               <p className="text-muted-foreground text-sm leading-relaxed">
-                流水线是「先召回一批片段 → 再可选地精排」。下面第一项只决定<strong className="text-foreground">怎么召回</strong>
-                （是否建 BM25）；第二项决定召回之后<strong className="text-foreground">要不要</strong>
-                用 cross-encoder 重排，与是否混合检索<strong className="text-foreground">无强制绑定</strong>
-                （例如：仅向量 + 开精排；或混合 + 关精排，都可以）。
+                建库时先用第 1 项把正文切成片段；查询时第 2 项决定<strong className="text-foreground">怎么召回</strong>
+                （是否建 BM25）；第 3 项决定召回之后<strong className="text-foreground">要不要</strong>
+                cross-encoder 精排，与混合/仅向量检索<strong className="text-foreground">无强制绑定</strong>
+                （例如仅向量 + 开精排也可以）。
               </p>
 
               <div className="flex flex-col gap-3">
-                <p className="text-foreground text-sm font-medium">1. 召回：建什么索引、怎么取候选</p>
+                <p className="text-foreground text-sm font-medium">1. 切片（建库）</p>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  控制 Markdown 分节后的 <span className="font-medium text-foreground">SentenceSplitter</span>{' '}
+                  目标大小与重叠（与规则引擎一致，按 <strong className="font-medium text-foreground">token</strong>{' '}
+                  计）。未改时与「模型管理 → 检索与索引」中的全局默认一致；写入 manifest 的{' '}
+                  <span className="font-mono">chunk_size</span> / <span className="font-mono">chunk_overlap</span>{' '}
+                  仅作记录，检索阶段不读取。
+                </p>
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  <Field className="flex-1 min-w-0">
+                    <FieldLabel>CHUNK_SIZE（token）</FieldLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={65536}
+                      value={chunkSize}
+                      onChange={e => setChunkSize(e.target.value)}
+                    />
+                  </Field>
+                  <Field className="flex-1 min-w-0">
+                    <FieldLabel>CHUNK_OVERLAP（token）</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={8192}
+                      value={chunkOverlap}
+                      onChange={e => setChunkOverlap(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <p className="text-foreground text-sm font-medium">2. 召回：建什么索引、怎么取候选</p>
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Field className="flex-1 min-w-0">
                     <FieldLabel>召回 TOPK（相似度 / RRF 宽度）</FieldLabel>
@@ -203,7 +266,7 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
               </div>
 
               <div className="flex flex-col gap-3">
-                <p className="text-foreground text-sm font-medium">2. 精排：候选确定之后（与上面独立）</p>
+                <p className="text-foreground text-sm font-medium">3. 精排：候选确定之后（与上面独立）</p>
                 <Field className="min-w-0">
                   <FieldLabel>条数上限（关精排时截断为此条；开精排时为 rerank 输出上限）</FieldLabel>
                   <Input

@@ -40,6 +40,8 @@ class BuildIndexRequest(BaseModel):
     rerank_top_n: int | None = Field(None, ge=1, le=100)
     retrieval_mode: Literal["hybrid", "vector_only"] | None = None
     use_rerank: bool | None = None
+    chunk_size: int | None = Field(None, ge=1, le=65536)
+    chunk_overlap: int | None = Field(None, ge=0, le=8192)
 
     @model_validator(mode="after")
     def _md_or_docs(self) -> "BuildIndexRequest":
@@ -85,6 +87,8 @@ def _run_build_index_job(job_id: str, body: BuildIndexRequest, ai_snapshot: dict
                 rerank_top_n=body.rerank_top_n,
                 retrieval_mode=body.retrieval_mode,
                 use_rerank=body.use_rerank,
+                chunk_size=body.chunk_size,
+                chunk_overlap=body.chunk_overlap,
             )
         index_jobs.set_completed(job_id, manifest)
     except Exception as e:  # noqa: BLE001

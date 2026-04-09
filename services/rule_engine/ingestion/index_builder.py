@@ -56,6 +56,23 @@ def _chunk_size_overlap() -> tuple[int, int]:
     return cs, co
 
 
+def _resolve_chunk_size_overlap_for_build(
+    override_chunk_size: int | None,
+    override_chunk_overlap: int | None,
+) -> tuple[int, int]:
+    """
+    Effective chunking for one build: per-request overrides, else global ``_chunk_size_overlap()`` (env + gateway).
+
+    Stored in manifest as ``chunk_size`` / ``chunk_overlap`` (query-time retrieval does not use these).
+    """
+    base_cs, base_co = _chunk_size_overlap()
+    cs = base_cs if override_chunk_size is None else max(1, int(override_chunk_size))
+    co = base_co if override_chunk_overlap is None else max(0, int(override_chunk_overlap))
+    if co >= cs:
+        co = max(0, cs // 2)
+    return cs, co
+
+
 def _bm25_token_pattern() -> str:
     ro = _try_rag_options()
     if ro is not None and ro.bm25_token_profile == "latin_word":
@@ -333,6 +350,8 @@ def build_and_persist_index(
     rerank_top_n: int | None = None,
     retrieval_mode: Literal["hybrid", "vector_only"] | None = None,
     use_rerank: bool | None = None,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ) -> dict[str, Any]:
     """
     Build per-game dense index; optionally persist BM25 for hybrid retrieval.
@@ -369,7 +388,7 @@ def build_and_persist_index(
             "Ensure rules.md is non-empty and uses <!-- pages: N --> anchors as documented in EXTRACTION_FLOW.md."
         )
 
-    chunk_size, chunk_overlap = _chunk_size_overlap()
+    chunk_size, chunk_overlap = _resolve_chunk_size_overlap_for_build(chunk_size, chunk_overlap)
     nodes = documents_to_nodes(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     if not nodes:
         nodes = documents_to_nodes_loose(docs)
@@ -449,6 +468,8 @@ def build_and_persist_index(
         "rerank_top_n": rrn,
         "retrieval_mode": mode,
         "use_rerank": use_rr,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
         "metadata_contract": [
             "game_id",
             "source_file",
@@ -461,6 +482,8 @@ def build_and_persist_index(
             "rerank_top_n",
             "retrieval_mode",
             "use_rerank",
+            "chunk_size",
+            "chunk_overlap",
         ],
         "vector_storage": str(vec_dir) if vector_backend == "disk" else None,
         "bm25_storage": bm25_path,
