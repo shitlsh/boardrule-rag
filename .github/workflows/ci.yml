@@ -16,6 +16,10 @@ jobs:
   web:
     name: apps/web
     runs-on: ubuntu-latest
+    env:
+      # prisma.config.ts requires DATABASE_URL when prisma generate runs (npm ci postinstall).
+      # No database is reachable in CI — placeholder URL is enough for client generation / validate.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
     defaults:
       run:
         working-directory: apps/web
