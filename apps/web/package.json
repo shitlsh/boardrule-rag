@@ -15,7 +15,6 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:reset-app-schema": "node scripts/reset-app-schema.cjs",
     "db:apply-migration": "node scripts/apply-migration.cjs",
-    "db:push": "prisma db push",
     "seed:admin": "node scripts/seed-admin.cjs"
   },
   "dependencies": {

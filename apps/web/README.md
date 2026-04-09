@@ -41,6 +41,8 @@ npx prisma migrate dev   # 改 schema 后生成并应用迁移；全新库也可
 npm run dev               # 默认 http://localhost:3000
 ```
 
+不要用 **`prisma db push`** 代替迁移：它只改库结构、**不写 `_prisma_migrations`**，会和 Migrate 历史脱节并引发 P3005/drift。需要原型阶段可本机临时执行 `npx prisma db push`，**不要**放进 npm scripts。
+
 ### Supabase `config.toml` 里的 `[api].schemas`
 
 只影响 **PostgREST**（`http://127.0.0.1:54321` 的自动 REST）和 **Studio 里对哪些 schema 建 API/展示**，**不会**替你执行 `supabase/migrations` 或 Prisma 迁移。  
