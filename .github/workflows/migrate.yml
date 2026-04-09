@@ -6,7 +6,7 @@ name: Database migrations
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "supabase/migrations/**"
       - "apps/web/prisma/migrations/**"

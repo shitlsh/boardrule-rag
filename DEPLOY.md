@@ -28,8 +28,8 @@ Set **`DATABASE_URL`** in each environment to match the intended use. For CI mig
 
 ## 2. GitHub Actions
 
-- **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `main`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`.
-- **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy`. Configure repository secrets (see workflow file). You can also run the same commands locally with a linked project.
+- **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `master`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`.
+- **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy` (runs on pushes to `master` when migration paths change, or `workflow_dispatch`). Configure repository secrets (see workflow file). You can also run the same commands locally with a linked project.
 
 **Vercel and Hugging Face** deploy via each platform’s **Git integration** (push to the default branch); this repo does not use GitHub Actions to deploy those surfaces.
 
@@ -49,6 +49,8 @@ Set environment variables in the Vercel dashboard (Production / Preview as neede
 - Miniapp build: `VITE_BFF_BASE_URL` = your deployed web app origin (see [`apps/miniapp/src/utils/env.ts`](apps/miniapp/src/utils/env.ts)).
 
 After **schema changes**, run migrations (§1) **before** relying on a new Vercel deployment that expects the new columns.
+
+**First admin user:** the app does not create one at deploy time. After migrations, insert an admin row into `next_auth.users` yourself (e.g. Supabase SQL Editor). Password must be stored as a bcrypt hash compatible with Auth.js login; column layout is illustrated in [`apps/web/scripts/seed-admin.cjs`](apps/web/scripts/seed-admin.cjs) if you need a reference.
 
 ## 4. Hugging Face Space (`services/rule_engine`)
 
