@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut, useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +14,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu, Sparkles } from 'lucide-react'
+import { Gamepad2, List, LogOut, MessageCircle, Settings, Moon, Sun, Menu, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -40,6 +41,8 @@ const navItems = [
 
 export function MobileNav() {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const { theme, setTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const mounted = useSyncExternalStore(
@@ -86,7 +89,7 @@ export function MobileNav() {
               {navItems.map((item) => {
                 const isActive =
                   item.href === "/settings"
-                    ? pathname === "/settings"
+                    ? pathname === "/settings" || pathname.startsWith("/settings/")
                     : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
@@ -105,6 +108,32 @@ export function MobileNav() {
                   </Link>
                 )
               })}
+              {isAdmin ? (
+                <Link
+                  href="/settings/users"
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    pathname === '/settings/users'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <Users className="h-5 w-5" />
+                  用户管理
+                </Link>
+              ) : null}
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 px-3"
+                onClick={() => {
+                  setOpen(false)
+                  void signOut({ callbackUrl: '/login' })
+                }}
+              >
+                <LogOut className="h-5 w-5" />
+                退出登录
+              </Button>
             </nav>
           </SheetContent>
         </Sheet>

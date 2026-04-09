@@ -10,6 +10,7 @@ import {
   prepareRulebookPagesFromStorageKey,
 } from "@/lib/prepare-rulebook-pages";
 import { prisma } from "@/lib/prisma";
+import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,9 @@ function parseExcludedIndices(raw: string | null): number[] {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const limits = await getAppSettings();
 

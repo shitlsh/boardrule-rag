@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getEngineAiHeaders } from "@/lib/engine-ai";
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
+import { ruleEngineAiHeaders } from "@/lib/rule-engine-headers";
+import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -9,10 +10,13 @@ type RouteParams = { params: Promise<{ gameId: string }> };
 
 /** Proxies rule_engine ``GET /index/{game_id}/manifest`` so the game page can show actual index settings. */
 export async function GET(_req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   try {
     const base = getRuleEngineBaseUrl();
-    const ai = await getEngineAiHeaders();
+    const ai = await ruleEngineAiHeaders();
     const res = await fetch(`${base}/index/${encodeURIComponent(gameId)}/manifest`, {
       method: "GET",
       headers: ai,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { assertStaffSession } from "@/lib/request-auth";
 import { readStorageText } from "@/lib/storage";
 import { startBuildIndex } from "@/lib/ingestion";
 import { getEngineAiHeaders } from "@/lib/engine-ai";
@@ -43,6 +44,9 @@ function asInt(v: unknown): number | undefined {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { assertStaffSession } from "@/lib/request-auth";
 import { startExtractionWithPagePlan } from "@/lib/ingestion";
 import { parsePageIndices } from "@/lib/page-indices";
 import { isStalePageJobEngineError } from "@/lib/stale-page-job";
@@ -18,6 +19,9 @@ type Body = {
 };
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
 
   let body: Body;

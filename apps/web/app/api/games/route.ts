@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 
 import { gameIdsWithActiveIndexBuild, prismaGameToDto } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
+import { assertStaffOrMiniapp, assertStaffSession } from "@/lib/request-auth";
 import { uniqueSlugForGame } from "@/lib/slug";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const gate = await assertStaffOrMiniapp(req);
+  if (!("kind" in gate)) return gate;
   const games = await prisma.game.findMany({
     orderBy: { updatedAt: "desc" },
   });
@@ -15,6 +18,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   let body: { name?: string; coverUrl?: string };
   try {
     body = await req.json();

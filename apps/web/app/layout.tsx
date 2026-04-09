@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 
+import { AuthSessionProvider } from "@/components/auth-session-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -34,9 +35,11 @@ export default function RootLayout({
           跳到主要内容
         </a>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <main id="main-content" className="min-h-screen">
-            {children}
-          </main>
+          <AuthSessionProvider>
+            <main id="main-content" className="min-h-screen">
+              {children}
+            </main>
+          </AuthSessionProvider>
           <Toaster />
         </ThemeProvider>
       </body>

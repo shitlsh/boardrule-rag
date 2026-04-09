@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getEngineAiHeaders } from "@/lib/engine-ai";
 import { getRuleEngineBaseUrl } from "@/lib/ingestion/client";
+import { ruleEngineAiHeaders } from "@/lib/rule-engine-headers";
+import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,9 @@ type RouteParams = { params: Promise<{ gameId: string }> };
 
 /** Proxies rule_engine ``GET /index/{game_id}/smoke-retrieve`` (hybrid + rerank, no LLM answer). */
 export async function GET(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const url = new URL(req.url);
   const q = url.searchParams.get("q")?.trim() || "规则";
@@ -28,7 +32,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   try {
     const base = getRuleEngineBaseUrl();
-    const ai = await getEngineAiHeaders();
+    const ai = await ruleEngineAiHeaders();
     const res = await fetch(
       `${base}/index/${encodeURIComponent(gameId)}/smoke-retrieve?${sp.toString()}`,
       {

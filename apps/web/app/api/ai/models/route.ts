@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { SlotKey } from "@/lib/ai-gateway-types";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import { getAiGatewayStored, getCredentialApiKey } from "@/lib/ai-gateway";
+import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,9 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
  * - POST JSON { credentialId } or { apiKey }, optional slot — same behavior.
  */
 export async function GET(req: Request) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { searchParams } = new URL(req.url);
   const credentialId = searchParams.get("credentialId")?.trim();
   if (!credentialId) {
@@ -53,6 +57,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

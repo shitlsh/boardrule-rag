@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 
 import { gameHasActiveIndexBuild, prismaGameToDetailDto, prismaGameToDto } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
+import { assertStaffOrMiniapp, assertStaffSession } from "@/lib/request-auth";
 
 type RouteParams = { params: Promise<{ gameId: string }> };
 
-export async function GET(_req: Request, { params }: RouteParams) {
+export async function GET(req: Request, { params }: RouteParams) {
+  const gate = await assertStaffOrMiniapp(req);
+  if (!("kind" in gate)) return gate;
+
   const { gameId } = await params;
   const game = await prisma.game.findUnique({
     where: { id: gameId },
@@ -18,6 +22,9 @@ export async function GET(_req: Request, { params }: RouteParams) {
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const existing = await prisma.game.findUnique({ where: { id: gameId } });
   if (!existing) {

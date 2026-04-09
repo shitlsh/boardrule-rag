@@ -5,6 +5,7 @@ import {
   updateWechatConfig,
   type WechatConfigPatch,
 } from "@/lib/wechat-settings";
+import { assertAdminSession, assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ export const runtime = "nodejs";
  * Returns the public (safe) WeChat config — never exposes raw AppSecret.
  */
 export async function GET() {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   try {
     const config = await getWechatConfigPublic();
     return NextResponse.json(config);
@@ -28,6 +32,9 @@ export async function GET() {
  * Validates types, then persists via updateWechatConfig.
  */
 export async function PATCH(req: Request) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

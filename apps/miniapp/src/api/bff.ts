@@ -1,4 +1,5 @@
 import { BFF_BASE_URL } from '../utils/env'
+import { getCachedAccessToken } from '../utils/auth'
 import type {
   Game,
   GameListItem,
@@ -10,10 +11,23 @@ import type {
 // 通用 request 封装（将 uni.request 转为 Promise）
 // -------------------------------------------------------
 
+function authHeaders(base: Record<string, string> = {}): Record<string, string> {
+  const h = { ...base }
+  const t = getCachedAccessToken()
+  if (t) {
+    h['Authorization'] = `Bearer ${t}`
+  }
+  return h
+}
+
 function request<T>(options: UniApp.RequestOptions): Promise<T> {
+  const mergedHeader = authHeaders(
+    (options.header as Record<string, string> | undefined) ?? {},
+  )
   return new Promise((resolve, reject) => {
     uni.request({
       ...options,
+      header: mergedHeader,
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data as T)
@@ -58,19 +72,12 @@ export async function fetchGame(gameId: string): Promise<Game> {
 // Chat API
 // -------------------------------------------------------
 
-/** 发送消息，返回完整 BFF 响应。userId 若存在则作为 x-user-id 请求头传递（限流用）。 */
-export async function sendChatMessage(
-  payload: ChatRequest,
-  userId?: string | null,
-): Promise<ChatBffResponse> {
-  const header: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (userId) {
-    header['x-user-id'] = userId
-  }
+/** 发送消息，返回完整 BFF 响应（需已登录并取得 miniapp JWT）。 */
+export async function sendChatMessage(payload: ChatRequest): Promise<ChatBffResponse> {
   return request<ChatBffResponse>({
     url: `${BFF_BASE_URL}/api/chat`,
     method: 'POST',
-    header,
+    header: { 'Content-Type': 'application/json' },
     data: payload,
   })
 }

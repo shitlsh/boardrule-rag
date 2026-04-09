@@ -5,10 +5,14 @@ import {
   updateAiGatewayFromPatch,
   type AiGatewayPatchBody,
 } from "@/lib/ai-gateway";
+import { assertAdminSession, assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   try {
     const data = await getAiGatewayPublic();
     return NextResponse.json(data);
@@ -19,6 +23,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  const denied = await assertAdminSession();
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

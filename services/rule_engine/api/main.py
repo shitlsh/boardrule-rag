@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from api.middleware_api_key import RuleEngineApiKeyMiddleware
 from api.routers import chat, extract, health
 from api.routers import index as index_api
 from graphs.extraction_graph import build_extraction_graph
@@ -108,6 +109,7 @@ async def boardrule_ai_header_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+app.add_middleware(RuleEngineApiKeyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),

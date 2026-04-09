@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 
 import { pagePreviewToThumbnails } from "@/lib/game-dto";
 import { prisma } from "@/lib/prisma";
+import { assertStaffSession } from "@/lib/request-auth";
 
 type RouteParams = { params: Promise<{ gameId: string }> };
 
 export async function GET(_req: Request, { params }: RouteParams) {
+  const denied = await assertStaffSession();
+  if (denied) return denied;
+
   const { gameId } = await params;
   const game = await prisma.game.findUnique({
     where: { id: gameId },

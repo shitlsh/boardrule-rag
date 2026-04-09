@@ -11,6 +11,17 @@
 import { BFF_BASE_URL } from './env'
 
 const STORAGE_KEY = 'wx_user_id'
+const STORAGE_TOKEN = 'wx_access_token'
+
+/** Cached miniapp JWT from ``/api/wx-login`` (Bearer for BFF APIs). */
+export function getCachedAccessToken(): string | null {
+  try {
+    const v = uni.getStorageSync(STORAGE_TOKEN)
+    return typeof v === 'string' && v.trim() !== '' ? v.trim() : null
+  } catch {
+    return null
+  }
+}
 
 /** Returns the cached userId, or null if not yet obtained. */
 export function getCachedUserId(): string | null {
@@ -23,9 +34,10 @@ export function getCachedUserId(): string | null {
 }
 
 /** Persist the userId to local storage. */
-function cacheUserId(userId: string): void {
+function cacheAuth(userId: string, accessToken: string): void {
   try {
     uni.setStorageSync(STORAGE_KEY, userId)
+    uni.setStorageSync(STORAGE_TOKEN, accessToken)
   } catch {
     // Ignore storage errors — userId will be re-fetched next time
   }
@@ -35,6 +47,7 @@ function cacheUserId(userId: string): void {
 export function clearCachedUserId(): void {
   try {
     uni.removeStorageSync(STORAGE_KEY)
+    uni.removeStorageSync(STORAGE_TOKEN)
   } catch {
     // Ignore
   }
@@ -47,7 +60,11 @@ export function clearCachedUserId(): void {
  */
 export async function getOrFetchUserId(): Promise<string | null> {
   const cached = getCachedUserId()
-  if (cached) return cached
+  const token = getCachedAccessToken()
+  if (cached && token) return cached
+  if (cached && !token) {
+    clearCachedUserId()
+  }
 
   return new Promise((resolve) => {
     uni.login({
@@ -59,11 +76,11 @@ export async function getOrFetchUserId(): Promise<string | null> {
         }
 
         try {
-          const userId = await exchangeCodeForUserId(code)
-          if (userId) {
-            cacheUserId(userId)
+          const auth = await exchangeCodeForAuth(code)
+          if (auth) {
+            cacheAuth(auth.userId, auth.accessToken)
           }
-          resolve(userId)
+          resolve(auth?.userId ?? null)
         } catch {
           resolve(null)
         }
@@ -75,8 +92,10 @@ export async function getOrFetchUserId(): Promise<string | null> {
   })
 }
 
-/** Call BFF to exchange a WeChat login code for an openid. */
-async function exchangeCodeForUserId(code: string): Promise<string | null> {
+type WxLoginOk = { userId: string; accessToken: string }
+
+/** Call BFF to exchange a WeChat login code for openid + miniapp JWT. */
+async function exchangeCodeForAuth(code: string): Promise<WxLoginOk | null> {
   return new Promise((resolve) => {
     uni.request({
       url: `${BFF_BASE_URL}/api/wx-login`,
@@ -87,7 +106,12 @@ async function exchangeCodeForUserId(code: string): Promise<string | null> {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           const data = res.data as Record<string, unknown> | null
           const userId = typeof data?.userId === 'string' ? data.userId.trim() : ''
-          resolve(userId || null)
+          const accessToken = typeof data?.accessToken === 'string' ? data.accessToken.trim() : ''
+          if (userId && accessToken) {
+            resolve({ userId, accessToken })
+          } else {
+            resolve(null)
+          }
         } else {
           resolve(null)
         }
