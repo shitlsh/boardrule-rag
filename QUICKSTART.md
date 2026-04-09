@@ -51,7 +51,7 @@ supabase start
 
 Production: point `DATABASE_URL` at your hosted Supabase project’s connection string; run `prisma migrate deploy` in CI or release. Set **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** so **`apps/web`** uses **Supabase Storage** for uploads and exports (recommended). Without them, files fall back to `apps/web/storage/` on disk. The database stores **paths/keys only**, not file bodies.
 
-Use the same `DATABASE_URL` for **`apps/web` (Prisma)** and **`services/rule_engine`** — the engine **requires** PostgreSQL for LangGraph checkpoints (there is no SQLite fallback). This also enables **pgvector** for indexing when configured (set `DATABASE_URL` / `PGVECTOR_DATABASE_URL` in the rule engine `.env`).
+Use the same `DATABASE_URL` for **`apps/web` (Prisma)** and **`services/rule_engine`** — the engine **requires** PostgreSQL for LangGraph checkpoints (there is no SQLite fallback). With a normal `postgresql://` URL, **new** LlamaIndex vectors are stored in **pgvector** in that database; BM25 + manifest stay on disk or in Storage when configured.
 
 ### Rulebook upload and the rule engine
 
@@ -75,7 +75,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and **pgvector** for per-game vectors when enabled. Use the same URL as **`apps/web`** (Supabase local or hosted). Optional override: `RULE_ENGINE_CHECKPOINT_URL` for checkpoints only. |
+| `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and **pgvector** for new indexes. Use the same URL as **`apps/web`** (Supabase local or hosted). |
 | `CORS_ORIGINS` | Recommended | Comma-separated browser origins for FastAPI CORS (default in `.env.example`: `http://localhost:3000`). Must include your **`apps/web`** origin. |
 | *(Gemini keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure Gemini API keys and per-slot models in the web app (**`/models`**). See §4.1. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
@@ -83,6 +83,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
 | `LANGCHAIN_ENDPOINT` | No | Override only if your LangSmith deployment requires it. |
 | `INDEX_STORAGE_ROOT` | No | Per-game **BM25** + manifests (default `services/rule_engine/data/indexes/`). |
+| `INDEX_STORAGE_MODE` + `SUPABASE_*` | No | Set `INDEX_STORAGE_MODE=supabase` plus `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to zip/upload index bundles to the **`boardrule-indexes`** bucket (see **[DEPLOY.md](./DEPLOY.md)**). Local `supabase start` uses the same pattern as hosted. |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | No | PDF page render quality for `/extract/pages`. |
 | `EMBEDDING_DIM` | No | Vector width for pgvector / indexing (default `3072`). **Must match** the embedding model chosen in **AI Gateway** (Embed slot). |
 | `RERANK_MODEL` | No | Cross-encoder name for reranking (default `BAAI/bge-reranker-base`; first run may download weights). |

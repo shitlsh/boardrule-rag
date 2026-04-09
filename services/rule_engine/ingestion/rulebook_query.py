@@ -23,6 +23,7 @@ from ingestion.index_builder import (
     load_vector_index,
     retrieval_config_from_manifest,
 )
+from ingestion.index_storage_remote import ensure_game_index_local
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_gemini
 
@@ -114,6 +115,7 @@ def build_rulebook_query_engine(game_id: str) -> RetrieverQueryEngine:
     fields in the manifest does (rebuild index), except rerank is query-time-only—manifest still
     records whether to run it.
     """
+    ensure_game_index_local(game_id)
     root = game_index_dir(game_id)
     if not (root / "manifest.json").is_file():
         raise FileNotFoundError(f"No index manifest for game_id={game_id}")

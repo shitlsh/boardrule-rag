@@ -48,7 +48,7 @@ def get_compiled_graph():
 
 
 def _postgres_checkpoint_uri() -> str | None:
-    raw = (os.environ.get("RULE_ENGINE_CHECKPOINT_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    raw = (os.environ.get("DATABASE_URL") or "").strip()
     if raw.startswith("postgresql"):
         return raw
     return None
@@ -62,8 +62,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pg_uri = _postgres_checkpoint_uri()
     if not pg_uri:
         raise RuntimeError(
-            "LangGraph checkpoints require PostgreSQL. Set DATABASE_URL or RULE_ENGINE_CHECKPOINT_URL "
-            "to a postgresql:// connection string (e.g. the same DATABASE_URL as apps/web: "
+            "LangGraph checkpoints require PostgreSQL. Set DATABASE_URL to a postgresql:// connection "
+            "string (e.g. the same as apps/web: "
             "postgresql://postgres:postgres@127.0.0.1:54322/postgres from `supabase status`). "
             "Local SQLite checkpoints are no longer supported."
         )

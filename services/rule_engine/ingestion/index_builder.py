@@ -284,16 +284,11 @@ def _paired_pgvector_uris(dsn: str) -> tuple[str, str]:
 
 
 def _pgvector_connection_string() -> str | None:
-    raw = (os.environ.get("PGVECTOR_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    """LlamaIndex PGVectorStore uses ``DATABASE_URL`` when it is a Postgres DSN."""
+    raw = (os.environ.get("DATABASE_URL") or "").strip()
     if raw.startswith("postgresql"):
         return _sanitize_postgresql_dsn(raw)
     return None
-
-
-def _use_pgvector_for_new_indexes() -> bool:
-    if os.environ.get("USE_PGVECTOR", "").strip().lower() in ("0", "false", "no"):
-        return False
-    return _pgvector_connection_string() is not None
 
 
 def _safe_table_name(game_id: str) -> str:
@@ -360,8 +355,8 @@ def build_and_persist_index(
     with ``hybrid``. Rerank is query-only (no rebuild to toggle if manifest is updated—by default
     it is fixed at build time from these parameters).
 
-    Vectors: PostgreSQL + pgvector when `DATABASE_URL` / `PGVECTOR_DATABASE_URL` is set and
-    `USE_PGVECTOR` is not disabled; otherwise SimpleVectorStore on disk under `vector_storage/`.
+    Vectors: PostgreSQL + pgvector when `DATABASE_URL` is a `postgresql://` DSN; otherwise
+    SimpleVectorStore on disk under `vector_storage/`.
     """
     sk, rrn, mode, use_rr = _resolve_retrieval_for_build(
         similarity_top_k,
@@ -408,7 +403,7 @@ def build_and_persist_index(
 
     embed_dim = _embedding_dim()
     pg_uri = _pgvector_connection_string()
-    use_pg = _use_pgvector_for_new_indexes() and pg_uri is not None
+    use_pg = pg_uri is not None
 
     if use_pg:
         from sqlalchemy import create_engine, text
@@ -489,10 +484,17 @@ def build_and_persist_index(
         "bm25_storage": bm25_path,
     }
     (root / _MANIFEST_NAME).write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    from ingestion.index_storage_remote import upload_game_index_bundle_after_build
+
+    upload_game_index_bundle_after_build(game_id, root)
     return manifest
 
 
 def load_manifest(game_id: str) -> dict[str, Any] | None:
+    from ingestion.index_storage_remote import ensure_game_index_local
+
+    ensure_game_index_local(game_id)
     path = game_index_dir(game_id) / _MANIFEST_NAME
     if not path.is_file():
         return None

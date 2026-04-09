@@ -33,7 +33,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 - **Web**: **Next.js** App Router, **TypeScript** (`apps/web`).
 - **Data**: **Prisma ORM 7** (`prisma.config.ts`); **PostgreSQL + pgvector** via **Supabase** (local `supabase start` or hosted). **Supabase Storage** (S3-compatible) for rule uploads and exports when configured — see **QUICKSTART.md**.
 - **Ingestion**: **pdf2image** + **poppler** (system) for PDF page renders; ordered images also supported.
-- **Orchestration**: **LangGraph** with checkpointing (**PostgreSQL** via `DATABASE_URL` or `RULE_ENGINE_CHECKPOINT_URL`).
+- **Orchestration**: **LangGraph** with checkpointing (**PostgreSQL** via `DATABASE_URL`).
 - **RAG**: **LlamaIndex** (Phase 2: hybrid retrieval + rerank).
 - **LLM**: **Gemini** — credentials and Flash / Pro / Embed / Chat slots are configured in **`apps/web`** (`/models`), not in `services/rule_engine/.env`.
 - **Observability**: **LangSmith** (optional tracing).
@@ -41,6 +41,7 @@ Details evolve with implementation; **`QUICKSTART.md`** stays the source of trut
 ## Documentation
 
 - **[QUICKSTART.md](./QUICKSTART.md)** — clone, dependencies, `.env`, ports, health check, and troubleshooting.
+- **[DEPLOY.md](./DEPLOY.md)** — production migrations order, GitHub Actions, Vercel, Hugging Face Spaces, index bundles in Storage.
 - **[apps/miniapp/README.md](./apps/miniapp/README.md)** — C 端 H5 / 小程序、本地调试与 Vercel 静态部署入口。
 - **[services/rule_engine/README.md](./services/rule_engine/README.md)** — Python env, running the API alone, LangSmith toggles.
 
