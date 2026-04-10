@@ -105,7 +105,9 @@ def _attach_embedding_batch_diagnostics(
     """
     if getattr(embed_model, "_boardrule_embed_batch_diag", False):
         return
-    setattr(embed_model, "_boardrule_embed_batch_diag", True)
+    # Pydantic embedding models (e.g. GoogleGenAIEmbedding) reject arbitrary attribute assignment;
+    # bypass their __setattr__ so we can mark wrapped + replace batch methods.
+    object.__setattr__(embed_model, "_boardrule_embed_batch_diag", True)
 
     debug = _env_embed_batch_debug()
     orig_batch = embed_model.get_text_embedding_batch
@@ -141,7 +143,7 @@ def _attach_embedding_batch_diagnostics(
             )
         return out
 
-    embed_model.get_text_embedding_batch = get_text_embedding_batch  # type: ignore[method-assign]
+    object.__setattr__(embed_model, "get_text_embedding_batch", get_text_embedding_batch)
 
     if orig_abatch is not None:
 
@@ -175,7 +177,7 @@ def _attach_embedding_batch_diagnostics(
                 )
             return out
 
-        embed_model.aget_text_embedding_batch = aget_text_embedding_batch  # type: ignore[method-assign]
+        object.__setattr__(embed_model, "aget_text_embedding_batch", aget_text_embedding_batch)
 
 
 def _embed_text_for_indexing_filter(node: TextNode) -> str:
