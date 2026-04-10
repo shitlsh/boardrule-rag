@@ -701,35 +701,6 @@ export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): P
   return persistStored({ ...cur, slotBindings, chatOptions });
 }
 
-export async function patchGatewayChatOptions(
-  patch: Partial<{ temperature: number; maxTokens: number }>,
-): Promise<AiGatewayPublic> {
-  const cur = await getAiGatewayStored();
-  const chatOptions = { ...cur.chatOptions };
-  if (patch.temperature !== undefined) {
-    if (!Number.isFinite(patch.temperature)) throw new Error("chat temperature 无效");
-    chatOptions.temperature = patch.temperature;
-  }
-  if (patch.maxTokens !== undefined) {
-    const m = Math.trunc(patch.maxTokens);
-    if (m < 1) throw new Error("chat maxTokens 无效");
-    chatOptions.maxTokens = m;
-  }
-  const ch = cur.slotBindings.chat;
-  const slotBindings =
-    ch && ch.credentialId && ch.model?.trim()
-      ? {
-          ...cur.slotBindings,
-          chat: {
-            ...ch,
-            temperature: chatOptions.temperature,
-            maxTokens: chatOptions.maxTokens,
-          },
-        }
-      : cur.slotBindings;
-  return persistStored({ ...cur, chatOptions, slotBindings });
-}
-
 /** PATCH body for RAG options: use `null` on a key to clear it (fall back to rule engine env). */
 export type RagOptionsPatch = {
   rerankModel?: string | null;
