@@ -74,3 +74,57 @@ $uni-color-subtitle: #555; // 二级标题颜色
 $uni-font-size-subtitle: 18px;
 $uni-color-paragraph: #3f536e; // 文章段落颜色
 $uni-font-size-paragraph: 15px;
+
+/* ============================================
+   设计系统 - Design Tokens
+   现代简约风格
+   ============================================ */
+
+/* 品牌色 */
+$brand-primary: #2563eb;
+$brand-primary-light: #3b82f6;
+$brand-primary-dark: #1d4ed8;
+
+/* 语义色 */
+$color-success: #10b981;
+$color-warning: #f59e0b;
+$color-error: #ef4444;
+
+/* 中性色 */
+$color-bg-page: #f8fafc;
+$color-bg-card: #ffffff;
+$color-bg-input: #f1f5f9;
+$color-bg-hover: #f1f5f9;
+
+/* 文字色 */
+$color-text-primary: #1e293b;
+$color-text-secondary: #64748b;
+$color-text-tertiary: #94a3b8;
+$color-text-inverse: #ffffff;
+
+/* 边框色 */
+$color-border-light: #e2e8f0;
+$color-border-medium: #cbd5e1;
+
+/* 阴影 */
+$shadow-sm: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+$shadow-md: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+$shadow-lg: 0 8rpx 24rpx rgba(0, 0, 0, 0.08);
+$shadow-xl: 0 12rpx 32rpx rgba(0, 0, 0, 0.1);
+
+/* 圆角 */
+$radius-sm: 12rpx;
+$radius-md: 16rpx;
+$radius-lg: 20rpx;
+$radius-xl: 24rpx;
+$radius-full: 999rpx;
+
+/* 动画时长 */
+$duration-fast: 0.15s;
+$duration-normal: 0.25s;
+$duration-slow: 0.35s;
+
+/* 缓动函数 */
+$ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+$ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
