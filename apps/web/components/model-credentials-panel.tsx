@@ -27,6 +27,12 @@ const VENDOR_LABEL: Record<AiVendor, string> = {
   openrouter: "OpenRouter",
 };
 
+/** Short label for the closed select trigger (avoids overflow in narrow layouts). */
+const VENDOR_TRIGGER_LABEL: Record<AiVendor, string> = {
+  gemini: "Gemini",
+  openrouter: "OpenRouter",
+};
+
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   const [alias, setAlias] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -104,15 +110,38 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
         <div className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
           <p className="text-sm font-medium mb-3">添加新凭证</p>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
-            <Field className="min-w-0 flex-1 lg:max-w-[11rem]">
+            <Field className="min-w-0 flex-1 sm:max-w-[13rem] lg:max-w-[15rem]">
               <FieldLabel>供应商</FieldLabel>
               <Select value={vendor} onValueChange={(v) => setVendor(v as AiVendor)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger
+                  className="w-full min-w-0 max-w-full"
+                  title={`${VENDOR_TRIGGER_LABEL[vendor]} — ${VENDOR_LABEL[vendor]}`}
+                >
+                  <SelectValue>{VENDOR_TRIGGER_LABEL[vendor]}</SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gemini">Google Gemini（AI Studio / Vertex 密钥）</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                <SelectContent className="max-w-[min(100vw-2rem,22rem)]">
+                  <SelectItem
+                    value="gemini"
+                    textValue="Gemini Google Gemini AI Studio Vertex"
+                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                  >
+                    <span className="flex flex-col gap-1 text-left leading-snug">
+                      <span className="font-medium">Gemini</span>
+                      <span className="text-muted-foreground text-xs">
+                        Google AI Studio / Vertex 等渠道的密钥
+                      </span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem
+                    value="openrouter"
+                    textValue="OpenRouter"
+                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                  >
+                    <span className="flex flex-col gap-1 text-left leading-snug">
+                      <span className="font-medium">OpenRouter</span>
+                      <span className="text-muted-foreground text-xs">openrouter.ai 控制台中的 API Key</span>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
