@@ -35,6 +35,9 @@ storage/
 # Local note
 NOTE.md
 
+# Local-only git tooling (scripts + hooks; not committed)
+scripts/local/
+
 # Supabase CLI local state (keep supabase/config.toml, migrations/, seed.sql in git)
 supabase/.temp/
 supabase/.branches/
