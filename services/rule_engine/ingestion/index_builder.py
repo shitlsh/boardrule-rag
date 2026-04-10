@@ -430,6 +430,23 @@ def _embedding_dim() -> int:
     return int(raw)
 
 
+def _gemini_embed_batch_size() -> int:
+    """
+    LlamaIndex's ``BaseEmbedding.get_text_embedding_batch`` flushes in chunks of ``embed_batch_size``.
+    For ``gemini-embedding-2*``, ``batchEmbedContents`` often returns **one** embedding object per
+    HTTP call regardless of how many texts were sent, so a chunk of 10 yields 1 vector and breaks
+    ``embed_nodes`` (zip length mismatch / KeyError). Per-text requests keep a 1:1 mapping.
+
+    Override with env ``GEMINI_EMBED_BATCH_SIZE`` (integer ≥ 1) if a future SDK/API fixes batching.
+    """
+    raw = (os.environ.get("GEMINI_EMBED_BATCH_SIZE") or "1").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 1
+    return max(1, min(100, n))
+
+
 def _sanitize_postgresql_dsn(url: str) -> str:
     """
     SQLAlchemy rejects URLs where the port was serialized as the literal string ``None``
@@ -509,6 +526,7 @@ def configure_embedding_settings() -> None:
         Settings.embed_model = GoogleGenAIEmbedding(
             model_name=slot.model,
             api_key=slot.api_key,
+            embed_batch_size=_gemini_embed_batch_size(),
         )
     _attach_embedding_batch_diagnostics(
         Settings.embed_model,
