@@ -14,28 +14,31 @@ _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config",
 class FlashProSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter"]
+    provider: Literal["gemini", "openrouter", "qwen"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     max_output_tokens: int | None = Field(None, alias="maxOutputTokens")
+    dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
 
 
 class EmbedSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter"]
+    provider: Literal["gemini", "openrouter", "qwen"]
     api_key: str = Field(..., alias="apiKey")
     model: str
+    dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
 
 
 class ChatSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter"]
+    provider: Literal["gemini", "openrouter", "qwen"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     temperature: float = 0.2
     max_tokens: int = Field(8192, alias="maxTokens")
+    dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
 
 
 class SlotsBundle(BaseModel):

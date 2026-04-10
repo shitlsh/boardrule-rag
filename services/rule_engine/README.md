@@ -45,6 +45,11 @@ cp .env.example .env
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `INDEX_STORAGE_MODE` + `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Optional. Set `INDEX_STORAGE_MODE=supabase` to store per-game index bundles (zip of BM25 + manifest + on-disk vectors when used) in **Supabase Storage** bucket `INDEX_STORAGE_BUCKET` (default **`boardrule-indexes`**). Use the same URL and service role as **`apps/web`**; local dev uses `supabase start` values. See repo **[DEPLOY.md](../../DEPLOY.md)**. |
 | `EMBEDDING_DIM` | Vector dimension for pgvector / indexing (must match the embedding model chosen in AI Gateway). |
+| `OPENROUTER_CHAT_CONTEXT_WINDOW` | Optional. When the **Chat** slot uses OpenRouter, RAG uses LlamaIndex’s **`OpenRouter`** LLM with this context size (tokens). Default **`128000`**. Set to match the model if needed (LlamaIndex cannot infer it for ids like `vendor/model`). |
+| `OPENROUTER_HTTP_TIMEOUT_MS` / `OPENROUTER_HTTP_REFERER` / `OPENROUTER_APP_TITLE` | Optional. Used by **`utils/openrouter_client.py`** for extraction-time OpenRouter HTTP calls (timeouts and headers). |
+| `QWEN_CHAT_CONTEXT_WINDOW` | Optional. When the **Chat** slot uses **Qwen** (DashScope OpenAI-compatible), RAG uses LlamaIndex’s **`OpenAILike`** with this context size (tokens). Default **`128000`**. Set to match the model (LlamaIndex does not infer DashScope ids like `qwen-turbo`). |
+| (none) | DashScope **OpenAI-compatible** base URL is configured per **Qwen credential** in **`apps/web`** (models page), stored in settings and sent as **`dashscopeCompatibleBase`** on each qwen slot in `X-Boardrule-Ai-Config`. The rule engine does **not** read a `DASHSCOPE_COMPATIBLE_BASE` environment variable for the base URL. |
+| `DASHSCOPE_HTTP_TIMEOUT_MS` | Optional. HTTP timeouts for **`utils/dashscope_client.py`** (extraction/vision paths that call DashScope chat/completions). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `BAAI/bge-reranker-base`). |
 
 Prefer **`.env.example`** as the authoritative list (grouped by concern: HTTP, LangSmith, raster defaults, vision graph, chat, index, paths).

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from llama_index.core import Settings
@@ -12,7 +13,8 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.response_synthesizers import ResponseMode, get_response_synthesizer
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.llms.google_genai import GoogleGenAI
-from llama_index.llms.openai import OpenAI as OpenAILlm
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.llms.openrouter import OpenRouter
 from ingestion.bm25_retriever import BoardruleBM25Retriever
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import format_header_path_for_prompt
@@ -27,20 +29,58 @@ from ingestion.index_builder import (
 from ingestion.index_storage_remote import ensure_game_index_local
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_slots
-from utils.openrouter_client import OPENROUTER_API_BASE
+from utils.dashscope_client import resolve_dashscope_api_base
 
 _BM25_SUBDIR = "bm25"
 
 
-def get_chat_llm() -> GoogleGenAI | OpenAILlm:
+def _openrouter_chat_context_window() -> int:
+    """
+    LlamaIndex ``OpenAI`` infers context size only for official OpenAI model ids; OpenRouter ids
+    (e.g. ``meta-llama/...``) require an explicit window. Override via ``OPENROUTER_CHAT_CONTEXT_WINDOW``.
+    """
+    raw = (os.environ.get("OPENROUTER_CHAT_CONTEXT_WINDOW") or "").strip()
+    if not raw:
+        return 128_000
+    try:
+        return max(1024, int(raw))
+    except ValueError:
+        return 128_000
+
+
+def _qwen_chat_context_window() -> int:
+    """
+    DashScope OpenAI-compatible ids (e.g. ``qwen-turbo``) are not in LlamaIndex's OpenAI map;
+    set an explicit window. Override via ``QWEN_CHAT_CONTEXT_WINDOW``.
+    """
+    raw = (os.environ.get("QWEN_CHAT_CONTEXT_WINDOW") or "").strip()
+    if not raw:
+        return 128_000
+    try:
+        return max(1024, int(raw))
+    except ValueError:
+        return 128_000
+
+
+def get_chat_llm() -> GoogleGenAI | OpenRouter | OpenAILike:
     c = get_slots().chat
     if c.provider == "openrouter":
-        return OpenAILlm(
+        return OpenRouter(
             model=c.model,
             api_key=c.api_key,
-            api_base=OPENROUTER_API_BASE,
             temperature=float(c.temperature),
             max_tokens=int(c.max_tokens),
+            context_window=_openrouter_chat_context_window(),
+        )
+    if c.provider == "qwen":
+        return OpenAILike(
+            model=c.model,
+            api_key=c.api_key,
+            api_base=resolve_dashscope_api_base(c.dashscope_compatible_base),
+            temperature=float(c.temperature),
+            max_tokens=int(c.max_tokens),
+            context_window=_qwen_chat_context_window(),
+            is_chat_model=True,
         )
     return GoogleGenAI(
         model=c.model,

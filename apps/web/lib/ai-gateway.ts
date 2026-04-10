@@ -13,6 +13,12 @@ import type {
   SlotBinding,
   SlotKey,
 } from "@/lib/ai-gateway-types";
+import { isAiVendor } from "@/lib/ai-gateway-types";
+import {
+  assertValidDashscopeCompatibleBase,
+  DASHSCOPE_COMPATIBLE_BASE_DEFAULT,
+  normalizeDashscopeCompatibleBase,
+} from "@/lib/dashscope-endpoint";
 
 const SLOTS: SlotKey[] = ["flash", "pro", "embed", "chat"];
 
@@ -77,7 +83,16 @@ function parseStored(raw: string): AiGatewayStored {
           ) {
             return false;
           }
-          return c.vendor === "gemini" || c.vendor === "openrouter";
+          return isAiVendor(c.vendor);
+        }).map((c) => {
+          const base =
+            typeof c.dashscopeCompatibleBase === "string" ? c.dashscopeCompatibleBase.trim() : "";
+          return {
+            ...c,
+            ...(c.vendor === "qwen" && base
+              ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(base) }
+              : {}),
+          };
         })
       : [];
     const sb = (o.slotBindings || {}) as Record<string, unknown>;
@@ -142,6 +157,9 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
       alias: c.alias.trim(),
       hasKey,
       keyLast4: last4,
+      ...(c.vendor === "qwen"
+        ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(c.dashscopeCompatibleBase) }
+        : {}),
     };
   });
   return {
@@ -176,6 +194,8 @@ export type AiGatewayPatchBody = {
     alias: string;
     /** If omitted or empty, keep previous key for this id. */
     apiKey?: string;
+    /** When vendor is qwen. */
+    dashscopeCompatibleBase?: string;
   }[];
   slotBindings?: Partial<Record<SlotKey, SlotBinding | null>>;
   chatOptions?: Partial<{ temperature: number; maxTokens: number }>;
@@ -202,8 +222,8 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     validateCredentialsUniqueAliases(patch.credentials);
     const next: AiCredentialStored[] = [];
     for (const p of patch.credentials) {
-      if (p.vendor !== "gemini" && p.vendor !== "openrouter") {
-        throw new Error("vendor 必须为 gemini 或 openrouter");
+      if (!isAiVendor(p.vendor)) {
+        throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
       }
       const alias = p.alias.trim();
       if (!alias) throw new Error("别名不能为空");
@@ -216,7 +236,25 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
       } else {
         throw new Error(`新凭证 ${alias} 必须提供 API Key`);
       }
-      next.push({ id: p.id, vendor: p.vendor, alias, apiKeyEnc });
+      if (p.vendor === "qwen") {
+        const raw =
+          typeof p.dashscopeCompatibleBase === "string" ? p.dashscopeCompatibleBase.trim() : "";
+        const fromPrev =
+          prev?.vendor === "qwen" && prev.dashscopeCompatibleBase
+            ? prev.dashscopeCompatibleBase
+            : "";
+        const merged = raw || fromPrev || "";
+        assertValidDashscopeCompatibleBase(merged || DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
+        next.push({
+          id: p.id,
+          vendor: p.vendor,
+          alias,
+          apiKeyEnc,
+          dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(merged),
+        });
+      } else {
+        next.push({ id: p.id, vendor: p.vendor, alias, apiKeyEnc });
+      }
     }
     credentials = next;
   }
@@ -288,7 +326,12 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
 function resolveSlot(
   stored: AiGatewayStored,
   slot: SlotKey,
-): { apiKey: string; model: string; vendor: AiVendor } {
+): {
+  apiKey: string;
+  model: string;
+  vendor: AiVendor;
+  dashscopeCompatibleBase?: string;
+} {
   const b = stored.slotBindings[slot];
   if (!b?.credentialId || !b.model?.trim()) {
     throw new Error(`AI 槽位未配置: ${slot}`);
@@ -297,7 +340,11 @@ function resolveSlot(
   if (!cred) throw new Error(`槽位 ${slot} 引用的凭证不存在`);
   const apiKey = decryptSecret(cred.apiKeyEnc).trim();
   if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
-  return { apiKey, model: b.model.trim(), vendor: cred.vendor };
+  const dashscopeCompatibleBase =
+    cred.vendor === "qwen"
+      ? normalizeDashscopeCompatibleBase(cred.dashscopeCompatibleBase)
+      : undefined;
+  return { apiKey, model: b.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
 }
 
 /** Resolved payload for rule_engine (v2). Throws if any slot incomplete. */
@@ -326,17 +373,24 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
         apiKey: flash.apiKey,
         model: flash.model,
         maxOutputTokens: 8192,
+        ...(flash.vendor === "qwen"
+          ? { dashscopeCompatibleBase: flash.dashscopeCompatibleBase }
+          : {}),
       },
       pro: {
         provider: pro.vendor,
         apiKey: pro.apiKey,
         model: pro.model,
         maxOutputTokens: 8192,
+        ...(pro.vendor === "qwen" ? { dashscopeCompatibleBase: pro.dashscopeCompatibleBase } : {}),
       },
       embed: {
         provider: embed.vendor,
         apiKey: embed.apiKey,
         model: embed.model,
+        ...(embed.vendor === "qwen"
+          ? { dashscopeCompatibleBase: embed.dashscopeCompatibleBase }
+          : {}),
       },
       chat: {
         provider: chat.vendor,
@@ -344,6 +398,9 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
         model: chat.model,
         temperature,
         maxTokens,
+        ...(chat.vendor === "qwen"
+          ? { dashscopeCompatibleBase: chat.dashscopeCompatibleBase }
+          : {}),
       },
     },
     ...(hasRag ? { ragOptions: ro } : {}),
@@ -367,6 +424,17 @@ export function getCredentialVendor(stored: AiGatewayStored, credentialId: strin
   return cred.vendor;
 }
 
+/** Resolved DashScope OpenAI-compatible base for a saved Qwen credential. */
+export function getCredentialDashscopeCompatibleBase(
+  stored: AiGatewayStored,
+  credentialId: string,
+): string {
+  const cred = stored.credentials.find((c) => c.id === credentialId);
+  if (!cred) throw new Error("凭证不存在");
+  if (cred.vendor !== "qwen") throw new Error("该凭证不是 Qwen（百炼）");
+  return normalizeDashscopeCompatibleBase(cred.dashscopeCompatibleBase);
+}
+
 async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> {
   await getAppSettings();
   await prisma.appSettings.update({
@@ -382,9 +450,11 @@ export async function addCredential(params: {
   alias: string;
   apiKey: string;
   vendor: AiVendor;
+  /** Required for vendor qwen (normalized); defaults to Beijing if omitted. */
+  dashscopeCompatibleBase?: string;
 }): Promise<AiGatewayPublic> {
-  if (params.vendor !== "gemini" && params.vendor !== "openrouter") {
-    throw new Error("vendor 必须为 gemini 或 openrouter");
+  if (!isAiVendor(params.vendor)) {
+    throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
   }
   const alias = params.alias.trim();
   const key = params.apiKey.trim();
@@ -400,12 +470,26 @@ export async function addCredential(params: {
   if (cur.credentials.some((c) => c.id === params.id)) {
     throw new Error("凭证 ID 冲突");
   }
-  const next: AiCredentialStored = {
-    id: params.id,
-    vendor: params.vendor,
-    alias,
-    apiKeyEnc: encryptSecret(key),
-  };
+  let next: AiCredentialStored;
+  if (params.vendor === "qwen") {
+    const raw = (params.dashscopeCompatibleBase ?? "").trim();
+    const merged = raw || DASHSCOPE_COMPATIBLE_BASE_DEFAULT;
+    assertValidDashscopeCompatibleBase(merged);
+    next = {
+      id: params.id,
+      vendor: params.vendor,
+      alias,
+      apiKeyEnc: encryptSecret(key),
+      dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(merged),
+    };
+  } else {
+    next = {
+      id: params.id,
+      vendor: params.vendor,
+      alias,
+      apiKeyEnc: encryptSecret(key),
+    };
+  }
   const stored: AiGatewayStored = {
     ...cur,
     credentials: [...cur.credentials, next],
@@ -428,6 +512,7 @@ export async function updateCredential(params: {
   alias?: string;
   vendor?: AiVendor;
   apiKey?: string;
+  dashscopeCompatibleBase?: string;
 }): Promise<AiGatewayPublic> {
   const cur = await getAiGatewayStored();
   const idx = cur.credentials.findIndex((c) => c.id === params.id);
@@ -446,8 +531,8 @@ export async function updateCredential(params: {
   }
   let vendor: AiVendor = prev.vendor;
   if (params.vendor !== undefined) {
-    if (params.vendor !== "gemini" && params.vendor !== "openrouter") {
-      throw new Error("vendor 必须为 gemini 或 openrouter");
+    if (!isAiVendor(params.vendor)) {
+      throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
     }
     vendor = params.vendor;
   }
@@ -455,7 +540,25 @@ export async function updateCredential(params: {
   if (params.apiKey !== undefined && params.apiKey.trim() !== "") {
     apiKeyEnc = encryptSecret(params.apiKey.trim());
   }
-  const nextCred: AiCredentialStored = { ...prev, alias, apiKeyEnc, vendor };
+
+  let dashscopeCompatibleBase: string | undefined;
+  if (vendor === "qwen") {
+    if (params.dashscopeCompatibleBase !== undefined) {
+      const t = params.dashscopeCompatibleBase.trim();
+      const merged = t || DASHSCOPE_COMPATIBLE_BASE_DEFAULT;
+      assertValidDashscopeCompatibleBase(merged);
+      dashscopeCompatibleBase = normalizeDashscopeCompatibleBase(merged);
+    } else if (prev.vendor === "qwen" && prev.dashscopeCompatibleBase) {
+      dashscopeCompatibleBase = normalizeDashscopeCompatibleBase(prev.dashscopeCompatibleBase);
+    } else {
+      dashscopeCompatibleBase = normalizeDashscopeCompatibleBase("");
+    }
+  }
+
+  const nextCred: AiCredentialStored =
+    vendor === "qwen"
+      ? { id: prev.id, vendor, alias, apiKeyEnc, dashscopeCompatibleBase: dashscopeCompatibleBase! }
+      : { id: prev.id, vendor, alias, apiKeyEnc };
   const credentials = [...cur.credentials];
   credentials[idx] = nextCred;
   return persistStored({ ...cur, credentials });

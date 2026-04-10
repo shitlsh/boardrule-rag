@@ -32,7 +32,7 @@ const SLOTS: { key: SlotKey; label: string; hint: string }[] = [
   {
     key: "embed",
     label: "Embed",
-    hint: "向量嵌入与建索引；更换嵌入模型后通常需重建索引。OpenRouter 上请选嵌入类模型（如 text-embedding 系列）。",
+    hint: "向量嵌入与建索引；更换嵌入模型后通常需重建索引。OpenRouter / 百炼请选嵌入类模型（如 text-embedding 系列）。",
   },
   {
     key: "chat",
@@ -46,7 +46,9 @@ function modelsCacheKey(credentialId: string, slot: SlotKey): string {
 }
 
 function vendorShort(v: AiVendor): string {
-  return v === "openrouter" ? "OpenRouter" : "Gemini";
+  if (v === "openrouter") return "OpenRouter";
+  if (v === "qwen") return "Qwen";
+  return "Gemini";
 }
 
 type Props = {

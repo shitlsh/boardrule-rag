@@ -81,6 +81,7 @@ export function GeminiModelPicker({
     if (selected) return selected.displayName;
     if (orphanSaved) return "已保存的模型不在当前列表中";
     if (vendor === "openrouter") return "请选择模型（OpenRouter 为 vendor/model 形式）";
+    if (vendor === "qwen") return "请选择模型（百炼为 qwen-* 等 ID）";
     return "请选择模型";
   })();
 
@@ -197,13 +198,19 @@ export function GeminiModelPicker({
       <p className="text-muted-foreground text-[11px] leading-snug">
         {vendor === "openrouter"
           ? "在显示名、模型 ID（如 openai/gpt-4o-mini）、描述中做包含匹配；多词用空格时需同时命中。"
-          : "在显示名、模型 ID（含或不含 models/ 前缀）、描述中做包含匹配；多词用空格时需同时命中。"}
+          : vendor === "qwen"
+            ? "在显示名、模型 ID（如 qwen-turbo）、描述中做包含匹配；多词用空格时需同时命中。"
+            : "在显示名、模型 ID（含或不含 models/ 前缀）、描述中做包含匹配；多词用空格时需同时命中。"}
       </p>
 
       {orphanSaved ? (
         <p className="text-destructive text-xs leading-relaxed">
           请在列表中重新选择一个模型后再保存
-          {vendor === "openrouter" ? "（OpenRouter 可能已下线或重命名该模型）" : "（历史 ID 可能已不可用）"}
+          {vendor === "openrouter"
+            ? "（OpenRouter 可能已下线或重命名该模型）"
+            : vendor === "qwen"
+              ? "（百炼可能已下线或重命名该模型）"
+              : "（历史 ID 可能已不可用）"}
           。
         </p>
       ) : null}

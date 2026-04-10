@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
@@ -15,7 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { QwenEndpointPicker } from "@/components/qwen-endpoint-picker";
 import type { AiCredentialPublic, AiGatewayPublic, AiVendor } from "@/lib/ai-gateway-types";
+import {
+  DASHSCOPE_COMPATIBLE_BASE_DEFAULT,
+  normalizeDashscopeCompatibleBase,
+} from "@/lib/dashscope-endpoint";
 
 type Props = {
   data: AiGatewayPublic;
@@ -25,20 +30,31 @@ type Props = {
 const VENDOR_LABEL: Record<AiVendor, string> = {
   gemini: "Google Gemini",
   openrouter: "OpenRouter",
+  qwen: "阿里云百炼（Qwen）",
 };
 
 /** Short label for the closed select trigger (avoids overflow in narrow layouts). */
 const VENDOR_TRIGGER_LABEL: Record<AiVendor, string> = {
   gemini: "Gemini",
   openrouter: "OpenRouter",
+  qwen: "Qwen",
 };
 
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   const [alias, setAlias] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [vendor, setVendor] = useState<AiVendor>("gemini");
+  const [qwenBase, setQwenBase] = useState(DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const prevVendorRef = useRef<AiVendor>(vendor);
+  useEffect(() => {
+    if (vendor === "qwen" && prevVendorRef.current !== "qwen") {
+      setQwenBase(DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
+    }
+    prevVendorRef.current = vendor;
+  }, [vendor]);
 
   const add = async () => {
     const a = alias.trim();
@@ -61,6 +77,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
           vendor,
           alias: a,
           apiKey: k,
+          ...(vendor === "qwen"
+            ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(qwenBase) }
+            : {}),
         }),
       });
       const json = (await res.json()) as AiGatewayPublic & { message?: string };
@@ -142,9 +161,26 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                       <span className="text-muted-foreground text-xs">openrouter.ai 控制台中的 API Key</span>
                     </span>
                   </SelectItem>
+                  <SelectItem
+                    value="qwen"
+                    textValue="Qwen DashScope Bailian Alibaba"
+                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                  >
+                    <span className="flex flex-col gap-1 text-left leading-snug">
+                      <span className="font-medium">Qwen（百炼）</span>
+                      <span className="text-muted-foreground text-xs">
+                        阿里云大模型服务平台百炼 / DashScope 的 API Key（OpenAI 兼容接口）
+                      </span>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
+            {vendor === "qwen" ? (
+              <div className="min-w-0 flex-[2] lg:max-w-md">
+                <QwenEndpointPicker value={qwenBase} onChange={setQwenBase} disabled={adding} />
+              </div>
+            ) : null}
             <Field className="min-w-0 flex-1 lg:max-w-xs">
               <FieldLabel>别名</FieldLabel>
               <Input
@@ -161,7 +197,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                 placeholder={
                   vendor === "openrouter"
                     ? "粘贴 OpenRouter 控制台中的 API Key"
-                    : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                    : vendor === "qwen"
+                      ? "粘贴阿里云百炼（DashScope）API Key"
+                      : "粘贴 Google AI Studio 或兼容渠道的密钥"
                 }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
@@ -191,7 +229,7 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
             {data.credentials.map((c: AiCredentialPublic) => (
               <li
                 key={c.id}
-                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-card hover:bg-muted/20 transition-colors"
+                className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between px-4 py-3 bg-card hover:bg-muted/20 transition-colors"
               >
                 <div className="min-w-0">
                   <p className="font-medium truncate">
@@ -203,6 +241,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                   <p className="text-xs text-muted-foreground font-mono">
                     {c.hasKey ? `密钥已配置 · 尾号 ${c.keyLast4 ?? "****"}` : "密钥无效或解密失败"}
                   </p>
+                  {c.vendor === "qwen" ? (
+                    <SavedQwenEndpointEditor credential={c} onUpdated={onUpdated} />
+                  ) : null}
                 </div>
                 <Button
                   type="button"
@@ -225,5 +266,54 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SavedQwenEndpointEditor({
+  credential,
+  onUpdated,
+}: {
+  credential: AiCredentialPublic;
+  onUpdated: (next: AiGatewayPublic) => void;
+}) {
+  const normalized = normalizeDashscopeCompatibleBase(credential.dashscopeCompatibleBase);
+  const [base, setBase] = useState(normalized);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setBase(normalizeDashscopeCompatibleBase(credential.dashscopeCompatibleBase));
+  }, [credential.id, credential.dashscopeCompatibleBase]);
+
+  const dirty = base !== normalizeDashscopeCompatibleBase(credential.dashscopeCompatibleBase);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/ai-gateway/credentials/${encodeURIComponent(credential.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dashscopeCompatibleBase: base }),
+      });
+      const json = (await res.json()) as AiGatewayPublic & { message?: string };
+      if (!res.ok) {
+        throw new Error(json.message || "保存失败");
+      }
+      onUpdated(json);
+      toast.success("接入点已更新");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-border bg-muted/20 p-3 max-w-xl">
+      <QwenEndpointPicker value={base} onChange={setBase} disabled={saving} />
+      <Button type="button" size="sm" variant="secondary" disabled={!dirty || saving} onClick={save}>
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+        <span className={saving ? "ml-2" : ""}>保存接入点</span>
+      </Button>
+    </div>
   );
 }

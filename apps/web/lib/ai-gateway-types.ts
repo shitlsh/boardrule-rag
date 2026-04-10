@@ -1,4 +1,10 @@
-export type AiVendor = "gemini" | "openrouter";
+export type AiVendor = "gemini" | "openrouter" | "qwen";
+
+export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen"];
+
+export function isAiVendor(v: string): v is AiVendor {
+  return (AI_VENDOR_IDS as readonly string[]).includes(v);
+}
 
 export type SlotKey = "flash" | "pro" | "embed" | "chat";
 
@@ -8,6 +14,11 @@ export type AiCredentialStored = {
   /** Globally unique (case-insensitive after trim). */
   alias: string;
   apiKeyEnc: string;
+  /**
+   * vendor === "qwen" only: DashScope OpenAI-compatible base URL (no trailing slash).
+   * Persisted when adding/editing Qwen credentials; drives model list + rule engine.
+   */
+  dashscopeCompatibleBase?: string;
 };
 
 export type SlotBinding = {
@@ -49,6 +60,8 @@ export type AiCredentialPublic = {
   alias: string;
   hasKey: boolean;
   keyLast4: string | null;
+  /** Set when vendor is qwen (normalized base URL). */
+  dashscopeCompatibleBase?: string;
 };
 
 export type AiGatewayPublic = {
@@ -64,12 +77,15 @@ export type EngineSlotFlashPro = {
   apiKey: string;
   model: string;
   maxOutputTokens?: number;
+  /** Required when provider is qwen: OpenAI-compatible API base (no trailing slash). */
+  dashscopeCompatibleBase?: string;
 };
 
 export type EngineSlotEmbed = {
   provider: AiVendor;
   apiKey: string;
   model: string;
+  dashscopeCompatibleBase?: string;
 };
 
 export type EngineSlotChat = {
@@ -78,6 +94,7 @@ export type EngineSlotChat = {
   model: string;
   temperature: number;
   maxTokens: number;
+  dashscopeCompatibleBase?: string;
 };
 
 /** Payload sent to rule_engine (camelCase). Version 2 only. */

@@ -1,7 +1,7 @@
 """LLM client wrapper (Flash / Pro, text + multimodal vision).
 
 Runtime config comes from BFF ``X-Boardrule-Ai-Config`` (see ``utils/ai_gateway.py``).
-Gemini uses ``google-genai``; OpenRouter uses OpenAI-compatible chat completions.
+Gemini uses ``google-genai``; OpenRouter and Qwen (DashScope) use OpenAI-compatible chat completions.
 
 When LangSmith tracing is enabled, optional :class:`GeminiCallMeta` attaches metadata to a child ``llm`` run.
 """
@@ -18,6 +18,8 @@ from typing import Any, Literal
 from google import genai
 from google.genai import types
 
+from utils import dashscope_client as _dashscope
+from utils.dashscope_client import resolve_dashscope_api_base
 from utils.ai_gateway import get_slots
 from utils.openrouter_client import chat_completion_from_parts, chat_completion_text
 
@@ -49,6 +51,11 @@ def flash_max_output_tokens() -> int:
 def pro_max_output_tokens() -> int:
     g = get_slots().pro
     return g.max_output_tokens if g.max_output_tokens is not None else 8192
+
+
+def _qwen_api_base(slot: object) -> str:
+    raw = getattr(slot, "dashscope_compatible_base", None)
+    return resolve_dashscope_api_base(raw if isinstance(raw, str) else None)
 
 
 _FLASH_PRESET_TEMP: dict[FlashPreset, float] = {
@@ -209,6 +216,26 @@ def generate_flash(
             empty_error="OpenRouter Flash returned empty response",
         )
 
+    if slot.provider == "qwen":
+
+        def _fn_q() -> str:
+            return _dashscope.chat_completion_text(
+                api_key=slot.api_key,
+                api_base=_qwen_api_base(slot),
+                model=slot.model,
+                user_text=prompt,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="qwen",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn_q,
+            empty_error="Qwen (DashScope) Flash returned empty response",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
 
     def _gem() -> str:
@@ -257,6 +284,26 @@ def generate_pro(
             contents_for_hash=prompt,
             fn=_fn,
             empty_error="OpenRouter Pro returned empty response",
+        )
+
+    if slot.provider == "qwen":
+
+        def _fn_q() -> str:
+            return _dashscope.chat_completion_text(
+                api_key=slot.api_key,
+                api_base=_qwen_api_base(slot),
+                model=slot.model,
+                user_text=prompt,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="qwen",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn_q,
+            empty_error="Qwen (DashScope) Pro returned empty response",
         )
 
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
@@ -339,6 +386,26 @@ def generate_flash_vision(
             empty_error="OpenRouter Flash returned empty response (vision)",
         )
 
+    if slot.provider == "qwen":
+
+        def _fn_q() -> str:
+            return _dashscope.chat_completion_from_parts(
+                api_key=slot.api_key,
+                api_base=_qwen_api_base(slot),
+                model=slot.model,
+                parts=parts,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="qwen",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn_q,
+            empty_error="Qwen (DashScope) Flash returned empty response (vision)",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
 
     def _gem() -> str:
@@ -388,6 +455,26 @@ def generate_pro_vision(
             contents_for_hash=parts,
             fn=_fn,
             empty_error="OpenRouter Pro returned empty response (vision)",
+        )
+
+    if slot.provider == "qwen":
+
+        def _fn_q() -> str:
+            return _dashscope.chat_completion_from_parts(
+                api_key=slot.api_key,
+                api_base=_qwen_api_base(slot),
+                model=slot.model,
+                parts=parts,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="qwen",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn_q,
+            empty_error="Qwen (DashScope) Pro returned empty response (vision)",
         )
 
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)

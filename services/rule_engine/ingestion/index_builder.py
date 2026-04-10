@@ -20,6 +20,7 @@ from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import documents_to_nodes, documents_to_nodes_loose, merged_markdown_to_documents
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_slots
+from utils.dashscope_client import resolve_dashscope_api_base
 from utils.openrouter_client import OPENROUTER_API_BASE
 from utils.paths import service_root
 
@@ -311,13 +312,19 @@ def _pgvector_physical_table_name(game_id: str) -> str:
 
 
 def configure_embedding_settings() -> None:
-    """Set global LlamaIndex embedding model from the Embed slot (Gemini or OpenRouter)."""
+    """Set global LlamaIndex embedding model from the Embed slot (Gemini, OpenRouter, or Qwen/DashScope)."""
     slot = get_slots().embed
     if slot.provider == "openrouter":
         Settings.embed_model = OpenAIEmbedding(
             model=slot.model,
             api_key=slot.api_key,
             api_base=OPENROUTER_API_BASE,
+        )
+    elif slot.provider == "qwen":
+        Settings.embed_model = OpenAIEmbedding(
+            model=slot.model,
+            api_key=slot.api_key,
+            api_base=resolve_dashscope_api_base(slot.dashscope_compatible_base),
         )
     else:
         Settings.embed_model = GoogleGenAIEmbedding(

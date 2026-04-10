@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { removeCredentialById, updateCredential } from "@/lib/ai-gateway";
 import type { AiVendor } from "@/lib/ai-gateway-types";
+import { isAiVendor } from "@/lib/ai-gateway-types";
 import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -31,7 +32,13 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const apiKey = o.apiKey !== undefined ? (typeof o.apiKey === "string" ? o.apiKey : undefined) : undefined;
   const vendorRaw = o.vendor !== undefined ? o.vendor : undefined;
   const vendor: AiVendor | undefined =
-    vendorRaw === "gemini" || vendorRaw === "openrouter" ? vendorRaw : undefined;
+    typeof vendorRaw === "string" && isAiVendor(vendorRaw) ? vendorRaw : undefined;
+  const dashscopeCompatibleBase =
+    o.dashscopeCompatibleBase !== undefined
+      ? typeof o.dashscopeCompatibleBase === "string"
+        ? o.dashscopeCompatibleBase
+        : undefined
+      : undefined;
 
   try {
     const data = await updateCredential({
@@ -39,6 +46,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       ...(alias !== undefined ? { alias } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
       ...(vendor !== undefined ? { vendor } : {}),
+      ...(dashscopeCompatibleBase !== undefined ? { dashscopeCompatibleBase } : {}),
     });
     return NextResponse.json(data);
   } catch (e) {

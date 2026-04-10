@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { addCredential } from "@/lib/ai-gateway";
 import type { AiVendor } from "@/lib/ai-gateway-types";
+import { isAiVendor } from "@/lib/ai-gateway-types";
 import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -23,18 +24,28 @@ export async function POST(req: Request) {
   const id = typeof o.id === "string" ? o.id.trim() : "";
   const alias = typeof o.alias === "string" ? o.alias : "";
   const apiKey = typeof o.apiKey === "string" ? o.apiKey : "";
-  const vendorRaw = o.vendor;
-  const vendor: AiVendor =
-    vendorRaw === "openrouter" ? "openrouter" : vendorRaw === "gemini" ? "gemini" : "gemini";
   if (!id) {
     return NextResponse.json({ message: "id 必填" }, { status: 400 });
   }
-  if (vendorRaw !== undefined && vendorRaw !== "gemini" && vendorRaw !== "openrouter") {
-    return NextResponse.json({ message: "vendor 必须为 gemini 或 openrouter" }, { status: 400 });
+
+  let vendor: AiVendor = "gemini";
+  if (o.vendor !== undefined) {
+    if (typeof o.vendor !== "string" || !isAiVendor(o.vendor)) {
+      return NextResponse.json({ message: "vendor 必须为 gemini、openrouter 或 qwen" }, { status: 400 });
+    }
+    vendor = o.vendor;
   }
+  const dashscopeCompatibleBase =
+    typeof o.dashscopeCompatibleBase === "string" ? o.dashscopeCompatibleBase : undefined;
 
   try {
-    const data = await addCredential({ id, alias, apiKey, vendor });
+    const data = await addCredential({
+      id,
+      alias,
+      apiKey,
+      vendor,
+      ...(vendor === "qwen" ? { dashscopeCompatibleBase } : {}),
+    });
     return NextResponse.json(data);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "保存失败";

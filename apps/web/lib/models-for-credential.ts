@@ -1,16 +1,21 @@
 /**
- * Server-only: list models for a saved credential (Gemini vs OpenRouter).
+ * Server-only: list models for a saved credential (Gemini, OpenRouter, or Qwen/DashScope).
  * Used by /api/ai/models and slot binding validation.
  */
 
 import type { AiGatewayStored, SlotKey } from "@/lib/ai-gateway-types";
-import { getCredentialApiKey, getCredentialVendor } from "@/lib/ai-gateway";
+import {
+  getCredentialApiKey,
+  getCredentialDashscopeCompatibleBase,
+  getCredentialVendor,
+} from "@/lib/ai-gateway";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import {
   fetchOpenRouterModelsForSlot,
   fetchOpenRouterModelsFromApi,
 } from "@/lib/openrouter-models-list";
+import { fetchQwenModelsForSlot, fetchQwenModelsFromApi } from "@/lib/qwen-models-list";
 
 /** All models for vendor, optionally filtered by slot capability. */
 export async function fetchModelsForCredential(
@@ -24,6 +29,12 @@ export async function fetchModelsForCredential(
     return slot
       ? await fetchOpenRouterModelsForSlot(apiKey, slot)
       : await fetchOpenRouterModelsFromApi(apiKey);
+  }
+  if (vendor === "qwen") {
+    const base = getCredentialDashscopeCompatibleBase(stored, credentialId);
+    return slot
+      ? await fetchQwenModelsForSlot(apiKey, slot, base)
+      : await fetchQwenModelsFromApi(apiKey, base);
   }
   return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
 }

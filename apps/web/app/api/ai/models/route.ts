@@ -8,6 +8,8 @@ import {
   fetchOpenRouterModelsForSlot,
   fetchOpenRouterModelsFromApi,
 } from "@/lib/openrouter-models-list";
+import { normalizeDashscopeCompatibleBase } from "@/lib/dashscope-endpoint";
+import { fetchQwenModelsForSlot, fetchQwenModelsFromApi } from "@/lib/qwen-models-list";
 import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -22,7 +24,7 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
 }
 
 function parseVendor(raw: unknown): AiVendor | "invalid" {
-  if (raw === "gemini" || raw === "openrouter") return raw;
+  if (raw === "gemini" || raw === "openrouter" || raw === "qwen") return raw;
   return "invalid";
 }
 
@@ -30,17 +32,25 @@ async function listModelsByKey(
   vendor: AiVendor,
   apiKey: string,
   slot: SlotKey | null,
+  /** Only used when vendor is qwen (preview before saving credential). */
+  qwenCompatibleBase?: string,
 ): Promise<unknown[]> {
   if (vendor === "openrouter") {
     return slot
       ? await fetchOpenRouterModelsForSlot(apiKey, slot)
       : await fetchOpenRouterModelsFromApi(apiKey);
   }
+  if (vendor === "qwen") {
+    const base = normalizeDashscopeCompatibleBase(qwenCompatibleBase);
+    return slot
+      ? await fetchQwenModelsForSlot(apiKey, slot, base)
+      : await fetchQwenModelsFromApi(apiKey, base);
+  }
   return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
 }
 
 /**
- * List models for a credential (Gemini or OpenRouter) with optional slot filter.
+ * List models for a credential (Gemini, OpenRouter, or Qwen/DashScope) with optional slot filter.
  * - GET ?credentialId=…&slot=flash|pro|embed|chat — slot optional; when set, filters by capability.
  * - POST JSON { credentialId } or { apiKey, vendor }, optional slot — same behavior.
  */
@@ -87,6 +97,7 @@ export async function POST(req: Request) {
   const o = body as Record<string, unknown>;
   const apiKeyDirect = typeof o.apiKey === "string" ? o.apiKey.trim() : "";
   const credentialId = typeof o.credentialId === "string" ? o.credentialId.trim() : "";
+  const qwenBaseRaw = typeof o.dashscopeCompatibleBase === "string" ? o.dashscopeCompatibleBase : "";
   const slot = parseSlot(o.slot);
 
   if (slot === "invalid") {
@@ -99,7 +110,7 @@ export async function POST(req: Request) {
     const v = parseVendor(o.vendor);
     if (v === "invalid") {
       return NextResponse.json(
-        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter" },
+        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen" },
         { status: 400 },
       );
     }
@@ -119,7 +130,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const models = await listModelsByKey(vendor, apiKey, slot);
+    const models = await listModelsByKey(vendor, apiKey, slot, qwenBaseRaw || undefined);
     return NextResponse.json({ models, slot: slot ?? null, vendor });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "拉取模型列表失败";
