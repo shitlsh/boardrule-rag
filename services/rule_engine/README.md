@@ -32,7 +32,7 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| *(none for Gemini keys)* | **Gemini API keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure providers in the web app at **`/models`** (模型与凭证). |
+| *(no API keys in `.env`)* | **Provider keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (v2, field **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure credentials (Gemini or OpenRouter) in the web app at **`/models`**. |
 | `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for new index vectors (same DSN). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |

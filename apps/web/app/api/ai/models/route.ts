@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 
-import type { SlotKey } from "@/lib/ai-gateway-types";
+import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
-import { getAiGatewayStored, getCredentialApiKey } from "@/lib/ai-gateway";
+import {
+  fetchOpenRouterModelsForSlot,
+  fetchOpenRouterModelsFromApi,
+} from "@/lib/openrouter-models-list";
+import {
+  getAiGatewayStored,
+  getCredentialApiKey,
+  getCredentialVendor,
+} from "@/lib/ai-gateway";
 import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -16,10 +24,28 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
   return SLOT_KEYS.includes(s) ? s : "invalid";
 }
 
+function parseVendor(raw: unknown): AiVendor | "invalid" {
+  if (raw === "gemini" || raw === "openrouter") return raw;
+  return "invalid";
+}
+
+async function listModels(
+  vendor: AiVendor,
+  apiKey: string,
+  slot: SlotKey | null,
+): Promise<unknown[]> {
+  if (vendor === "openrouter") {
+    return slot
+      ? await fetchOpenRouterModelsForSlot(apiKey, slot)
+      : await fetchOpenRouterModelsFromApi(apiKey);
+  }
+  return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
+}
+
 /**
- * List Gemini models (normalized + optional slot filter).
+ * List models for a credential (Gemini or OpenRouter) with optional slot filter.
  * - GET ?credentialId=…&slot=flash|pro|embed|chat — slot optional; when set, filters by capability.
- * - POST JSON { credentialId } or { apiKey }, optional slot — same behavior.
+ * - POST JSON { credentialId } or { apiKey, vendor }, optional slot — same behavior.
  */
 export async function GET(req: Request) {
   const denied = await assertStaffSession();
@@ -36,9 +62,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
   }
 
+  let vendor: AiVendor;
   let apiKey: string;
   try {
     const stored = await getAiGatewayStored();
+    vendor = getCredentialVendor(stored, credentialId);
     apiKey = getCredentialApiKey(stored, credentialId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "读取凭证失败";
@@ -46,10 +74,8 @@ export async function GET(req: Request) {
   }
 
   try {
-    const models = slot
-      ? await fetchGeminiModelsForSlot(apiKey, slot)
-      : await fetchGeminiModelsFromGoogle(apiKey);
-    return NextResponse.json({ models, slot: slot ?? null });
+    const models = await listModels(vendor, apiKey, slot);
+    return NextResponse.json({ models, slot: slot ?? null, vendor });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "拉取模型列表失败";
     return NextResponse.json({ message: msg }, { status: 502 });
@@ -78,26 +104,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
   }
 
+  let vendor: AiVendor;
   let apiKey: string;
   if (apiKeyDirect) {
+    const v = parseVendor(o.vendor);
+    if (v === "invalid") {
+      return NextResponse.json(
+        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter" },
+        { status: 400 },
+      );
+    }
+    vendor = v;
     apiKey = apiKeyDirect;
   } else if (credentialId) {
     try {
       const stored = await getAiGatewayStored();
+      vendor = getCredentialVendor(stored, credentialId);
       apiKey = getCredentialApiKey(stored, credentialId);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "读取凭证失败";
       return NextResponse.json({ message: msg }, { status: 400 });
     }
   } else {
-    return NextResponse.json({ message: "请提供 apiKey 或 credentialId" }, { status: 400 });
+    return NextResponse.json({ message: "请提供 apiKey+vendor 或 credentialId" }, { status: 400 });
   }
 
   try {
-    const models = slot
-      ? await fetchGeminiModelsForSlot(apiKey, slot)
-      : await fetchGeminiModelsFromGoogle(apiKey);
-    return NextResponse.json({ models, slot: slot ?? null });
+    const models = await listModels(vendor, apiKey, slot);
+    return NextResponse.json({ models, slot: slot ?? null, vendor });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "拉取模型列表失败";
     return NextResponse.json({ message: msg }, { status: 502 });

@@ -77,7 +77,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and **pgvector** for new indexes. Use the same URL as **`apps/web`** (Supabase local or hosted). |
 | `CORS_ORIGINS` | Recommended | Comma-separated browser origins for FastAPI CORS (default in `.env.example`: `http://localhost:3000`). Must include your **`apps/web`** origin. |
-| *(Gemini keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure Gemini API keys and per-slot models in the web app (**`/models`**). See §4.1. |
+| *(API keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (JSON v2 with **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure credentials (Gemini or OpenRouter) and per-slot models in the web app (**`/models`**). See §4.1. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
@@ -158,7 +158,7 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 
 1. Start **`apps/web`** with `AI_CONFIG_SECRET` set.
 2. Open **`/models`** (模型与凭证): add at least one Gemini credential (API key), then assign **Flash / Pro / Embed / Chat** slots to a credential and pick a model from the filtered list for each slot. Save per slot when prompted.
-3. The web app persists this in **`AppSettings.aiGatewayJson`** and, when calling the rule engine, attaches header **`X-Boardrule-Ai-Config`** with the resolved keys and model IDs. The rule engine does **not** read `GOOGLE_API_KEY` from its own `.env` for those calls.
+3. The web app persists this in **`AppSettings.aiGatewayJson`** and, when calling the rule engine, attaches header **`X-Boardrule-Ai-Config`** (JSON **v2**, field **`slots`**, each slot includes **`provider`**) with the resolved keys and model IDs. The rule engine does **not** read `GOOGLE_API_KEY` from its own `.env` for those calls.
 
 Chat temperature / max tokens are configured on the models UI where applicable.
 
@@ -182,7 +182,7 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 ## 5. End-to-end smoke test
 
 1. Rule engine responds on `GET /health`.
-2. Configure **AI Gateway** in **`apps/web`** (`/models`: credentials + all required slots). Then either use the **web UI** for extract, or call the engine with **`X-Boardrule-Ai-Config`** as the web would. **`POST /extract/pages`** only rasterizes pages (no Gemini); **`POST /extract`** needs the header for vision/text. Flow: **`POST /extract/pages`** with `game_id` and **`file`** (multipart) or **`file_url`** (form field), then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
+2. Configure **AI Gateway** in **`apps/web`** (`/models`: credentials + all required slots). Then either use the **web UI** for extract, or call the engine with **`X-Boardrule-Ai-Config`** as the web would. **`POST /extract/pages`** only rasterizes pages (no LLM); **`POST /extract`** needs the header for vision/text. Flow: **`POST /extract/pages`** with `game_id` and **`file`** (multipart) or **`file_url`** (form field), then **`POST /extract`** with `page_job_id`, `toc_page_indices`, `exclude_page_indices` (JSON arrays as strings). Poll **`GET /extract/{job_id}`** until `completed`. (The web UI uploads to Storage when configured, then uses **`file_url`** for rasterization.)
 3. **验收辅助**：将合并后的 Markdown 存盘，运行 `python services/rule_engine/eval/check_extraction_output.py merged.md --min-words 3000 --min-page-markers 5` 检查字数与 `<!-- pages: -->` 锚点数量。
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
 5. **索引（Phase 2）**：调用 **`POST /build-index/start`**（同上 JSON 体），携带 **`X-Boardrule-Ai-Config`**；用返回的 `job_id` 轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed`。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。

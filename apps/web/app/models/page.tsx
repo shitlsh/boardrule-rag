@@ -66,7 +66,7 @@ export default function ModelsPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">模型管理</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl text-pretty">
-            管理 Gemini 凭证与各能力槽位（Flash / Pro / Embed / Chat）。凭证与槽位相互独立；槽位与对话参数在编辑后会自动保存。
+            管理 API 凭证（Google Gemini 或 OpenRouter）与各能力槽位（Flash / Pro / Embed / Chat）。凭证与槽位相互独立；对话与检索参数在编辑后会自动保存。
           </p>
         </div>
       </div>

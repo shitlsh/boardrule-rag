@@ -1,6 +1,7 @@
-"""Gemini client wrapper (Flash / Pro, text + multimodal vision).
+"""LLM client wrapper (Flash / Pro, text + multimodal vision).
 
-Runtime config comes from BFF ``X-Boardrule-Ai-Config`` (see ``utils/ai_gateway.py``). Uses ``google-genai``.
+Runtime config comes from BFF ``X-Boardrule-Ai-Config`` (see ``utils/ai_gateway.py``).
+Gemini uses ``google-genai``; OpenRouter uses OpenAI-compatible chat completions.
 
 When LangSmith tracing is enabled, optional :class:`GeminiCallMeta` attaches metadata to a child ``llm`` run.
 """
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -16,7 +18,8 @@ from typing import Any, Literal
 from google import genai
 from google.genai import types
 
-from utils.ai_gateway import get_gemini
+from utils.ai_gateway import get_slots
+from utils.openrouter_client import chat_completion_from_parts, chat_completion_text
 
 # Preset names (use at call sites to avoid magic strings)
 FLASH_TOC = "flash_toc"
@@ -39,16 +42,15 @@ class GeminiCallMeta:
 
 
 def flash_max_output_tokens() -> int:
-    g = get_gemini().flash
+    g = get_slots().flash
     return g.max_output_tokens if g.max_output_tokens is not None else 8192
 
 
 def pro_max_output_tokens() -> int:
-    g = get_gemini().pro
+    g = get_slots().pro
     return g.max_output_tokens if g.max_output_tokens is not None else 8192
 
 
-# (temperature,) — max tokens come from flash_max_output_tokens() / pro_max_output_tokens()
 _FLASH_PRESET_TEMP: dict[FlashPreset, float] = {
     "flash_toc": 0.1,
     "flash_quickstart": 0.3,
@@ -60,8 +62,7 @@ _PRO_PRESET_TEMP: dict[ProPreset, float] = {
 }
 
 
-def _tracing_enabled_for_gemini() -> bool:
-    """Match LangSmith expectations: TRACING_V2 truthy + API key present."""
+def _tracing_enabled_for_llm() -> bool:
     v = (
         os.environ.get("LANGSMITH_TRACING_V2")
         or os.environ.get("LANGCHAIN_TRACING_V2")
@@ -74,10 +75,9 @@ def _tracing_enabled_for_gemini() -> bool:
 
 
 def _gemini_http_timeout_ms() -> int | None:
-    """Bound HTTP wait for ``generate_content``; unset SDK default can hang indefinitely on bad networks."""
     raw = (os.environ.get("GEMINI_HTTP_TIMEOUT_MS") or "").strip()
     if raw == "":
-        return 120_000  # 2 minutes (ms) per attempt; ``retry()`` may run up to 3 times in nodes like toc_analyzer
+        return 120_000
     if raw.lower() in ("none", "0", "unlimited"):
         return None
     try:
@@ -107,7 +107,7 @@ def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
     return h.hexdigest()
 
 
-def _generate_once(
+def _generate_once_gemini(
     *,
     api_key: str,
     model: str,
@@ -126,25 +126,21 @@ def _generate_once(
     return response.text
 
 
-def _generate_with_optional_trace(
+def _run_with_optional_trace(
     *,
-    api_key: str,
-    model: str,
-    contents: str | list[Any],
-    gen_config: types.GenerateContentConfig,
+    provider: str,
     meta: GeminiCallMeta | None,
+    contents_for_hash: str | list[Any],
+    fn: Callable[[], str],
     empty_error: str,
 ) -> str:
     def _call() -> str:
-        return _generate_once(
-            api_key=api_key,
-            model=model,
-            contents=contents,
-            gen_config=gen_config,
-            empty_error=empty_error,
-        )
+        out = fn()
+        if not (out or "").strip():
+            raise RuntimeError(empty_error)
+        return out
 
-    if meta is None or not _tracing_enabled_for_gemini():
+    if meta is None or not _tracing_enabled_for_llm():
         return _call()
 
     try:
@@ -152,9 +148,10 @@ def _generate_with_optional_trace(
     except ImportError:
         return _call()
 
-    sha = _sha256_for_content(contents, meta.prompt_sha256)
+    sha = _sha256_for_content(contents_for_hash, meta.prompt_sha256)
     md: dict[str, Any] = {
-        "gemini_node": meta.node,
+        "llm_node": meta.node,
+        "llm_provider": provider,
         "prompt_sha256": sha,
     }
     if meta.prompt_file:
@@ -162,7 +159,7 @@ def _generate_with_optional_trace(
     if meta.call_tag:
         md["call_tag"] = meta.call_tag
 
-    trace_name = f"gemini:{meta.node}"
+    trace_name = f"{provider}:{meta.node}"
     with trace(
         trace_name,
         run_type="llm",
@@ -190,16 +187,44 @@ def generate_flash(
     max_output_tokens: int | None = None,
     meta: GeminiCallMeta | None = None,
 ) -> str:
-    slot = get_gemini().flash
+    slot = get_slots().flash
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
+    if slot.provider == "openrouter":
+
+        def _fn() -> str:
+            return chat_completion_text(
+                api_key=slot.api_key,
+                model=slot.model,
+                user_text=prompt,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="openrouter",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn,
+            empty_error="OpenRouter Flash returned empty response",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-    return _generate_with_optional_trace(
-        api_key=slot.api_key,
-        model=slot.model,
-        contents=prompt,
-        gen_config=gen_config,
+
+    def _gem() -> str:
+        return _generate_once_gemini(
+            api_key=slot.api_key,
+            model=slot.model,
+            contents=prompt,
+            gen_config=gen_config,
+            empty_error="Gemini Flash returned empty response",
+        )
+
+    return _run_with_optional_trace(
+        provider="gemini",
         meta=meta,
+        contents_for_hash=prompt,
+        fn=_gem,
         empty_error="Gemini Flash returned empty response",
     )
 
@@ -212,16 +237,44 @@ def generate_pro(
     max_output_tokens: int | None = None,
     meta: GeminiCallMeta | None = None,
 ) -> str:
-    slot = get_gemini().pro
+    slot = get_slots().pro
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
+    if slot.provider == "openrouter":
+
+        def _fn() -> str:
+            return chat_completion_text(
+                api_key=slot.api_key,
+                model=slot.model,
+                user_text=prompt,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="openrouter",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn,
+            empty_error="OpenRouter Pro returned empty response",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-    return _generate_with_optional_trace(
-        api_key=slot.api_key,
-        model=slot.model,
-        contents=prompt,
-        gen_config=gen_config,
+
+    def _gem() -> str:
+        return _generate_once_gemini(
+            api_key=slot.api_key,
+            model=slot.model,
+            contents=prompt,
+            gen_config=gen_config,
+            empty_error="Gemini Pro returned empty response",
+        )
+
+    return _run_with_optional_trace(
+        provider="gemini",
         meta=meta,
+        contents_for_hash=prompt,
+        fn=_gem,
         empty_error="Gemini Pro returned empty response",
     )
 
@@ -264,16 +317,44 @@ def generate_flash_vision(
     meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Flash (images + text parts)."""
-    slot = get_gemini().flash
+    slot = get_slots().flash
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
+    if slot.provider == "openrouter":
+
+        def _fn() -> str:
+            return chat_completion_from_parts(
+                api_key=slot.api_key,
+                model=slot.model,
+                parts=parts,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="openrouter",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn,
+            empty_error="OpenRouter Flash returned empty response (vision)",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-    return _generate_with_optional_trace(
-        api_key=slot.api_key,
-        model=slot.model,
-        contents=parts,
-        gen_config=gen_config,
+
+    def _gem() -> str:
+        return _generate_once_gemini(
+            api_key=slot.api_key,
+            model=slot.model,
+            contents=parts,
+            gen_config=gen_config,
+            empty_error="Gemini Flash returned empty response (vision)",
+        )
+
+    return _run_with_optional_trace(
+        provider="gemini",
         meta=meta,
+        contents_for_hash=parts,
+        fn=_gem,
         empty_error="Gemini Flash returned empty response (vision)",
     )
 
@@ -287,15 +368,43 @@ def generate_pro_vision(
     meta: GeminiCallMeta | None = None,
 ) -> str:
     """Multimodal Pro (images + text parts)."""
-    slot = get_gemini().pro
+    slot = get_slots().pro
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
+    if slot.provider == "openrouter":
+
+        def _fn() -> str:
+            return chat_completion_from_parts(
+                api_key=slot.api_key,
+                model=slot.model,
+                parts=parts,
+                temperature=temp,
+                max_tokens=mot,
+            )
+
+        return _run_with_optional_trace(
+            provider="openrouter",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn,
+            empty_error="OpenRouter Pro returned empty response (vision)",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-    return _generate_with_optional_trace(
-        api_key=slot.api_key,
-        model=slot.model,
-        contents=parts,
-        gen_config=gen_config,
+
+    def _gem() -> str:
+        return _generate_once_gemini(
+            api_key=slot.api_key,
+            model=slot.model,
+            contents=parts,
+            gen_config=gen_config,
+            empty_error="Gemini Pro returned empty response (vision)",
+        )
+
+    return _run_with_optional_trace(
+        provider="gemini",
         meta=meta,
+        contents_for_hash=parts,
+        fn=_gem,
         empty_error="Gemini Pro returned empty response (vision)",
     )

@@ -113,7 +113,7 @@ logger = logging.getLogger("boardrule.api")
 
 @app.middleware("http")
 async def boardrule_ai_header_middleware(request: Request, call_next):
-    """Parse ``X-Boardrule-Ai-Config`` onto ``request.state`` for routes that need Gemini."""
+    """Parse ``X-Boardrule-Ai-Config`` (v2, ``slots``) onto ``request.state`` for AI routes."""
     if request.method == "POST":
         if request.url.path == "/chat":
             logger.info("POST /chat received (before handler)")

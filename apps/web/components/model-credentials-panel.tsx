@@ -8,16 +8,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { AiCredentialPublic, AiGatewayPublic } from "@/lib/ai-gateway-types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { AiCredentialPublic, AiGatewayPublic, AiVendor } from "@/lib/ai-gateway-types";
 
 type Props = {
   data: AiGatewayPublic;
   onUpdated: (next: AiGatewayPublic) => void;
 };
 
+const VENDOR_LABEL: Record<AiVendor, string> = {
+  gemini: "Google Gemini",
+  openrouter: "OpenRouter",
+};
+
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   const [alias, setAlias] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [vendor, setVendor] = useState<AiVendor>("gemini");
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -39,7 +52,7 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: crypto.randomUUID(),
-          vendor: "gemini",
+          vendor,
           alias: a,
           apiKey: k,
         }),
@@ -82,15 +95,27 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-lg">Gemini 凭证</CardTitle>
+        <CardTitle className="text-lg">API 凭证</CardTitle>
         <CardDescription>
-          别名全局唯一（不区分大小写）。保存后的凭证可在下方槽位中选用；与模型配置互不影响，可随时添加或删除。
+          选择供应商并填写密钥。别名全局唯一（不区分大小写）。凭证可在下方槽位中复用；与具体模型 ID 分开配置，可随时增删。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
           <p className="text-sm font-medium mb-3">添加新凭证</p>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+            <Field className="min-w-0 flex-1 lg:max-w-[11rem]">
+              <FieldLabel>供应商</FieldLabel>
+              <Select value={vendor} onValueChange={(v) => setVendor(v as AiVendor)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini">Google Gemini（AI Studio / Vertex 密钥）</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
             <Field className="min-w-0 flex-1 lg:max-w-xs">
               <FieldLabel>别名</FieldLabel>
               <Input
@@ -104,7 +129,11 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
               <FieldLabel>API Key</FieldLabel>
               <Input
                 type="password"
-                placeholder="粘贴 Google AI Studio 密钥"
+                placeholder={
+                  vendor === "openrouter"
+                    ? "粘贴 OpenRouter 控制台中的 API Key"
+                    : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 autoComplete="new-password"
@@ -136,7 +165,12 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                 className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-card hover:bg-muted/20 transition-colors"
               >
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{c.alias}</p>
+                  <p className="font-medium truncate">
+                    {c.alias}{" "}
+                    <span className="text-muted-foreground font-normal text-xs">
+                      （{VENDOR_LABEL[c.vendor]}）
+                    </span>
+                  </p>
                   <p className="text-xs text-muted-foreground font-mono">
                     {c.hasKey ? `密钥已配置 · 尾号 ${c.keyLast4 ?? "****"}` : "密钥无效或解密失败"}
                   </p>

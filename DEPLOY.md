@@ -90,7 +90,7 @@ If the workflow is skipped, ensure both `HF_TOKEN` and `HF_SPACE_ID` are set.
 
 Set **Variables and secrets** on the Space (not in GitHub) for the running container:
 
-- `DATABASE_URL`, `CORS_ORIGINS` (your Vercel web origin), optional `RULE_ENGINE_API_KEY` to match `apps/web`, and Supabase vars if using **remote index bundles** (`INDEX_STORAGE_MODE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INDEX_STORAGE_BUCKET`). Gemini keys stay in the web app; the engine uses `X-Boardrule-Ai-Config` from the BFF.
+- `DATABASE_URL`, `CORS_ORIGINS` (your Vercel web origin), optional `RULE_ENGINE_API_KEY` to match `apps/web`, and Supabase vars if using **remote index bundles** (`INDEX_STORAGE_MODE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INDEX_STORAGE_BUCKET`). Provider API keys stay in the web app; the engine uses `X-Boardrule-Ai-Config` (v2) from the BFF.
 
 - Default listen port follows Hugging Face’s **`PORT`** environment variable (the Dockerfile uses it).
 

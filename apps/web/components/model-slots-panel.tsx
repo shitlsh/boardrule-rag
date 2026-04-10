@@ -15,18 +15,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AiGatewayPublic, SlotKey } from "@/lib/ai-gateway-types";
+import type { AiGatewayPublic, AiVendor, SlotKey } from "@/lib/ai-gateway-types";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 
 const SLOTS: { key: SlotKey; label: string; hint: string }[] = [
-  { key: "flash", label: "Flash", hint: "目录、快路径、Flash 视觉" },
-  { key: "pro", label: "Pro", hint: "章节提取、合并、Pro 视觉" },
-  { key: "embed", label: "Embed", hint: "向量嵌入（建索引）" },
-  { key: "chat", label: "Chat", hint: "规则问答（RAG）" },
+  {
+    key: "flash",
+    label: "Flash",
+    hint: "目录、快路径与多模态读图；请选支持视觉的模型（Gemini 或 OpenRouter 上带多模态能力的模型）。",
+  },
+  {
+    key: "pro",
+    label: "Pro",
+    hint: "章节提取、合并与高精度读图；模型需与供应商凭证匹配。",
+  },
+  {
+    key: "embed",
+    label: "Embed",
+    hint: "向量嵌入与建索引；更换嵌入模型后通常需重建索引。OpenRouter 上请选嵌入类模型（如 text-embedding 系列）。",
+  },
+  {
+    key: "chat",
+    label: "Chat",
+    hint: "RAG 合成回答；使用所选凭证对应的聊天模型。",
+  },
 ];
 
 function modelsCacheKey(credentialId: string, slot: SlotKey): string {
   return `${credentialId}:${slot}`;
+}
+
+function vendorShort(v: AiVendor): string {
+  return v === "openrouter" ? "OpenRouter" : "Gemini";
 }
 
 type Props = {
@@ -158,7 +178,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">模型槽位</CardTitle>
         <CardDescription>
-          为每个用途选择凭证与模型，点击「保存」写入配置。若嵌入模型变更，通常需要重建索引。
+          每个槽位绑定一组「凭证 + 模型 ID」。凭证决定供应商（Gemini 或 OpenRouter）；OpenRouter 模型 ID 多为「厂商/模型名」形式。变更嵌入（Embed）模型后通常需重建索引。
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -208,7 +228,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
                       <SelectItem value="__none__">未选择</SelectItem>
                       {data.credentials.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.alias}
+                          {c.alias}（{vendorShort(c.vendor)}）
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -222,6 +242,11 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
                   </FieldLabel>
                   <GeminiModelPicker
                     slot={key}
+                    vendor={
+                      row.credentialId
+                        ? (data.credentials.find((c) => c.id === row.credentialId)?.vendor ?? "gemini")
+                        : "gemini"
+                    }
                     models={list}
                     value={row.model}
                     onChange={(v) => onModelChange(key, v)}

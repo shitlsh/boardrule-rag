@@ -12,6 +12,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.response_synthesizers import ResponseMode, get_response_synthesizer
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.llms.openai import OpenAI as OpenAILlm
 from ingestion.bm25_retriever import BoardruleBM25Retriever
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import format_header_path_for_prompt
@@ -25,13 +26,22 @@ from ingestion.index_builder import (
 )
 from ingestion.index_storage_remote import ensure_game_index_local
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
-from utils.ai_gateway import get_gemini
+from utils.ai_gateway import get_slots
+from utils.openrouter_client import OPENROUTER_API_BASE
 
 _BM25_SUBDIR = "bm25"
 
 
-def get_chat_llm() -> GoogleGenAI:
-    c = get_gemini().chat
+def get_chat_llm() -> GoogleGenAI | OpenAILlm:
+    c = get_slots().chat
+    if c.provider == "openrouter":
+        return OpenAILlm(
+            model=c.model,
+            api_key=c.api_key,
+            api_base=OPENROUTER_API_BASE,
+            temperature=float(c.temperature),
+            max_tokens=int(c.max_tokens),
+        )
     return GoogleGenAI(
         model=c.model,
         api_key=c.api_key,

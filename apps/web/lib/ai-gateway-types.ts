@@ -1,4 +1,4 @@
-export type AiVendor = "gemini";
+export type AiVendor = "gemini" | "openrouter";
 
 export type SlotKey = "flash" | "pro" | "embed" | "chat";
 
@@ -12,7 +12,7 @@ export type AiCredentialStored = {
 
 export type SlotBinding = {
   credentialId: string;
-  /** Full model resource name or id, e.g. models/gemini-2.0-flash */
+  /** Model id: e.g. models/gemini-2.0-flash (Gemini) or openai/gpt-4o-mini (OpenRouter). */
   model: string;
 };
 
@@ -59,14 +59,35 @@ export type AiGatewayPublic = {
   ragOptions: RagOptionsStored;
 };
 
-/** Payload sent to rule_engine (camelCase). */
-export type EngineAiPayloadV1 = {
-  version: 1;
-  gemini: {
-    flash: { apiKey: string; model: string; maxOutputTokens?: number };
-    pro: { apiKey: string; model: string; maxOutputTokens?: number };
-    embed: { apiKey: string; model: string };
-    chat: { apiKey: string; model: string; temperature: number; maxTokens: number };
+export type EngineSlotFlashPro = {
+  provider: AiVendor;
+  apiKey: string;
+  model: string;
+  maxOutputTokens?: number;
+};
+
+export type EngineSlotEmbed = {
+  provider: AiVendor;
+  apiKey: string;
+  model: string;
+};
+
+export type EngineSlotChat = {
+  provider: AiVendor;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+};
+
+/** Payload sent to rule_engine (camelCase). Version 2 only. */
+export type EngineAiPayloadV2 = {
+  version: 2;
+  slots: {
+    flash: EngineSlotFlashPro;
+    pro: EngineSlotFlashPro;
+    embed: EngineSlotEmbed;
+    chat: EngineSlotChat;
   };
   ragOptions?: RagOptionsStored;
 };

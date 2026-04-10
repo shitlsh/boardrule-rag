@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { removeCredentialById, updateGeminiCredential } from "@/lib/ai-gateway";
+import { removeCredentialById, updateCredential } from "@/lib/ai-gateway";
+import type { AiVendor } from "@/lib/ai-gateway-types";
 import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -28,12 +29,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const o = body as Record<string, unknown>;
   const alias = o.alias !== undefined ? (typeof o.alias === "string" ? o.alias : undefined) : undefined;
   const apiKey = o.apiKey !== undefined ? (typeof o.apiKey === "string" ? o.apiKey : undefined) : undefined;
+  const vendorRaw = o.vendor !== undefined ? o.vendor : undefined;
+  const vendor: AiVendor | undefined =
+    vendorRaw === "gemini" || vendorRaw === "openrouter" ? vendorRaw : undefined;
 
   try {
-    const data = await updateGeminiCredential({
+    const data = await updateCredential({
       id: id.trim(),
       ...(alias !== undefined ? { alias } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
+      ...(vendor !== undefined ? { vendor } : {}),
     });
     return NextResponse.json(data);
   } catch (e) {

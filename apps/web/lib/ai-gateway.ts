@@ -7,7 +7,8 @@ import type {
   AiCredentialStored,
   AiGatewayPublic,
   AiGatewayStored,
-  EngineAiPayloadV1,
+  AiVendor,
+  EngineAiPayloadV2,
   RagOptionsStored,
   SlotBinding,
   SlotKey,
@@ -66,14 +67,18 @@ function parseStored(raw: string): AiGatewayStored {
     const o = j as Record<string, unknown>;
     if (o.version !== 1) return emptyStored();
     const credentials = Array.isArray(o.credentials)
-      ? (o.credentials as AiCredentialStored[]).filter(
-          (c) =>
-            c &&
-            typeof c.id === "string" &&
-            typeof c.vendor === "string" &&
-            typeof c.alias === "string" &&
-            typeof c.apiKeyEnc === "string",
-        )
+      ? (o.credentials as AiCredentialStored[]).filter((c) => {
+          if (
+            !c ||
+            typeof c.id !== "string" ||
+            typeof c.vendor !== "string" ||
+            typeof c.alias !== "string" ||
+            typeof c.apiKeyEnc !== "string"
+          ) {
+            return false;
+          }
+          return c.vendor === "gemini" || c.vendor === "openrouter";
+        })
       : [];
     const sb = (o.slotBindings || {}) as Record<string, unknown>;
     const slotBindings: AiGatewayStored["slotBindings"] = {
@@ -167,7 +172,7 @@ export async function getAiGatewayPublic(): Promise<AiGatewayPublic> {
 export type AiGatewayPatchBody = {
   credentials?: {
     id: string;
-    vendor: "gemini";
+    vendor: AiVendor;
     alias: string;
     /** If omitted or empty, keep previous key for this id. */
     apiKey?: string;
@@ -197,7 +202,9 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     validateCredentialsUniqueAliases(patch.credentials);
     const next: AiCredentialStored[] = [];
     for (const p of patch.credentials) {
-      if (p.vendor !== "gemini") throw new Error("当前仅支持 gemini 厂商");
+      if (p.vendor !== "gemini" && p.vendor !== "openrouter") {
+        throw new Error("vendor 必须为 gemini 或 openrouter");
+      }
       const alias = p.alias.trim();
       if (!alias) throw new Error("别名不能为空");
       const prev = prevById.get(p.id);
@@ -209,7 +216,7 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
       } else {
         throw new Error(`新凭证 ${alias} 必须提供 API Key`);
       }
-      next.push({ id: p.id, vendor: "gemini", alias, apiKeyEnc });
+      next.push({ id: p.id, vendor: p.vendor, alias, apiKeyEnc });
     }
     credentials = next;
   }
@@ -281,7 +288,7 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
 function resolveSlot(
   stored: AiGatewayStored,
   slot: SlotKey,
-): { apiKey: string; model: string } {
+): { apiKey: string; model: string; vendor: AiVendor } {
   const b = stored.slotBindings[slot];
   if (!b?.credentialId || !b.model?.trim()) {
     throw new Error(`AI 槽位未配置: ${slot}`);
@@ -290,11 +297,11 @@ function resolveSlot(
   if (!cred) throw new Error(`槽位 ${slot} 引用的凭证不存在`);
   const apiKey = decryptSecret(cred.apiKeyEnc).trim();
   if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
-  return { apiKey, model: b.model.trim() };
+  return { apiKey, model: b.model.trim(), vendor: cred.vendor };
 }
 
-/** Resolved payload for rule_engine. Throws if any slot incomplete. */
-export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1 {
+/** Resolved payload for rule_engine (v2). Throws if any slot incomplete. */
+export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2 {
   const flash = resolveSlot(stored, "flash");
   const pro = resolveSlot(stored, "pro");
   const embed = resolveSlot(stored, "embed");
@@ -312,12 +319,27 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1
       ro.retrievalMode ||
       typeof ro.useRerank === "boolean");
   return {
-    version: 1,
-    gemini: {
-      flash: { apiKey: flash.apiKey, model: flash.model, maxOutputTokens: 8192 },
-      pro: { apiKey: pro.apiKey, model: pro.model, maxOutputTokens: 8192 },
-      embed: { apiKey: embed.apiKey, model: embed.model },
+    version: 2,
+    slots: {
+      flash: {
+        provider: flash.vendor,
+        apiKey: flash.apiKey,
+        model: flash.model,
+        maxOutputTokens: 8192,
+      },
+      pro: {
+        provider: pro.vendor,
+        apiKey: pro.apiKey,
+        model: pro.model,
+        maxOutputTokens: 8192,
+      },
+      embed: {
+        provider: embed.vendor,
+        apiKey: embed.apiKey,
+        model: embed.model,
+      },
       chat: {
+        provider: chat.vendor,
         apiKey: chat.apiKey,
         model: chat.model,
         temperature,
@@ -328,7 +350,7 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV1
   };
 }
 
-export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV1> {
+export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV2> {
   const stored = await getAiGatewayStored();
   return buildEngineAiPayload(stored);
 }
@@ -337,6 +359,12 @@ export function getCredentialApiKey(stored: AiGatewayStored, credentialId: strin
   const cred = stored.credentials.find((c) => c.id === credentialId);
   if (!cred) throw new Error("凭证不存在");
   return decryptSecret(cred.apiKeyEnc).trim();
+}
+
+export function getCredentialVendor(stored: AiGatewayStored, credentialId: string): AiVendor {
+  const cred = stored.credentials.find((c) => c.id === credentialId);
+  if (!cred) throw new Error("凭证不存在");
+  return cred.vendor;
 }
 
 async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> {
@@ -348,12 +376,16 @@ async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> 
   return toPublic(stored);
 }
 
-/** Add a new Gemini credential (saved immediately). */
-export async function addGeminiCredential(params: {
+/** Add a new API credential (saved immediately). */
+export async function addCredential(params: {
   id: string;
   alias: string;
   apiKey: string;
+  vendor: AiVendor;
 }): Promise<AiGatewayPublic> {
+  if (params.vendor !== "gemini" && params.vendor !== "openrouter") {
+    throw new Error("vendor 必须为 gemini 或 openrouter");
+  }
   const alias = params.alias.trim();
   const key = params.apiKey.trim();
   if (!alias) throw new Error("别名不能为空");
@@ -370,7 +402,7 @@ export async function addGeminiCredential(params: {
   }
   const next: AiCredentialStored = {
     id: params.id,
-    vendor: "gemini",
+    vendor: params.vendor,
     alias,
     apiKeyEnc: encryptSecret(key),
   };
@@ -381,10 +413,20 @@ export async function addGeminiCredential(params: {
   return persistStored(stored);
 }
 
-/** Update alias and/or API Key for one credential. */
-export async function updateGeminiCredential(params: {
+/** @deprecated Use addCredential */
+export async function addGeminiCredential(params: {
+  id: string;
+  alias: string;
+  apiKey: string;
+}): Promise<AiGatewayPublic> {
+  return addCredential({ ...params, vendor: "gemini" });
+}
+
+/** Update alias, vendor, and/or API Key for one credential. */
+export async function updateCredential(params: {
   id: string;
   alias?: string;
+  vendor?: AiVendor;
   apiKey?: string;
 }): Promise<AiGatewayPublic> {
   const cur = await getAiGatewayStored();
@@ -402,14 +444,30 @@ export async function updateGeminiCredential(params: {
       }
     }
   }
+  let vendor: AiVendor = prev.vendor;
+  if (params.vendor !== undefined) {
+    if (params.vendor !== "gemini" && params.vendor !== "openrouter") {
+      throw new Error("vendor 必须为 gemini 或 openrouter");
+    }
+    vendor = params.vendor;
+  }
   let apiKeyEnc = prev.apiKeyEnc;
   if (params.apiKey !== undefined && params.apiKey.trim() !== "") {
     apiKeyEnc = encryptSecret(params.apiKey.trim());
   }
-  const nextCred: AiCredentialStored = { ...prev, alias, apiKeyEnc };
+  const nextCred: AiCredentialStored = { ...prev, alias, apiKeyEnc, vendor };
   const credentials = [...cur.credentials];
   credentials[idx] = nextCred;
   return persistStored({ ...cur, credentials });
+}
+
+/** @deprecated Use updateCredential */
+export async function updateGeminiCredential(params: {
+  id: string;
+  alias?: string;
+  apiKey?: string;
+}): Promise<AiGatewayPublic> {
+  return updateCredential(params);
 }
 
 /** Remove credential; clears any slot that referenced it. */

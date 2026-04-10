@@ -1,6 +1,6 @@
 # boardrule-rag — Web (`apps/web`)
 
-Next.js（App Router）管理端：游戏元数据、规则书上传、任务与提取状态轮询。通过 **`RULE_ENGINE_URL`** 调用 `services/rule_engine`；**Gemini** 在 **`/models`** 配置后由 BFF 以请求头 **`X-Boardrule-Ai-Config`** 传给规则引擎。
+Next.js（App Router）管理端：游戏元数据、规则书上传、任务与提取状态轮询。通过 **`RULE_ENGINE_URL`** 调用 `services/rule_engine`；在 **`/models`** 配置供应商（Gemini 或 OpenRouter）与槽位后，由 BFF 以请求头 **`X-Boardrule-Ai-Config`**（v2）传给规则引擎。
 
 ## 环境变量
 

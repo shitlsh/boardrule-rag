@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Any
-
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +14,7 @@ _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config",
 class FlashProSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    provider: Literal["gemini", "openrouter"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     max_output_tokens: int | None = Field(None, alias="maxOutputTokens")
@@ -24,6 +23,7 @@ class FlashProSlot(BaseModel):
 class EmbedSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    provider: Literal["gemini", "openrouter"]
     api_key: str = Field(..., alias="apiKey")
     model: str
 
@@ -31,13 +31,14 @@ class EmbedSlot(BaseModel):
 class ChatSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    provider: Literal["gemini", "openrouter"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     temperature: float = 0.2
     max_tokens: int = Field(8192, alias="maxTokens")
 
 
-class GeminiBundle(BaseModel):
+class SlotsBundle(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     flash: FlashProSlot
@@ -58,7 +59,6 @@ class RagOptions(BaseModel):
         None,
         alias="bm25TokenProfile",
     )
-    # Retrieval defaults for new index builds; query-time behavior is stored in per-game manifest.
     similarity_top_k: int | None = Field(None, alias="similarityTopK", ge=1, le=200)
     rerank_top_n: int | None = Field(None, alias="rerankTopN", ge=1, le=100)
     retrieval_mode: Literal["hybrid", "vector_only"] | None = Field(None, alias="retrievalMode")
@@ -68,8 +68,8 @@ class RagOptions(BaseModel):
 class BoardruleAiConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    version: int = 1
-    gemini: GeminiBundle
+    version: Literal[2] = 2
+    slots: SlotsBundle
     rag_options: RagOptions | None = Field(None, alias="ragOptions")
 
 
@@ -80,8 +80,8 @@ def get_config() -> BoardruleAiConfig:
     return c
 
 
-def get_gemini() -> GeminiBundle:
-    return get_config().gemini
+def get_slots() -> SlotsBundle:
+    return get_config().slots
 
 
 def parse_boardrule_ai_header(raw: str | None) -> BoardruleAiConfig | None:

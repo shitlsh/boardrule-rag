@@ -13,12 +13,14 @@ from typing import Any, Literal
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 from ingestion.bm25_retriever import BM25_CJK_TOKEN_PATTERN, BoardruleBM25Retriever, default_bm25_from_nodes
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import documents_to_nodes, documents_to_nodes_loose, merged_markdown_to_documents
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
-from utils.ai_gateway import get_gemini
+from utils.ai_gateway import get_slots
+from utils.openrouter_client import OPENROUTER_API_BASE
 from utils.paths import service_root
 
 _MANIFEST_NAME = "manifest.json"
@@ -199,7 +201,7 @@ def game_index_dir(game_id: str) -> Path:
 
 
 def _embedding_model_name() -> str:
-    return get_gemini().embed.model
+    return get_slots().embed.model
 
 
 def _normalize_embedding_model_id(model_id: str) -> str:
@@ -309,12 +311,19 @@ def _pgvector_physical_table_name(game_id: str) -> str:
 
 
 def configure_embedding_settings() -> None:
-    """Set global LlamaIndex embedding model (Gemini)."""
-    g = get_gemini().embed
-    Settings.embed_model = GoogleGenAIEmbedding(
-        model_name=g.model,
-        api_key=g.api_key,
-    )
+    """Set global LlamaIndex embedding model from the Embed slot (Gemini or OpenRouter)."""
+    slot = get_slots().embed
+    if slot.provider == "openrouter":
+        Settings.embed_model = OpenAIEmbedding(
+            model=slot.model,
+            api_key=slot.api_key,
+            api_base=OPENROUTER_API_BASE,
+        )
+    else:
+        Settings.embed_model = GoogleGenAIEmbedding(
+            model_name=slot.model,
+            api_key=slot.api_key,
+        )
 
 
 def _documents_from_inputs(
