@@ -115,7 +115,14 @@ function parseStored(raw: string): AiGatewayStored {
     };
     const ragRaw = (o as { ragOptions?: unknown }).ragOptions;
     const ragOptions = normalizeRagOptions(ragRaw) ?? {};
-    return { version: 1, credentials, slotBindings, chatOptions, ragOptions };
+    const merged: AiGatewayStored = {
+      version: 1,
+      credentials,
+      slotBindings,
+      chatOptions,
+      ragOptions,
+    };
+    return migrateChatBindingFromLegacyOptions(merged);
   } catch {
     return emptyStored();
   }
@@ -123,11 +130,46 @@ function parseStored(raw: string): AiGatewayStored {
 
 function normalizeBinding(v: unknown): SlotBinding | null {
   if (typeof v !== "object" || v === null) return null;
-  const b = v as { credentialId?: unknown; model?: unknown };
+  const b = v as Record<string, unknown>;
   const credentialId = typeof b.credentialId === "string" ? b.credentialId.trim() : "";
   const model = typeof b.model === "string" ? b.model.trim() : "";
   if (!credentialId || !model) return null;
-  return { credentialId, model };
+  const out: SlotBinding = { credentialId, model };
+  if (typeof b.maxOutputTokens === "number" && Number.isFinite(b.maxOutputTokens)) {
+    const m = Math.trunc(b.maxOutputTokens);
+    if (m > 0) out.maxOutputTokens = m;
+  }
+  if (typeof b.temperature === "number" && Number.isFinite(b.temperature)) {
+    out.temperature = b.temperature;
+  }
+  if (typeof b.maxTokens === "number" && Number.isFinite(b.maxTokens)) {
+    const mt = Math.trunc(b.maxTokens);
+    if (mt > 0) out.maxTokens = mt;
+  }
+  return out;
+}
+
+/**
+ * Legacy stores had chat params only under `chatOptions`. Copy into `slotBindings.chat`
+ * when missing so the slot panel can show a single source of truth.
+ */
+function migrateChatBindingFromLegacyOptions(stored: AiGatewayStored): AiGatewayStored {
+  const ch = stored.slotBindings.chat;
+  if (!ch) return stored;
+  const needTemp = ch.temperature === undefined;
+  const needMt = ch.maxTokens === undefined;
+  if (!needTemp && !needMt) return stored;
+  return {
+    ...stored,
+    slotBindings: {
+      ...stored.slotBindings,
+      chat: {
+        ...ch,
+        ...(needTemp ? { temperature: stored.chatOptions.temperature } : {}),
+        ...(needMt ? { maxTokens: stored.chatOptions.maxTokens } : {}),
+      },
+    },
+  };
 }
 
 export function aliasKey(alias: string): string {
@@ -353,7 +395,11 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
   const pro = resolveSlot(stored, "pro");
   const embed = resolveSlot(stored, "embed");
   const chat = resolveSlot(stored, "chat");
-  const { temperature, maxTokens } = stored.chatOptions;
+  const flashB = stored.slotBindings.flash;
+  const proB = stored.slotBindings.pro;
+  const chatB = stored.slotBindings.chat;
+  const temperature = chatB?.temperature ?? stored.chatOptions.temperature;
+  const maxTokens = chatB?.maxTokens ?? stored.chatOptions.maxTokens;
   const ro = stored.ragOptions;
   const hasRag =
     ro &&
@@ -372,7 +418,9 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
         provider: flash.vendor,
         apiKey: flash.apiKey,
         model: flash.model,
-        maxOutputTokens: 8192,
+        ...(flashB?.maxOutputTokens != null && flashB.maxOutputTokens > 0
+          ? { maxOutputTokens: Math.trunc(flashB.maxOutputTokens) }
+          : {}),
         ...(flash.vendor === "qwen"
           ? { dashscopeCompatibleBase: flash.dashscopeCompatibleBase }
           : {}),
@@ -381,7 +429,9 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
         provider: pro.vendor,
         apiKey: pro.apiKey,
         model: pro.model,
-        maxOutputTokens: 8192,
+        ...(proB?.maxOutputTokens != null && proB.maxOutputTokens > 0
+          ? { maxOutputTokens: Math.trunc(proB.maxOutputTokens) }
+          : {}),
         ...(pro.vendor === "qwen" ? { dashscopeCompatibleBase: pro.dashscopeCompatibleBase } : {}),
       },
       embed: {
@@ -590,21 +640,65 @@ export async function removeCredentialById(id: string): Promise<AiGatewayPublic>
   return persistStored({ ...cur, credentials, slotBindings });
 }
 
+export type SlotBindingSave =
+  | (Omit<SlotBinding, "maxOutputTokens"> & { maxOutputTokens?: number | null })
+  | null;
+
 /** Set one slot binding (auto-save). Both parts required when binding is set. */
-export async function setSlotBinding(slot: SlotKey, binding: SlotBinding | null): Promise<AiGatewayPublic> {
+export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): Promise<AiGatewayPublic> {
   if (!SLOTS.includes(slot)) throw new Error("无效槽位");
   const cur = await getAiGatewayStored();
   const credIds = new Set(cur.credentials.map((c) => c.id));
   let nextBinding: SlotBinding | null = null;
+  let chatOptions = cur.chatOptions;
   if (binding !== null) {
     const cid = binding.credentialId.trim();
     const model = binding.model.trim();
     if (!cid || !model) throw new Error("请选择凭证并填写模型");
     if (!credIds.has(cid)) throw new Error("凭证不存在");
-    nextBinding = { credentialId: cid, model };
+    const base: SlotBinding = { credentialId: cid, model };
+
+    if (slot === "flash" || slot === "pro") {
+      const raw = binding.maxOutputTokens as number | null | undefined;
+      const hasKey = Object.prototype.hasOwnProperty.call(binding as object, "maxOutputTokens");
+      const prevSlot = cur.slotBindings[slot];
+      if (hasKey && raw === null) {
+        // omit field — use rule-engine default (env / 32768)
+      } else if (hasKey && raw !== undefined && raw !== null) {
+        const m = Math.trunc(Number(raw));
+        if (!Number.isFinite(m) || m < 1) throw new Error("maxOutputTokens 须为正整数");
+        base.maxOutputTokens = m;
+      } else if (
+        !hasKey &&
+        prevSlot?.credentialId === cid &&
+        prevSlot.model === model &&
+        prevSlot.maxOutputTokens != null &&
+        prevSlot.maxOutputTokens > 0
+      ) {
+        base.maxOutputTokens = prevSlot.maxOutputTokens;
+      }
+    }
+
+    if (slot === "chat") {
+      const t =
+        binding.temperature !== undefined && Number.isFinite(binding.temperature)
+          ? binding.temperature
+          : cur.chatOptions.temperature;
+      const mtRaw = binding.maxTokens;
+      const mt =
+        mtRaw !== undefined && mtRaw !== null
+          ? Math.trunc(Number(mtRaw))
+          : cur.chatOptions.maxTokens;
+      if (!Number.isFinite(mt) || mt < 1) throw new Error("maxTokens 无效");
+      base.temperature = t;
+      base.maxTokens = mt;
+      chatOptions = { temperature: t, maxTokens: mt };
+    }
+
+    nextBinding = base;
   }
   const slotBindings = { ...cur.slotBindings, [slot]: nextBinding };
-  return persistStored({ ...cur, slotBindings });
+  return persistStored({ ...cur, slotBindings, chatOptions });
 }
 
 export async function patchGatewayChatOptions(
@@ -621,7 +715,19 @@ export async function patchGatewayChatOptions(
     if (m < 1) throw new Error("chat maxTokens 无效");
     chatOptions.maxTokens = m;
   }
-  return persistStored({ ...cur, chatOptions });
+  const ch = cur.slotBindings.chat;
+  const slotBindings =
+    ch && ch.credentialId && ch.model?.trim()
+      ? {
+          ...cur.slotBindings,
+          chat: {
+            ...ch,
+            temperature: chatOptions.temperature,
+            maxTokens: chatOptions.maxTokens,
+          },
+        }
+      : cur.slotBindings;
+  return persistStored({ ...cur, chatOptions, slotBindings });
 }
 
 /** PATCH body for RAG options: use `null` on a key to clear it (fall back to rule engine env). */

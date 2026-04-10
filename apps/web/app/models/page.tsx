@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { ModelRagOptionsPanel } from "@/components/model-rag-options-panel";
-import { ModelChatOptionsPanel } from "@/components/model-chat-options-panel";
 import { ModelCredentialsPanel } from "@/components/model-credentials-panel";
 import { ModelSlotsPanel } from "@/components/model-slots-panel";
 import { Spinner } from "@/components/ui/spinner";
@@ -66,7 +65,7 @@ export default function ModelsPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">模型管理</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl text-pretty">
-            管理 API 凭证（Google Gemini 或 OpenRouter）与各能力槽位（Flash / Pro / Embed / Chat）。凭证与槽位相互独立；对话与检索参数在编辑后会自动保存。
+            管理 API 凭证与各能力槽位（Flash / Pro / Embed / Chat）。每个槽位内选择凭证与模型后，可设置该槽位专用参数（如 Flash/Pro 的最大输出长度、Chat 的温度与回复长度）；检索相关参数见下方 RAG 面板。
           </p>
         </div>
       </div>
@@ -74,7 +73,6 @@ export default function ModelsPage() {
       <div className="space-y-8">
         <ModelCredentialsPanel data={data} onUpdated={onUpdated} />
         <ModelSlotsPanel data={data} onUpdated={onUpdated} />
-        <ModelChatOptionsPanel data={data} onUpdated={onUpdated} />
         <ModelRagOptionsPanel data={data} onUpdated={onUpdated} />
       </div>
     </div>

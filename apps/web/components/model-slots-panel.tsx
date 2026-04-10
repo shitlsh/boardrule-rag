@@ -7,7 +7,8 @@ import { Loader2 } from "lucide-react";
 import { GeminiModelPicker } from "@/components/gemini-model-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,16 @@ import {
 } from "@/components/ui/select";
 import type { AiGatewayPublic, AiVendor, SlotKey } from "@/lib/ai-gateway-types";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
+
+type LocalSlotRow = {
+  credentialId: string;
+  model: string;
+  /** flash / pro */
+  maxOutputTokens: string;
+  /** chat */
+  temperature: string;
+  maxTokens: string;
+};
 
 const SLOTS: { key: SlotKey; label: string; hint: string }[] = [
   {
@@ -60,9 +71,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
   const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
   const [savingSlot, setSavingSlot] = useState<SlotKey | null>(null);
-  const [local, setLocal] = useState<Record<SlotKey, { credentialId: string; model: string }>>(() =>
-    initLocal(data),
-  );
+  const [local, setLocal] = useState<Record<SlotKey, LocalSlotRow>>(() => initLocal(data));
 
   useEffect(() => {
     setLocal(initLocal(data));
@@ -104,13 +113,36 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
   }, [slotBindingsKey, fetchModels]);
 
   const saveSlot = useCallback(
-    async (slot: SlotKey, credentialId: string, model: string) => {
+    async (slot: SlotKey) => {
+      const row = local[slot];
       setSavingSlot(slot);
       try {
+        const body: Record<string, unknown> = {
+          credentialId: row.credentialId.trim(),
+          model: row.model.trim(),
+        };
+        if (slot === "flash" || slot === "pro") {
+          const raw = row.maxOutputTokens.trim();
+          body.maxOutputTokens = raw === "" ? null : Number(raw);
+          if (raw !== "" && !Number.isFinite(body.maxOutputTokens as number)) {
+            throw new Error("maxOutputTokens 须为数字");
+          }
+          if (raw !== "" && (body.maxOutputTokens as number) < 1) {
+            throw new Error("maxOutputTokens 须 ≥ 1，或留空使用引擎默认");
+          }
+        }
+        if (slot === "chat") {
+          body.temperature = Number(row.temperature);
+          body.maxTokens = Number(row.maxTokens);
+          if (!Number.isFinite(body.temperature as number)) throw new Error("temperature 无效");
+          if (!Number.isFinite(body.maxTokens as number) || (body.maxTokens as number) < 1) {
+            throw new Error("maxTokens 无效");
+          }
+        }
         const res = await fetch(`/api/ai-gateway/slots/${encodeURIComponent(slot)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ credentialId, model }),
+          body: JSON.stringify(body),
         });
         const json = (await res.json()) as AiGatewayPublic & { message?: string };
         if (!res.ok) {
@@ -124,7 +156,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
         setSavingSlot(null);
       }
     },
-    [onUpdated],
+    [local, onUpdated],
   );
 
   const clearSlot = async (slot: SlotKey) => {
@@ -142,7 +174,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
       onUpdated(json);
       setLocal((prev) => ({
         ...prev,
-        [slot]: { credentialId: "", model: "" },
+        [slot]: emptyRow(data),
       }));
       toast.success("已清除该槽位");
     } catch (e) {
@@ -156,7 +188,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
     const cid = credentialId === "__none__" ? "" : credentialId;
 
     if (!cid) {
-      setLocal((prev) => ({ ...prev, [slot]: { credentialId: "", model: "" } }));
+      setLocal((prev) => ({ ...prev, [slot]: emptyRow(data) }));
       void clearSlot(slot);
       return;
     }
@@ -164,6 +196,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
     setLocal((prev) => ({
       ...prev,
       [slot]: {
+        ...prev[slot],
         credentialId: cid,
         model: prev[slot].credentialId === cid ? prev[slot].model : "",
       },
@@ -180,7 +213,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">模型槽位</CardTitle>
         <CardDescription>
-          每个槽位绑定一组「凭证 + 模型 ID」。凭证决定供应商（Gemini 或 OpenRouter）；OpenRouter 模型 ID 多为「厂商/模型名」形式。变更嵌入（Embed）模型后通常需重建索引。
+          每个槽位绑定一组「凭证 + 模型 ID」及该槽位专用生成参数。Flash / Pro 可设置单次最大输出 token；Chat 可设置对话温度与回复长度。留空 max output 表示使用规则引擎默认（见部署环境变量）。变更嵌入（Embed）模型后通常需重建索引。
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -191,9 +224,23 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
             const list = row.credentialId ? (modelLists[ck] ?? []) : [];
             const loading = row.credentialId ? Boolean(loadingModels[ck]) : false;
             const server = data.slotBindings[key];
+            const serverMaxOut =
+              server?.maxOutputTokens != null ? String(server.maxOutputTokens) : "";
+            const serverTemp =
+              key === "chat"
+                ? String(server?.temperature ?? data.chatOptions.temperature)
+                : "";
+            const serverChatMax =
+              key === "chat" ? String(server?.maxTokens ?? data.chatOptions.maxTokens) : "";
             const dirty =
               row.credentialId !== (server?.credentialId ?? "") ||
-              row.model.trim() !== (server?.model ?? "").trim();
+              row.model.trim() !== (server?.model ?? "").trim() ||
+              (key === "flash" || key === "pro"
+                ? row.maxOutputTokens.trim() !== serverMaxOut
+                : false) ||
+              (key === "chat"
+                ? row.temperature !== serverTemp || row.maxTokens !== serverChatMax
+                : false);
             const modelAllowed = list.some((m) => m.name === row.model.trim());
             const canSave =
               Boolean(row.credentialId) &&
@@ -262,11 +309,73 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
                   ) : null}
                 </Field>
 
+                {key === "flash" || key === "pro" ? (
+                  <Field>
+                    <FieldLabel>单次最大输出（max output tokens）</FieldLabel>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="留空则使用引擎默认（如 32768）"
+                      value={row.maxOutputTokens}
+                      onChange={(e) =>
+                        setLocal((prev) => ({
+                          ...prev,
+                          [key]: { ...prev[key], maxOutputTokens: e.target.value },
+                        }))
+                      }
+                      disabled={!row.credentialId}
+                    />
+                    <FieldDescription>
+                      规则书抽取与合并等长文生成会用到。需小于等于所选模型允许的上限。
+                    </FieldDescription>
+                  </Field>
+                ) : null}
+
+                {key === "chat" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Temperature</FieldLabel>
+                      <Input
+                        type="number"
+                        step={0.1}
+                        min={0}
+                        max={2}
+                        value={row.temperature}
+                        onChange={(e) =>
+                          setLocal((prev) => ({
+                            ...prev,
+                            [key]: { ...prev[key], temperature: e.target.value },
+                          }))
+                        }
+                        disabled={!row.credentialId}
+                      />
+                      <FieldDescription>RAG 合成回答的采样温度。</FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Max tokens（回复）</FieldLabel>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={200000}
+                        step={1}
+                        value={row.maxTokens}
+                        onChange={(e) =>
+                          setLocal((prev) => ({
+                            ...prev,
+                            [key]: { ...prev[key], maxTokens: e.target.value },
+                          }))
+                        }
+                        disabled={!row.credentialId}
+                      />
+                    </Field>
+                  </div>
+                ) : null}
+
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button
                     type="button"
                     disabled={!canSave || !dirty || savingSlot !== null}
-                    onClick={() => void saveSlot(key, row.credentialId.trim(), row.model.trim())}
+                    onClick={() => void saveSlot(key)}
                   >
                     保存
                   </Button>
@@ -291,13 +400,26 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
   );
 }
 
-function initLocal(data: AiGatewayPublic): Record<SlotKey, { credentialId: string; model: string }> {
-  const out = {} as Record<SlotKey, { credentialId: string; model: string }>;
+function emptyRow(gateway: AiGatewayPublic): LocalSlotRow {
+  return {
+    credentialId: "",
+    model: "",
+    maxOutputTokens: "",
+    temperature: String(gateway.chatOptions.temperature),
+    maxTokens: String(gateway.chatOptions.maxTokens),
+  };
+}
+
+function initLocal(data: AiGatewayPublic): Record<SlotKey, LocalSlotRow> {
+  const out = {} as Record<SlotKey, LocalSlotRow>;
   for (const s of SLOTS) {
     const b = data.slotBindings[s.key];
     out[s.key] = {
       credentialId: b?.credentialId ?? "",
       model: b?.model ?? "",
+      maxOutputTokens: b?.maxOutputTokens != null ? String(b.maxOutputTokens) : "",
+      temperature: String(b?.temperature ?? data.chatOptions.temperature),
+      maxTokens: String(b?.maxTokens ?? data.chatOptions.maxTokens),
     };
   }
   return out;

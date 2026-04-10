@@ -25,6 +25,15 @@ export type SlotBinding = {
   credentialId: string;
   /** Model id: e.g. models/gemini-2.0-flash (Gemini) or openai/gpt-4o-mini (OpenRouter). */
   model: string;
+  /**
+   * flash / pro only: max output tokens for rule-engine generation (extract / merge).
+   * Omit to use engine default (env / 32768).
+   */
+  maxOutputTokens?: number;
+  /** chat only: RAG synthesis temperature */
+  temperature?: number;
+  /** chat only: max tokens for assistant reply */
+  maxTokens?: number;
 };
 
 /** Optional RAG / indexing overrides (rule engine falls back to env when unset). */
