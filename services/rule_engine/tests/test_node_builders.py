@@ -5,7 +5,21 @@ from ingestion.node_builders import (
     documents_to_nodes,
     format_header_path_for_prompt,
     merged_markdown_to_documents,
+    sanitize_invisible_unicode_for_rules_markdown,
 )
+
+
+def test_merged_markdown_strips_zero_width_before_split() -> None:
+    zw = "\u200b"
+    md = f"<!-- pages: 1 -->\n{zw}可见{zw}"
+    docs = merged_markdown_to_documents(md, game_id="g1", source_file="rules.md")
+    assert len(docs) == 1
+    assert docs[0].text == "可见"
+
+
+def test_sanitize_invisible_unicode_for_rules_markdown() -> None:
+    assert sanitize_invisible_unicode_for_rules_markdown("a\u200bb") == "ab"
+    assert sanitize_invisible_unicode_for_rules_markdown("") == ""
 
 
 def test_merged_markdown_preserves_page_metadata() -> None:

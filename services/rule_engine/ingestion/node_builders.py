@@ -19,6 +19,15 @@ _SPLIT_RE = re.compile(
     r"(<!--\s*pages:\s*[^>]+\s*-->)",
     re.IGNORECASE,
 )
+# OCR / models often emit these; they are invisible but non-empty for chunking & embedding APIs.
+_INVISIBLE_UNICODE_RULES_MD = re.compile(r"[\u200b\u200c\u200d\ufeff]")
+
+
+def sanitize_invisible_unicode_for_rules_markdown(text: str) -> str:
+    """Remove ZWSP/ZWJ/ZWNJ/BOM from rules Markdown (normal spaces unchanged)."""
+    if not text:
+        return text
+    return _INVISIBLE_UNICODE_RULES_MD.sub("", text)
 # ATX headings with 3+ hashes split too finely in ``MarkdownNodeParser`` (each ### becomes its own
 # node). Demote to bold lines so only ``#`` / ``##`` drive structure; section content stays coherent.
 _DEEP_ATX_HEADER_RE = re.compile(r"^(#{3,6})\s+(.*)$")
@@ -93,7 +102,7 @@ def merged_markdown_to_documents(
     Content **following** each anchor inherits that anchor's page metadata until the next anchor.
     Any preamble before the first anchor uses `original_page_range: unknown`.
     """
-    text = merged_markdown.strip()
+    text = sanitize_invisible_unicode_for_rules_markdown(merged_markdown.strip())
     if not text:
         return []
 

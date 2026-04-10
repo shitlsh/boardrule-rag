@@ -11,13 +11,18 @@ from pathlib import Path
 from typing import Any, Literal
 
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 from ingestion.bm25_retriever import BM25_CJK_TOKEN_PATTERN, BoardruleBM25Retriever, default_bm25_from_nodes
 from ingestion.hybrid_retriever import HybridFusionRetriever
-from ingestion.node_builders import documents_to_nodes, documents_to_nodes_loose, merged_markdown_to_documents
+from ingestion.node_builders import (
+    documents_to_nodes,
+    documents_to_nodes_loose,
+    merged_markdown_to_documents,
+    sanitize_invisible_unicode_for_rules_markdown,
+)
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import get_slots
 from utils.dashscope_client import resolve_dashscope_api_base
@@ -27,6 +32,33 @@ from utils.paths import service_root
 _MANIFEST_NAME = "manifest.json"
 _VECTOR_SUBDIR = "vector_storage"
 _BM25_SUBDIR = "bm25"
+
+def _embed_text_for_indexing_filter(node: TextNode) -> str:
+    raw = node.get_content(metadata_mode=MetadataMode.EMBED)
+    if raw is None:
+        return ""
+    return sanitize_invisible_unicode_for_rules_markdown(str(raw)).strip()
+
+
+def _nodes_with_embeddable_text(nodes: list[TextNode]) -> list[TextNode]:
+    """Remove chunks that have no real text to embed (whitespace / zero-width only)."""
+    import logging
+
+    kept: list[TextNode] = []
+    dropped = 0
+    for n in nodes:
+        if _embed_text_for_indexing_filter(n):
+            kept.append(n)
+        else:
+            dropped += 1
+    if dropped:
+        logging.getLogger(__name__).warning(
+            "index build dropped %s empty-looking chunk(s) (whitespace/zero-width only); kept %s",
+            dropped,
+            len(kept),
+        )
+    return kept
+
 
 # Multilingual cross-encoder; stronger than MiniLM variants for zh/en retrieval reranking.
 _DEFAULT_RERANK_MODEL = "BAAI/bge-reranker-base"
@@ -403,6 +435,7 @@ def build_and_persist_index(
     nodes = documents_to_nodes(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     if not nodes:
         nodes = documents_to_nodes_loose(docs)
+    nodes = _nodes_with_embeddable_text(nodes)
     if not nodes:
         raise ValueError(
             "Could not chunk merged Markdown for indexing. "

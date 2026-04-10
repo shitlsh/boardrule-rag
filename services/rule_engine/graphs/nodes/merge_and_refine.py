@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from ingestion.node_builders import merged_markdown_to_documents
+from ingestion.node_builders import merged_markdown_to_documents, sanitize_invisible_unicode_for_rules_markdown
 from utils.llm_generate import PRO_MERGE, LlmCallMeta, generate_pro, pro_max_output_tokens
 from utils.page_markers import (
     page_continuity_warnings,
@@ -12,6 +12,11 @@ from utils.page_markers import (
 )
 from utils.prompt_context import render_prompt
 from utils.retry import retry
+
+
+def _finalize_merged_markdown(raw: str) -> str:
+    """Strip invisible unicode from Pro output before persistence / indexing."""
+    return sanitize_invisible_unicode_for_rules_markdown(raw.strip())
 
 
 def _structured_from_md(state: ExtractionState, md: str) -> list[dict]:
@@ -43,7 +48,7 @@ def run(state: ExtractionState) -> dict:
     if any(text_contains_need_more_context(c) for c in chunks):
         joined = "\n\n---\n\n".join(chunks)
         return {
-            "merged_markdown": joined.strip(),
+            "merged_markdown": _finalize_merged_markdown(joined),
             "structured_chapters": [],
             "errors": base_errs
             + [
@@ -104,7 +109,7 @@ def run(state: ExtractionState) -> dict:
             part_b = retry(_merge_b, attempts=2)
             body = part_a + "\n\n" + part_b
         except Exception as e:  # noqa: BLE001
-            md = joined[:200_000]
+            md = _finalize_merged_markdown(joined[:200_000])
             cont = page_continuity_warnings(md)
             return {
                 "merged_markdown": md,
@@ -129,16 +134,15 @@ def run(state: ExtractionState) -> dict:
                 out_warnings=llm_warns,
             )
 
-        merged_md = retry(_final, attempts=3)
+        merged_md = _finalize_merged_markdown(retry(_final, attempts=3))
     except Exception as e:  # noqa: BLE001
-        md = body[:200_000]
+        md = _finalize_merged_markdown(body[:200_000])
         cont = page_continuity_warnings(md)
         return {
             "merged_markdown": md,
             "structured_chapters": _structured_from_md(state, md),
             "errors": base_errs + llm_warns + [f"merge_and_refine: {e}"] + cont,
         }
-    merged_md = merged_md.strip()
     cont = page_continuity_warnings(merged_md)
     return {
         "merged_markdown": merged_md,

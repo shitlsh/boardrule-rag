@@ -14,6 +14,7 @@ from utils.llm_generate import (
     generate_pro_vision,
     pro_max_output_tokens,
 )
+from ingestion.node_builders import sanitize_invisible_unicode_for_rules_markdown
 from utils.page_markers import text_contains_need_more_context
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -144,7 +145,7 @@ def run(state: ExtractionState) -> dict:
                     f"(starting at original batch {i + 1}, {len(combined)} page image(s))"
                 )
 
-            outputs.append(out)
+            outputs.append(sanitize_invisible_unicode_for_rules_markdown(out.strip()))
             i = k + 1
 
         prev_retry = int(state.get("retry_count") or 0)
