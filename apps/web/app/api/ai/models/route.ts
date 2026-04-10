@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 
 import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
+import { getAiGatewayStored, getCredentialApiKey, getCredentialVendor } from "@/lib/ai-gateway";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
+import { fetchModelsForCredential } from "@/lib/models-for-credential";
 import {
   fetchOpenRouterModelsForSlot,
   fetchOpenRouterModelsFromApi,
 } from "@/lib/openrouter-models-list";
-import {
-  getAiGatewayStored,
-  getCredentialApiKey,
-  getCredentialVendor,
-} from "@/lib/ai-gateway";
 import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -29,7 +26,7 @@ function parseVendor(raw: unknown): AiVendor | "invalid" {
   return "invalid";
 }
 
-async function listModels(
+async function listModelsByKey(
   vendor: AiVendor,
   apiKey: string,
   slot: SlotKey | null,
@@ -62,23 +59,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
   }
 
-  let vendor: AiVendor;
-  let apiKey: string;
   try {
     const stored = await getAiGatewayStored();
-    vendor = getCredentialVendor(stored, credentialId);
-    apiKey = getCredentialApiKey(stored, credentialId);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "读取凭证失败";
-    return NextResponse.json({ message: msg }, { status: 400 });
-  }
-
-  try {
-    const models = await listModels(vendor, apiKey, slot);
+    const vendor = getCredentialVendor(stored, credentialId);
+    const models = await fetchModelsForCredential(stored, credentialId, slot);
     return NextResponse.json({ models, slot: slot ?? null, vendor });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "拉取模型列表失败";
-    return NextResponse.json({ message: msg }, { status: 502 });
+    const msg = e instanceof Error ? e.message : "读取凭证失败或拉取模型列表失败";
+    const status = /凭证|不存在/.test(msg) ? 400 : 502;
+    return NextResponse.json({ message: msg }, { status });
   }
 }
 
@@ -130,7 +119,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const models = await listModels(vendor, apiKey, slot);
+    const models = await listModelsByKey(vendor, apiKey, slot);
     return NextResponse.json({ models, slot: slot ?? null, vendor });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "拉取模型列表失败";

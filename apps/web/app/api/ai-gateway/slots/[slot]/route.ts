@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getCredentialApiKey, getAiGatewayStored, setSlotBinding } from "@/lib/ai-gateway";
+import { getAiGatewayStored, setSlotBinding } from "@/lib/ai-gateway";
 import type { SlotKey } from "@/lib/ai-gateway-types";
-import { fetchGeminiModelsForSlot } from "@/lib/gemini-models-list";
+import { fetchModelsForCredentialSlot } from "@/lib/models-for-credential";
 import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -51,11 +51,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   try {
     const stored = await getAiGatewayStored();
-    const apiKey = getCredentialApiKey(stored, credentialId);
-    const allowed = await fetchGeminiModelsForSlot(apiKey, slot);
+    const allowed = await fetchModelsForCredentialSlot(stored, credentialId, slot);
     if (!allowed.some((m) => m.name === model)) {
       return NextResponse.json(
-        { message: "模型必须是当前槽位下 Google 返回的可用模型，请从列表中选择后保存" },
+        { message: "模型必须是当前槽位下列表中的可用模型，请从列表中选择后保存" },
         { status: 400 },
       );
     }
