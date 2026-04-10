@@ -6,15 +6,10 @@
       <view class="header__subtitle">选择游戏，开始问答</view>
     </view>
 
-    <!-- 加载中 -->
-    <view v-if="loading" class="state-center">
-      <view class="loading-dots">
-        <view class="dot" />
-        <view class="dot" />
-        <view class="dot" />
-      </view>
-      <text class="state-center__text">加载游戏列表...</text>
-    </view>
+    <!-- 加载中：骨架屏 -->
+    <scroll-view v-if="loading" scroll-y class="skeleton-scroll">
+      <SkeletonCard v-for="n in 5" :key="n" />
+    </scroll-view>
 
     <!-- 错误 -->
     <view v-else-if="error" class="state-center">
@@ -32,7 +27,7 @@
 
     <!-- 有数据：搜索 + 列表 -->
     <view v-else class="list-section">
-      <view class="search-bar">
+      <view class="search-bar" :class="{ 'search-bar--focus': searchFocused }">
         <text class="search-bar__icon" aria-hidden="true">⌕</text>
         <input
           v-model="searchQuery"
@@ -41,6 +36,8 @@
           confirm-type="search"
           placeholder="搜索游戏名称"
           placeholder-class="search-bar__placeholder"
+          @focus="searchFocused = true"
+          @blur="searchFocused = false"
         />
         <view v-if="searchQuery" class="search-bar__clear" @tap="searchQuery = ''">
           <text class="search-bar__clear-text">清除</text>
@@ -52,7 +49,9 @@
           v-for="game in filteredGames"
           :key="game.id"
           class="game-card"
-          @tap="openChat(game)"
+          hover-class="game-card--active"
+          :hover-stay-time="80"
+          @tap="onGameTap(game)"
         >
           <view class="game-card__cover">
             <image
@@ -86,12 +85,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { fetchGames } from '../../api/bff'
 import { getOrFetchUserId } from '../../utils/auth'
+import { hapticLight } from '../../utils/haptic'
+import SkeletonCard from '../../components/SkeletonCard.vue'
 import type { GameListItem } from '../../types/index'
 
 const games = ref<GameListItem[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
+const searchFocused = ref(false)
 
 const filteredGames = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -120,6 +122,11 @@ async function loadGames() {
   }
 }
 
+function onGameTap(game: GameListItem) {
+  hapticLight()
+  openChat(game)
+}
+
 function openChat(game: GameListItem) {
   uni.navigateTo({
     url: `/pages/chat/index?gameId=${game.id}&gameName=${encodeURIComponent(game.name)}`,
@@ -130,17 +137,26 @@ onMounted(loadGames)
 </script>
 
 <style lang="scss" scoped>
+@import '../../uni.scss';
+
 .page {
   min-height: 100vh;
   min-height: 100dvh;
-  background: #f4f6f9;
+  background: $br-bg-page;
   display: flex;
   flex-direction: column;
 }
 
+.skeleton-scroll {
+  flex: 1;
+  padding: 0 24rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom, 0px));
+  min-height: 200rpx;
+}
+
 /* ---- 头部 ---- */
 .header {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: $br-gradient-header;
   padding: calc(28rpx + env(safe-area-inset-top, 0px)) 32rpx 36rpx;
   color: #fff;
   flex-shrink: 0;
@@ -154,7 +170,7 @@ onMounted(loadGames)
   &__subtitle {
     margin-top: 10rpx;
     font-size: 26rpx;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.75);
     line-height: 1.4;
   }
 }
@@ -181,7 +197,7 @@ onMounted(loadGames)
 
   &__text {
     font-size: 28rpx;
-    color: #444;
+    color: $br-text-primary;
     text-align: center;
     line-height: 1.5;
     max-width: 560rpx;
@@ -189,44 +205,10 @@ onMounted(loadGames)
 
   &__hint {
     font-size: 24rpx;
-    color: #999;
+    color: $br-text-secondary;
     text-align: center;
     line-height: 1.6;
     max-width: 520rpx;
-  }
-}
-
-.loading-dots {
-  display: flex;
-  gap: 12rpx;
-  margin-bottom: 8rpx;
-
-  .dot {
-    width: 16rpx;
-    height: 16rpx;
-    border-radius: 50%;
-    background: #4a90d9;
-    animation: pulse 1.2s ease-in-out infinite;
-
-    &:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    &:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-  }
-}
-
-@keyframes pulse {
-  0%,
-  80%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.8);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1);
   }
 }
 
@@ -235,9 +217,9 @@ onMounted(loadGames)
   padding: 20rpx 48rpx;
   min-height: 88rpx;
   line-height: 1.4;
-  background: #4a90d9;
+  background: $br-color-primary;
   color: #fff;
-  border-radius: 44rpx;
+  border-radius: $br-radius-button;
   font-size: 28rpx;
   border: none;
 }
@@ -256,11 +238,17 @@ onMounted(loadGames)
   gap: 16rpx;
   margin: 20rpx 24rpx 16rpx;
   padding: 18rpx 24rpx;
-  background: #fff;
+  background: $br-bg-card;
   border-radius: 999rpx;
-  border: 1rpx solid #e2e8f0;
+  border: 2rpx solid #e2e8f0;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
+  transition: border-color $br-duration-fast, box-shadow $br-duration-fast;
+
+  &--focus {
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.12);
+  }
 
   &__icon {
     font-size: 30rpx;
@@ -271,7 +259,7 @@ onMounted(loadGames)
   &__input {
     flex: 1;
     font-size: 28rpx;
-    color: #1a1a2e;
+    color: $br-text-primary;
     height: 44rpx;
     line-height: 44rpx;
   }
@@ -287,7 +275,7 @@ onMounted(loadGames)
 
   &__clear-text {
     font-size: 24rpx;
-    color: #64748b;
+    color: $br-text-secondary;
   }
 }
 
@@ -300,14 +288,26 @@ onMounted(loadGames)
 .game-card {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 20rpx;
+  background: $br-bg-card;
+  border-radius: $br-radius-card;
   margin-bottom: 16rpx;
   padding: 22rpx 20rpx;
-  box-shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.06);
+  box-shadow: $br-shadow-card;
   gap: 20rpx;
   overflow: hidden;
   min-height: 120rpx;
+  transition: transform $br-duration-fast, box-shadow $br-duration-fast;
+
+  /* #ifdef H5 */
+  &:hover {
+    box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.1);
+  }
+  /* #endif */
+
+  &--active {
+    transform: scale(0.98);
+    box-shadow: 0 6rpx 24rpx rgba(37, 99, 235, 0.15);
+  }
 
   &__cover {
     width: 112rpx;
@@ -346,7 +346,7 @@ onMounted(loadGames)
   &__name {
     font-size: 30rpx;
     font-weight: 600;
-    color: #1a1a2e;
+    color: $br-text-primary;
     line-height: 1.45;
     display: -webkit-box;
     -webkit-box-orient: vertical;

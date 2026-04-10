@@ -1,11 +1,11 @@
 <!-- @ts-nocheck towxml is a native WeChat miniprogram component without Vue type declarations -->
 <template>
-  <view class="chat-page">
+  <view class="chat-page" :style="chatPageStyle">
     <!-- ===== 游戏信息加载中 ===== -->
-    <view v-if="gameLoading" class="game-loading">
-      <view class="loading-dots">
-        <view class="dot" /><view class="dot" /><view class="dot" />
-      </view>
+    <view v-if="gameLoading" class="chat-skeleton-wrap">
+      <SkeletonMessage align="assistant" />
+      <SkeletonMessage align="assistant" />
+      <SkeletonMessage align="user" />
     </view>
 
     <block v-else>
@@ -34,7 +34,7 @@
         </view>
       </view>
 
-      <!-- ===== 推荐问题（多行换行，适配窄屏） ===== -->
+      <!-- ===== 推荐问题 ===== -->
       <view
         v-if="suggestedQuestions.length > 0 && chatStore.messages.length === 0"
         class="chips-bar"
@@ -44,8 +44,11 @@
             v-for="(q, i) in suggestedQuestions"
             :key="i"
             class="chip"
+            hover-class="chip--active"
+            :hover-stay-time="80"
             @tap="sendSuggested(q)"
           >
+            <text class="chip__icon" aria-hidden="true">💬</text>
             <text class="chip__text">{{ q }}</text>
           </view>
         </view>
@@ -57,7 +60,7 @@
         :scroll-top="scrollTop"
         :scroll-with-animation="true"
         class="message-list"
-        :style="{ height: messageListHeight }"
+        :style="messageListFlexStyle"
       >
         <!-- 空状态提示 -->
         <view v-if="chatStore.messages.length === 0" class="empty-hint">
@@ -68,7 +71,10 @@
           v-for="msg in chatStore.messages"
           :key="msg.id"
           class="msg-row"
-          :class="msg.role === 'user' ? 'msg-row--user' : 'msg-row--assistant'"
+          :class="[
+            msg.role === 'user' ? 'msg-row--user' : 'msg-row--assistant',
+            { 'br-msg-enter': enterAnim[msg.id] },
+          ]"
         >
           <!-- 助手头像 -->
           <view v-if="msg.role === 'assistant'" class="avatar avatar--assistant">
@@ -76,12 +82,10 @@
           </view>
 
           <view class="bubble-wrapper">
-            <!-- 气泡 -->
             <view
               class="bubble"
               :class="msg.role === 'user' ? 'bubble--user' : 'bubble--assistant'"
             >
-              <!-- 用户消息：纯文本 -->
               <text v-if="msg.role === 'user'" class="bubble__text">{{ msg.content }}</text>
               <!-- #ifdef MP-WEIXIN -->
               <towxml
@@ -111,40 +115,57 @@
         <view v-if="chatStore.isLoading" class="msg-row msg-row--assistant">
           <view class="avatar avatar--assistant"><text>🤖</text></view>
           <view class="bubble bubble--assistant bubble--loading">
-            <view class="loading-dots">
-              <view class="dot" /><view class="dot" /><view class="dot" />
+            <view class="typing-dots">
+              <view class="typing-dots__dot" />
+              <view class="typing-dots__dot" />
+              <view class="typing-dots__dot" />
             </view>
           </view>
         </view>
 
-        <!-- 底部锚点，用于自动滚动 -->
         <view id="msg-bottom" style="height: 1px;" />
       </scroll-view>
 
       <!-- ===== 底部输入栏 ===== -->
-      <view class="input-bar" :style="{ paddingBottom: safeAreaBottom + 'px' }">
+      <view
+        class="input-bar"
+        :style="{ paddingBottom: inputBarPaddingBottom + 'px' }"
+      >
         <view class="input-bar__inner">
+          <view
+            v-if="chatStore.messages.length > 0"
+            class="input-bar__clear-icon"
+            hover-class="input-bar__clear-icon--active"
+            @tap="confirmClear"
+          >
+            <text class="input-bar__clear-emoji" aria-hidden="true">🗑</text>
+          </view>
           <textarea
             v-model="inputText"
             class="input-bar__textarea"
+            :class="{ 'input-bar__textarea--focus': inputFocused }"
             placeholder="输入规则问题..."
             :disabled="chatStore.isLoading"
             :maxlength="500"
             auto-height
             :show-confirm-bar="false"
+            :adjust-position="false"
+            confirm-type="send"
             @confirm="handleSend"
+            @focus="inputFocused = true"
+            @blur="inputFocused = false"
           />
           <view
             class="input-bar__send"
-            :class="{ 'is-active': inputText.trim() && !chatStore.isLoading }"
-            @tap="handleSend"
+            :class="{
+              'is-active': inputText.trim() && !chatStore.isLoading,
+              'br-send-btn--pulse': sendPulse,
+            }"
+            @animationend="sendPulse = false"
+            @tap="onSendTap"
           >
             <text class="input-bar__send-icon">↑</text>
           </view>
-        </view>
-        <!-- 清空历史 -->
-        <view v-if="chatStore.messages.length > 0" class="input-bar__clear" @tap="confirmClear">
-          <text class="input-bar__clear-text">清空对话</text>
         </view>
       </view>
     </block>
@@ -153,15 +174,13 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-// towxml is a native WeChat miniprogram component (usingComponents). Its props
-// are typed as `string & Record<string,unknown>` by @dcloudio/types, which
-// conflicts with the object nodes towxml expects. Suppressing template TS checks
-// for this file is the accepted workaround in the UniApp community.
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { ref, computed, onMounted, nextTick, watch, reactive, onBeforeUnmount } from 'vue'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { useChatStore } from '../../store/chat'
 import { fetchGame, sendChatMessage } from '../../api/bff'
 import { getOrFetchUserId } from '../../utils/auth'
+import { hapticLight, hapticMedium } from '../../utils/haptic'
+import SkeletonMessage from '../../components/SkeletonMessage.vue'
 import type { Game } from '../../types/index'
 
 // #ifdef H5
@@ -169,16 +188,12 @@ import { renderMarkdownToHtml } from '../../utils/markdown'
 // #endif
 
 // #ifdef MP-WEIXIN
-// towxml 解析器（原生小程序 CommonJS 模块，通过 require 加载）
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TowxmlParser = (content: string, type: 'markdown' | 'html', options?: Record<string, unknown>) => any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const towxml = (require as any)('../../wxcomponents/towxml/index.js') as TowxmlParser
 // #endif
 
-// -------------------------------------------------------
-// 路由参数
-// -------------------------------------------------------
 const gameId = ref('')
 const gameName = ref('')
 
@@ -188,19 +203,7 @@ onLoad((options) => {
   uni.setNavigationBarTitle({ title: gameName.value })
 })
 
-// -------------------------------------------------------
-// User identity (Bearer JWT for BFF; chat rate limit is by IP on server)
-// -------------------------------------------------------
-const userId = ref<string | null>(null)
-
-// -------------------------------------------------------
-// Store
-// -------------------------------------------------------
 const chatStore = useChatStore()
-
-// -------------------------------------------------------
-// 游戏详情
-// -------------------------------------------------------
 const game = ref<Game | null>(null)
 const gameLoading = ref(true)
 
@@ -227,15 +230,9 @@ onShow(() => {
     chatStore.enterGame(gameId.value)
     loadGame()
   }
-  // Ensure we have a userId for rate-limit header (no-op if already cached)
-  getOrFetchUserId().then((id) => {
-    if (id) userId.value = id
-  })
+  getOrFetchUserId()
 })
 
-// -------------------------------------------------------
-// QuickStart 折叠
-// -------------------------------------------------------
 const quickStartOpen = ref(false)
 
 function toggleQuickStart() {
@@ -275,26 +272,43 @@ function getOrBuildHtml(msgId: string, content: string) {
 }
 // #endif
 
-// -------------------------------------------------------
-// 滚动控制
-// -------------------------------------------------------
 const scrollTop = ref(0)
 
 async function scrollToBottom() {
   await nextTick()
-  // 通过更新 scrollTop 到极大值触发滚动
   scrollTop.value = 0
   await nextTick()
   scrollTop.value = 999999
 }
 
 watch(() => chatStore.messages.length, scrollToBottom)
-watch(() => chatStore.isLoading, (v) => { if (v) scrollToBottom() })
+watch(
+  () => chatStore.isLoading,
+  (v) => {
+    if (v) scrollToBottom()
+  },
+)
 
-// -------------------------------------------------------
-// 键盘安全区
-// -------------------------------------------------------
 const safeAreaBottom = ref(0)
+const keyboardHeight = ref(0)
+const enterAnim = reactive<Record<string, boolean>>({})
+const sendPulse = ref(false)
+const inputFocused = ref(false)
+
+let keyboardListener: ((res: { height: number }) => void) | null = null
+
+// #ifdef H5
+let h5VvResize: (() => void) | null = null
+// #endif
+
+function updateH5KeyboardInset() {
+  // #ifdef H5
+  if (typeof window === 'undefined' || !window.visualViewport) return
+  const vv = window.visualViewport
+  const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+  keyboardHeight.value = inset
+  // #endif
+}
 
 onMounted(() => {
   try {
@@ -303,16 +317,69 @@ onMounted(() => {
   } catch {
     safeAreaBottom.value = 0
   }
+
+  // #ifdef MP-WEIXIN
+  keyboardListener = (res) => {
+    keyboardHeight.value = res.height ?? 0
+  }
+  uni.onKeyboardHeightChange(keyboardListener)
+  // #endif
+
+  // #ifdef H5
+  if (typeof window !== 'undefined' && window.visualViewport) {
+    h5VvResize = () => updateH5KeyboardInset()
+    window.visualViewport.addEventListener('resize', h5VvResize)
+    window.visualViewport.addEventListener('scroll', h5VvResize)
+    updateH5KeyboardInset()
+  }
+  // #endif
 })
 
-// 消息列表高度：撑满除 quickstart / chips / inputbar 之外的空间
-const messageListHeight = computed(() => {
-  return 'calc(100vh - 44px - var(--quickstart-h, 0px) - var(--chips-h, 0px) - 120rpx)'
+onBeforeUnmount(() => {
+  // #ifdef H5
+  if (typeof window !== 'undefined' && window.visualViewport && h5VvResize) {
+    window.visualViewport.removeEventListener('resize', h5VvResize)
+    window.visualViewport.removeEventListener('scroll', h5VvResize)
+  }
+  // #endif
 })
 
-// -------------------------------------------------------
-// 发送消息
-// -------------------------------------------------------
+onUnload(() => {
+  // #ifdef MP-WEIXIN
+  if (keyboardListener) {
+    uni.offKeyboardHeightChange(keyboardListener)
+    keyboardListener = null
+  }
+  // #endif
+})
+
+const chatPageStyle = computed(() => {
+  const kb = keyboardHeight.value
+  if (kb > 0) {
+    return {
+      height: `calc(100dvh - ${kb}px)`,
+    }
+  }
+  return { height: '100dvh' }
+})
+
+const messageListFlexStyle = computed(() => ({
+  flex: '1',
+  minHeight: '0',
+  height: '0',
+}))
+
+const inputBarPaddingBottom = computed(() => {
+  return safeAreaBottom.value + keyboardHeight.value
+})
+
+function markMsgEnter(id: string) {
+  enterAnim[id] = true
+  setTimeout(() => {
+    delete enterAnim[id]
+  }, 450)
+}
+
 const inputText = ref('')
 
 async function handleSend() {
@@ -321,7 +388,6 @@ async function handleSend() {
 
   inputText.value = ''
 
-  // 先追加用户消息
   const userMsg = {
     id: `user_${Date.now()}`,
     role: 'user' as const,
@@ -329,10 +395,11 @@ async function handleSend() {
     createdAt: new Date().toISOString(),
   }
   chatStore.addMessage(userMsg)
+  await nextTick()
+  markMsgEnter(userMsg.id)
+  hapticLight()
 
-  // 获取当前历史（不含刚加的用户消息，BFF 会把 message 字段作为当前消息）
   const history = chatStore.getHistoryForApi()
-  // getHistoryForApi 已包含刚加的用户消息，需要去掉最后一条
   const historyWithoutCurrent = history.slice(0, -1)
 
   chatStore.isLoading = true
@@ -351,20 +418,31 @@ async function handleSend() {
       sources: resp.sources ?? [],
     }
     chatStore.addMessage(assistantMsg)
+    await nextTick()
+    markMsgEnter(assistantMsg.id)
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : '请求失败，请重试'
-    // 429 rate-limit error — the BFF message is already user-friendly
     const isRateLimit = /今日提问次数/.test(errMsg) || /429/.test(errMsg)
+    const errId = `err_${Date.now()}`
     chatStore.addMessage({
-      id: `err_${Date.now()}`,
+      id: errId,
       role: 'assistant',
       content: isRateLimit ? `⏰ ${errMsg}` : `⚠️ ${errMsg}`,
       createdAt: new Date().toISOString(),
       sources: [],
     })
+    await nextTick()
+    markMsgEnter(errId)
   } finally {
     chatStore.isLoading = false
   }
+}
+
+function onSendTap() {
+  const text = inputText.value.trim()
+  if (!text || chatStore.isLoading || !gameId.value) return
+  sendPulse.value = true
+  handleSend()
 }
 
 function sendSuggested(q: string) {
@@ -372,9 +450,6 @@ function sendSuggested(q: string) {
   handleSend()
 }
 
-// -------------------------------------------------------
-// 清空历史
-// -------------------------------------------------------
 function confirmClear() {
   uni.showModal({
     title: '清空对话',
@@ -383,6 +458,7 @@ function confirmClear() {
     confirmColor: '#e53e3e',
     success: (res) => {
       if (res.confirm) {
+        hapticMedium()
         chatStore.clearMessages()
         // #ifdef MP-WEIXIN
         nodeCache.clear()
@@ -397,27 +473,30 @@ function confirmClear() {
 </script>
 
 <style lang="scss" scoped>
+@import '../../uni.scss';
+
 .chat-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  background: #f4f6f9;
-  overflow: hidden;
+  width: 100%;
   max-width: 100%;
+  background: $br-bg-page;
+  overflow: hidden;
 }
 
-/* ---- 游戏加载 ---- */
-.game-loading {
-  display: flex;
-  justify-content: center;
-  padding: 40rpx;
+.chat-skeleton-wrap {
+  flex: 1;
+  padding: 24rpx 24rpx 32rpx;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ---- QuickStart 卡片 ---- */
 .quickstart-card {
-  background: #fff;
-  border-bottom: 1rpx solid #eee;
+  background: $br-bg-card;
+  border-bottom: 1rpx solid #e8ecf1;
+  border-left: 6rpx solid $br-color-primary;
+  flex-shrink: 0;
 
   &__header {
     display: flex;
@@ -433,7 +512,7 @@ function confirmClear() {
     gap: 12rpx;
     font-size: 28rpx;
     font-weight: 600;
-    color: #1a1a2e;
+    color: $br-text-primary;
   }
 
   &__icon {
@@ -442,9 +521,9 @@ function confirmClear() {
 
   &__chevron {
     font-size: 36rpx;
-    color: #999;
+    color: $br-text-secondary;
     transform: rotate(90deg);
-    transition: transform 0.2s;
+    transition: transform $br-duration-normal;
     display: inline-block;
 
     &.is-open {
@@ -462,10 +541,10 @@ function confirmClear() {
   }
 }
 
-/* ---- 推荐问题（flex 换行，窄屏多行展示） ---- */
+/* ---- 推荐问题 ---- */
 .chips-bar {
-  background: #fff;
-  border-bottom: 1rpx solid #eee;
+  background: $br-bg-card;
+  border-bottom: 1rpx solid #e8ecf1;
   padding: 20rpx 24rpx 24rpx;
   flex-shrink: 0;
 }
@@ -480,19 +559,31 @@ function confirmClear() {
 
 .chip {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
+  gap: 10rpx;
   max-width: 100%;
-  padding: 18rpx 22rpx;
-  min-height: 72rpx;
-  background: #eef4ff;
-  border: 1rpx solid #c7d9f5;
-  border-radius: 12rpx;
+  padding: 14rpx 22rpx;
+  min-height: 64rpx;
+  background: #eff6ff;
+  border: 1rpx solid rgba(37, 99, 235, 0.2);
+  border-radius: 999rpx;
   box-sizing: border-box;
+  transition: transform $br-duration-fast, background $br-duration-fast;
+
+  &--active {
+    transform: scale(0.98);
+    background: #dbeafe;
+  }
+
+  &__icon {
+    font-size: 26rpx;
+    flex-shrink: 0;
+  }
 
   &__text {
     font-size: 26rpx;
-    color: #1e4d8c;
+    color: #1e40af;
     line-height: 1.45;
     white-space: normal;
     word-break: break-word;
@@ -515,14 +606,13 @@ function confirmClear() {
 
   &__text {
     font-size: 26rpx;
-    color: #94a3b8;
+    color: $br-text-secondary;
     text-align: center;
     line-height: 1.55;
     max-width: 92%;
   }
 }
 
-/* ---- 消息行 ---- */
 .msg-row {
   display: flex;
   align-items: flex-end;
@@ -538,7 +628,6 @@ function confirmClear() {
   }
 }
 
-/* ---- 头像 ---- */
 .avatar {
   width: 72rpx;
   height: 72rpx;
@@ -550,15 +639,16 @@ function confirmClear() {
   flex-shrink: 0;
 
   &--assistant {
-    background: #e8f0fe;
+    background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
+    box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.12);
   }
 
   &--user {
-    background: #e6f4ea;
+    background: linear-gradient(145deg, #d1fae5 0%, #a7f3d0 100%);
+    box-shadow: 0 2rpx 8rpx rgba(16, 185, 129, 0.12);
   }
 }
 
-/* ---- 气泡 ---- */
 .bubble-wrapper {
   display: flex;
   flex-direction: column;
@@ -568,19 +658,20 @@ function confirmClear() {
 
 .bubble {
   padding: 22rpx 26rpx;
-  border-radius: 22rpx;
+  border-radius: $br-radius-bubble;
   word-break: break-word;
 
   &--user {
-    background: #1a6dd9;
-    border-bottom-right-radius: 6rpx;
+    background: $br-gradient-user-bubble;
+    border-bottom-right-radius: 8rpx;
     align-self: flex-end;
+    box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.25);
   }
 
   &--assistant {
-    background: #fff;
-    border-bottom-left-radius: 6rpx;
-    box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+    background: $br-bg-card;
+    border-bottom-left-radius: 8rpx;
+    box-shadow: $br-shadow-card;
   }
 
   &--loading {
@@ -594,32 +685,50 @@ function confirmClear() {
   color: #fff;
 }
 
-/* ---- Loading dots ---- */
-.loading-dots {
+.typing-dots {
   display: flex;
-  gap: 10rpx;
+  gap: 12rpx;
   align-items: center;
 
-  .dot {
+  &__dot {
     width: 14rpx;
     height: 14rpx;
     border-radius: 50%;
-    background: #aaa;
-    animation: pulse 1.2s ease-in-out infinite;
+    background: #93c5fd;
+    animation: typing-wave 1.1s ease-in-out infinite;
 
-    &:nth-child(2) { animation-delay: 0.2s; }
-    &:nth-child(3) { animation-delay: 0.4s; }
+    &:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+    &:nth-child(3) {
+      animation-delay: 0.3s;
+    }
   }
 }
 
-@keyframes pulse {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+@keyframes typing-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translate3d(0, 0, 0) scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: translate3d(0, -6rpx, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots__dot {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 /* ---- 输入栏 ---- */
 .input-bar {
-  background: #fff;
+  background: $br-bg-card;
   border-top: 1rpx solid #e8ecf1;
   padding: 16rpx 24rpx 12rpx;
   flex-shrink: 0;
@@ -628,8 +737,29 @@ function confirmClear() {
   &__inner {
     display: flex;
     align-items: flex-end;
-    gap: 16rpx;
+    gap: 12rpx;
     min-height: 88rpx;
+  }
+
+  &__clear-icon {
+    width: 72rpx;
+    height: 72rpx;
+    border-radius: 50%;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background $br-duration-fast, transform $br-duration-fast;
+
+    &--active {
+      background: #e2e8f0;
+      transform: scale(0.95);
+    }
+  }
+
+  &__clear-emoji {
+    font-size: 32rpx;
   }
 
   &__textarea {
@@ -641,7 +771,14 @@ function confirmClear() {
     line-height: 1.45;
     max-height: 220rpx;
     min-height: 80rpx;
-    color: #1a1a2e;
+    color: $br-text-primary;
+    border: 2rpx solid transparent;
+    transition: border-color $br-duration-fast, box-shadow $br-duration-fast;
+
+    &--focus {
+      border-color: rgba(37, 99, 235, 0.45);
+      box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+    }
   }
 
   &__send {
@@ -653,10 +790,19 @@ function confirmClear() {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background 0.15s;
+    transition: transform $br-duration-fast, box-shadow $br-duration-fast;
 
     &.is-active {
-      background: #1a6dd9;
+      background: $br-gradient-send-active;
+      box-shadow: 0 4rpx 14rpx rgba(37, 99, 235, 0.35);
+    }
+
+    &:active.is-active {
+      transform: scale(0.94);
+    }
+
+    &:not(.is-active) .input-bar__send-icon {
+      color: #94a3b8;
     }
   }
 
@@ -665,26 +811,13 @@ function confirmClear() {
     color: #fff;
     font-weight: 700;
   }
-
-  &__clear {
-    display: flex;
-    justify-content: center;
-    padding: 10rpx 0 0;
-  }
-
-  &__clear-text {
-    font-size: 24rpx;
-    color: #94a3b8;
-    padding: 12rpx 20rpx;
-  }
 }
 
 /* #ifdef H5 */
-/* markdown-it 输出 */
 .markdown-body {
   font-size: 30rpx;
   line-height: 1.55;
-  color: #1a1a2e;
+  color: $br-text-primary;
   word-break: break-word;
 }
 
@@ -702,7 +835,8 @@ function confirmClear() {
 
 <!-- #ifdef H5 -->
 <style lang="scss">
-/* v-html 内部节点（H5 专用；无 scoped 以便选子元素） */
+@import '../../uni.scss';
+
 .chat-page .markdown-body p {
   margin: 0 0 0.5em;
 }
@@ -731,10 +865,10 @@ function confirmClear() {
   padding: 0;
 }
 .chat-page .markdown-body a {
-  color: #1a6dd9;
+  color: $br-color-primary;
 }
 .chat-page .bubble--assistant .markdown-body {
-  color: #1a1a2e;
+  color: $br-text-primary;
 }
 </style>
 <!-- #endif -->
