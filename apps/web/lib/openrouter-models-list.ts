@@ -22,6 +22,10 @@ function isEmbeddingModel(m: OpenRouterModelRaw): boolean {
   const desc = typeof m.description === "string" ? m.description : "";
   const blob = `${name} ${desc}`.toLowerCase();
   const outs = m.architecture?.output_modalities ?? [];
+  const mod = (m.architecture?.modality ?? "").toLowerCase();
+  if (mod.includes("embed")) {
+    return true;
+  }
   if (outs.some((x) => String(x).toLowerCase().includes("embed"))) {
     return true;
   }
@@ -32,6 +36,15 @@ function isEmbeddingModel(m: OpenRouterModelRaw): boolean {
     return true;
   }
   if (/^cohere\/embed/.test(i)) return true;
+  // Common OpenRouter embedding families (architecture often omits output_modalities)
+  if (
+    /\b(voyage|jina-embed|jina-embeddings|multilingual-e5|mxe5|e5-mistral|e5-large|e5-base|e5-small|bge-m3|bge-large|bge-base|bge-small|gte-large|gte-base|snowflake-arctic-embed|mxbai-embed|llm-embedder|sentence-transformers)/i.test(
+      i,
+    )
+  ) {
+    return true;
+  }
+  if (/\/(embed|embedding)(\/|$|-)/i.test(i)) return true;
   return false;
 }
 
@@ -118,10 +131,34 @@ export function filterOpenRouterModelsForSlot(
   }
 }
 
+/** When strict parsing marks nothing as embed-capable, match likely embedding ids (OpenRouter id = vendor/model). */
+function relaxedOpenRouterEmbedId(id: string): boolean {
+  const i = id.toLowerCase();
+  if (/\b(chat|instruct|vision|vl-|4o|claude|gpt-4|gemini-2\.0-flash|reasoning)\b/i.test(i)) {
+    return false;
+  }
+  return /\b(embed|embedding|text-embedding|voyage|jina-embed|e5-|bge-|gte-|snowflake|arctic-embed|mxbai|sentence-transformers|minilm|nomic-embed|cohere\/embed)/i.test(
+    i,
+  );
+}
+
 export async function fetchOpenRouterModelsForSlot(
   apiKey: string,
   slot: SlotKey,
 ): Promise<GeminiModelOption[]> {
   const all = await fetchOpenRouterModelsFromApi(apiKey);
-  return filterOpenRouterModelsForSlot(all, slot);
+  const filtered = filterOpenRouterModelsForSlot(all, slot);
+  if (slot === "embed" && filtered.length === 0 && all.length > 0) {
+    const relaxed = all
+      .filter((m) => relaxedOpenRouterEmbedId(m.name))
+      .map((m) => ({
+        ...m,
+        capabilities: { generateContent: false, embedContent: true },
+        visionHint: false,
+      }));
+    if (relaxed.length > 0) {
+      return relaxed;
+    }
+  }
+  return filtered;
 }

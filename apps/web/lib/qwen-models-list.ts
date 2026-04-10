@@ -16,7 +16,12 @@ type OpenAIListModelsResponse = {
 
 function isEmbeddingModelId(id: string): boolean {
   const s = id.toLowerCase();
-  return s.includes("text-embedding") || s.includes("embedding");
+  if (s.includes("text-embedding")) return true;
+  // e.g. multimodal-embedding-v1, qwen3-embedding-*
+  if (/\bembedding\b/.test(s)) return true;
+  // DashScope sometimes uses hyphenated embed-* ids
+  if (/[-_]embed[-_]/.test(s)) return true;
+  return false;
 }
 
 function inferVisionHint(id: string): boolean {
@@ -53,8 +58,20 @@ const FALLBACK_IDS: string[] = [
   "qwen-vl-max",
   "qwen2.5-72b-instruct",
   "qwen2.5-32b-instruct",
+  "text-embedding-v4",
   "text-embedding-v3",
   "text-embedding-v2",
+  "text-embedding-v1",
+  "multimodal-embedding-v1",
+];
+
+/** Shown when /models returns chat-only models but user opens the Embed slot (same ids as fallbacks). */
+const DASHSCOPE_EMBED_SLOT_EXTRA: string[] = [
+  "text-embedding-v4",
+  "text-embedding-v3",
+  "text-embedding-v2",
+  "text-embedding-v1",
+  "multimodal-embedding-v1",
 ];
 
 function parseOpenAIList(data: OpenAIListModelsResponse): GeminiModelOption[] {
@@ -120,5 +137,15 @@ export async function fetchQwenModelsForSlot(
   compatibleBase?: string,
 ): Promise<GeminiModelOption[]> {
   const all = await fetchQwenModelsFromApi(apiKey, compatibleBase);
-  return filterQwenModelsForSlot(all, slot);
+  let out = filterQwenModelsForSlot(all, slot);
+  if (slot === "embed" && out.length === 0) {
+    const seen = new Set(all.map((m) => m.name));
+    for (const id of DASHSCOPE_EMBED_SLOT_EXTRA) {
+      if (!seen.has(id)) {
+        out = [...out, toOption(id)];
+        seen.add(id);
+      }
+    }
+  }
+  return out;
 }
