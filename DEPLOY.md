@@ -28,7 +28,7 @@ Set **`DATABASE_URL`** in each environment to match the intended use. For CI mig
 
 ## 2. GitHub Actions
 
-- **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `master`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`.
+- **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** — on pull requests and `master`: lint/build `apps/web`, build H5 `apps/miniapp`, `ruff` + `pytest` for `services/rule_engine`. The **`web` job** sets placeholder `DATABASE_URL`, `SUPABASE_*`, `AUTH_SECRET`, `AI_CONFIG_SECRET`, `MINIAPP_JWT_SECRET`, `RULE_ENGINE_URL` so `next build` can run (see workflow file); it does not talk to real Supabase or the rule engine.
 - **[`.github/workflows/migrate.yml`](.github/workflows/migrate.yml)** — optional automation for hosted DB: Supabase CLI `db push`, then `prisma migrate deploy` (runs on pushes to `master` when migration paths change, or `workflow_dispatch`).  
   - **`SUPABASE_ACCESS_TOKEN`**: Supabase **account** [Personal Access Token](https://supabase.com/dashboard/account/tokens) — must look like `sbp_0102…1920`. **Not** the project **service_role** / **anon** keys (those are JWTs for your app).  
   - **`SUPABASE_PROJECT_REF`**: project ref from **Dashboard → Project Settings → General**.  
