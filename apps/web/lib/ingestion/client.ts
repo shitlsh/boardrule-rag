@@ -156,6 +156,38 @@ export async function startBuildIndex(params: {
   return (await res.json()) as BuildIndexStartResponse;
 }
 
+/** Normalize rule_engine poll JSON (snake_case) and optional camelCase aliases. */
+export function normalizeBuildIndexPoll(raw: unknown): BuildIndexJobPollResponse {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("建索引轮询返回非 JSON 对象");
+  }
+  const o = raw as Record<string, unknown>;
+  const job_id =
+    typeof o.job_id === "string"
+      ? o.job_id
+      : typeof o.jobId === "string"
+        ? o.jobId
+        : "";
+  const status = o.status as BuildIndexJobPollResponse["status"];
+  const manifest =
+    o.manifest !== null && o.manifest !== undefined && typeof o.manifest === "object"
+      ? (o.manifest as Record<string, unknown>)
+      : null;
+  let error: string | null = null;
+  if (typeof o.error === "string") {
+    error = o.error;
+  } else if (o.error !== null && o.error !== undefined) {
+    error = String(o.error);
+  }
+  if (!job_id) {
+    throw new Error("建索引响应缺少 job_id");
+  }
+  if (status !== "pending" && status !== "processing" && status !== "completed" && status !== "failed") {
+    throw new Error(`建索引响应 status 无效: ${String(status)}`);
+  }
+  return { job_id, status, manifest, error };
+}
+
 export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPollResponse> {
   const base = getRuleEngineBaseUrl();
   let res: Response;
@@ -178,7 +210,8 @@ export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPoll
     const text = await res.text();
     throw new Error(text || `Build index poll failed: ${res.status}`);
   }
-  return (await res.json()) as BuildIndexJobPollResponse;
+  const raw: unknown = await res.json();
+  return normalizeBuildIndexPoll(raw);
 }
 
 export async function chatRules(params: {

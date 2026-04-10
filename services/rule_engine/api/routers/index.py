@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -12,6 +13,9 @@ from api.deps import require_boardrule_ai
 from api.routers import index_jobs
 from ingestion.index_builder import build_and_persist_index, load_hybrid_reranked_nodes, load_manifest
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
+from utils.exception_format import format_exception_for_job
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["index"])
 
@@ -92,7 +96,8 @@ def _run_build_index_job(job_id: str, body: BuildIndexRequest, ai_snapshot: dict
             )
         index_jobs.set_completed(job_id, manifest)
     except Exception as e:  # noqa: BLE001
-        index_jobs.set_failed(job_id, str(e))
+        logger.exception("build-index job %s failed", job_id)
+        index_jobs.set_failed(job_id, format_exception_for_job(e))
 
 
 @router.post("/build-index/start", response_model=BuildIndexStartResponse)

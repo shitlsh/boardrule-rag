@@ -60,6 +60,23 @@ function progressFromIndexEngine(status: ExtractJobStatus, pollError: string | n
 }
 
 /**
+ * When the rule engine surfaces KeyError(uuid), the message can look like a bare UUID.
+ * Make Task rows self-explanatory without requiring log access for the first clue.
+ */
+function augmentIndexEngineError(error: string | null, jobId: string): string | null {
+  if (error == null || error === "") return error;
+  const core = error.trim().replace(/^['"]+|['"]+$/g, "");
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(core);
+  if (!isUuid) return error;
+  return (
+    `${error} — 说明：该片段多来自 Python KeyError（缺失的配置键或字典访问）。` +
+    `请查看规则引擎日志中的完整栈。若使用多 worker 部署 Uvicorn，建索引任务只在创建它的进程内存中，` +
+    `轮询打到其他 worker 会失败；请改为单 worker 或固定路由。engine_job_id=${jobId}`
+  );
+}
+
+/**
  * Polls the rule engine for this task’s job and updates `Task` / `Game` plus on-disk exports when done.
  */
 export async function syncTaskFromRuleEngine(taskId: string) {
@@ -230,7 +247,8 @@ export async function syncIndexBuildTask(taskId: string) {
   }
 
   const taskStatus = mapEngineToTaskStatus(poll.status);
-  const progressJson = progressFromIndexEngine(poll.status, poll.error);
+  const indexErrDetail = augmentIndexEngineError(poll.error, poll.job_id);
+  const progressJson = progressFromIndexEngine(poll.status, indexErrDetail);
 
   if (poll.status === "completed" && !poll.manifest) {
     await prisma.task.update({
@@ -272,7 +290,7 @@ export async function syncIndexBuildTask(taskId: string) {
       where: { id: taskId },
       data: {
         status: "FAILED",
-        errorMsg: poll.error ?? "建索引失败",
+        errorMsg: indexErrDetail ?? "建索引失败",
         progressJson,
       },
     });
@@ -281,7 +299,7 @@ export async function syncIndexBuildTask(taskId: string) {
       where: { id: taskId },
       data: {
         status: taskStatus,
-        errorMsg: poll.error,
+        errorMsg: poll.status === "processing" || poll.status === "pending" ? null : indexErrDetail,
         progressJson,
       },
     });

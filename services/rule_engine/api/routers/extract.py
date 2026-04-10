@@ -27,6 +27,7 @@ from graphs.state import ExtractionState
 from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
+from utils.exception_format import format_exception_for_job
 from utils.paths import page_assets_root
 
 router = APIRouter(tags=["extract"])
@@ -211,7 +212,7 @@ def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]
                 j = _jobs.get(job_id)
                 if j:
                     j.status = JobStatus.failed
-                    j.error = str(e)
+                    j.error = format_exception_for_job(e)
 
 
 def _download_to_temp(url: str) -> Path:
