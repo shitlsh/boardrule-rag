@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -32,6 +33,150 @@ from utils.paths import service_root
 _MANIFEST_NAME = "manifest.json"
 _VECTOR_SUBDIR = "vector_storage"
 _BM25_SUBDIR = "bm25"
+
+logger = logging.getLogger(__name__)
+
+
+def _env_embed_batch_debug() -> bool:
+    return os.environ.get("INDEX_BUILD_EMBED_BATCH_DEBUG", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _summarize_text_batch_for_embed_log(texts: list[str]) -> dict[str, int | float]:
+    """Lightweight stats for diagnosing provider batch mismatches (no full text in logs)."""
+    n = len(texts)
+    if n == 0:
+        return {"count": 0, "empty_strings": 0, "min_chars": 0, "max_chars": 0, "total_chars": 0}
+    lens = [len(t) for t in texts]
+    empty = sum(1 for t in texts if t == "")
+    return {
+        "count": n,
+        "empty_strings": empty,
+        "min_chars": min(lens),
+        "max_chars": max(lens),
+        "total_chars": sum(lens),
+    }
+
+
+def _log_embedding_batch_mismatch(
+    *,
+    sync: bool,
+    texts: list[str],
+    out_len: int,
+    provider: str,
+    model: str,
+    embed_model: Any,
+) -> None:
+    stats = _summarize_text_batch_for_embed_log(texts)
+    eb = getattr(embed_model, "embed_batch_size", None)
+    nw = getattr(embed_model, "num_workers", None)
+    previews: list[str] = []
+    for i, t in enumerate(texts[:3]):
+        s = repr(t[:120] + ("…" if len(t) > 120 else ""))
+        previews.append(f"[{i}] len={len(t)} sample={s}")
+    logger.error(
+        "embedding batch length mismatch (%s): expected %s vectors, got %s; "
+        "provider=%r model=%r embed_batch_size=%r num_workers=%r stats=%s; "
+        "first texts: %s",
+        "sync" if sync else "async",
+        len(texts),
+        out_len,
+        provider,
+        model,
+        eb,
+        nw,
+        stats,
+        " | ".join(previews) if previews else "(none)",
+    )
+
+
+def _attach_embedding_batch_diagnostics(
+    embed_model: Any,
+    *,
+    provider: str,
+    model: str,
+) -> None:
+    """
+    Wrap batch embedding calls so we log dimensions and surface a clear error if the provider
+    returns fewer vectors than texts (LlamaIndex ``embed_nodes`` would otherwise KeyError).
+    """
+    if getattr(embed_model, "_boardrule_embed_batch_diag", False):
+        return
+    setattr(embed_model, "_boardrule_embed_batch_diag", True)
+
+    debug = _env_embed_batch_debug()
+    orig_batch = embed_model.get_text_embedding_batch
+    orig_abatch = getattr(embed_model, "aget_text_embedding_batch", None)
+
+    def get_text_embedding_batch(
+        texts: list[str],
+        show_progress: bool = False,
+        **kwargs: Any,
+    ) -> Any:
+        if debug:
+            logger.info(
+                "embed batch (sync): n_texts=%s embed_batch_size=%r provider=%r model=%r",
+                len(texts),
+                getattr(embed_model, "embed_batch_size", None),
+                provider,
+                model,
+            )
+        out = orig_batch(texts, show_progress=show_progress, **kwargs)
+        if len(out) != len(texts):
+            _log_embedding_batch_mismatch(
+                sync=True,
+                texts=texts,
+                out_len=len(out),
+                provider=provider,
+                model=model,
+                embed_model=embed_model,
+            )
+            raise RuntimeError(
+                f"Embedding API returned {len(out)} vectors for {len(texts)} input texts "
+                f"(provider={provider!r}, model={model!r}). "
+                "This breaks LlamaIndex node id ↔ embedding alignment; see logs above."
+            )
+        return out
+
+    embed_model.get_text_embedding_batch = get_text_embedding_batch  # type: ignore[method-assign]
+
+    if orig_abatch is not None:
+
+        async def aget_text_embedding_batch(
+            texts: list[str],
+            show_progress: bool = False,
+            **kwargs: Any,
+        ) -> Any:
+            if debug:
+                logger.info(
+                    "embed batch (async): n_texts=%s embed_batch_size=%r provider=%r model=%r",
+                    len(texts),
+                    getattr(embed_model, "embed_batch_size", None),
+                    provider,
+                    model,
+                )
+            out = await orig_abatch(texts, show_progress=show_progress, **kwargs)
+            if len(out) != len(texts):
+                _log_embedding_batch_mismatch(
+                    sync=False,
+                    texts=texts,
+                    out_len=len(out),
+                    provider=provider,
+                    model=model,
+                    embed_model=embed_model,
+                )
+                raise RuntimeError(
+                    f"Embedding API returned {len(out)} vectors for {len(texts)} input texts "
+                    f"(provider={provider!r}, model={model!r}). "
+                    "This breaks LlamaIndex node id ↔ embedding alignment; see logs above."
+                )
+            return out
+
+        embed_model.aget_text_embedding_batch = aget_text_embedding_batch  # type: ignore[method-assign]
+
 
 def _embed_text_for_indexing_filter(node: TextNode) -> str:
     raw = node.get_content(metadata_mode=MetadataMode.EMBED)
@@ -363,6 +508,11 @@ def configure_embedding_settings() -> None:
             model_name=slot.model,
             api_key=slot.api_key,
         )
+    _attach_embedding_batch_diagnostics(
+        Settings.embed_model,
+        provider=slot.provider,
+        model=slot.model,
+    )
 
 
 def _documents_from_inputs(
@@ -442,6 +592,19 @@ def build_and_persist_index(
             "Check that sections contain visible text (not only HTML comments). "
             "Page anchors must look like <!-- pages: 3 --> or <!-- pages: 3-5 -->."
         )
+
+    slot = get_slots().embed
+    logger.info(
+        "index build: game_id=%s nodes=%s chunk_size=%s chunk_overlap=%s "
+        "embed_provider=%s embed_model=%s pgvector=%s",
+        game_id,
+        len(nodes),
+        chunk_size,
+        chunk_overlap,
+        slot.provider,
+        slot.model,
+        _pgvector_connection_string() is not None,
+    )
 
     import shutil
 
