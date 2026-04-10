@@ -4,7 +4,7 @@
       "path": "pages/index/index",
       "style": {
         "navigationBarTitleText": "规则助手",
-        "navigationBarBackgroundColor": "#166534",
+        "navigationBarBackgroundColor": "#b45309",
         "navigationBarTextStyle": "white"
       }
     },
@@ -12,7 +12,7 @@
       "path": "pages/chat/index",
       "style": {
         "navigationBarTitleText": "规则问答",
-        "navigationBarBackgroundColor": "#166534",
+        "navigationBarBackgroundColor": "#b45309",
         "navigationBarTextStyle": "white",
         "usingComponents": {
           "towxml": "/wxcomponents/towxml/towxml"
@@ -23,7 +23,7 @@
   "globalStyle": {
     "navigationBarTextStyle": "white",
     "navigationBarTitleText": "规则助手",
-    "navigationBarBackgroundColor": "#166534",
-    "backgroundColor": "#f8fafc"
+    "navigationBarBackgroundColor": "#b45309",
+    "backgroundColor": "#fffbf5"
   }
 }

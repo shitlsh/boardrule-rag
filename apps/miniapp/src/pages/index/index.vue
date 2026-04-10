@@ -3,9 +3,12 @@
     <!-- 头部 -->
     <view class="header">
       <view class="header__brand">
-        <!-- Book-open SVG icon -->
+        <!-- book-open SVG icon -->
         <view class="header__logo" aria-hidden="true">
-          <svg-icon name="book-open" size="44" color="#fff" />
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
         </view>
         <view class="header__title">规则助手</view>
       </view>
@@ -23,7 +26,6 @@
     <!-- 错误 -->
     <view v-else-if="error" class="state-center">
       <view class="state-center__icon-wrap" aria-hidden="true">
-        <!-- alert-circle SVG -->
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="10" stroke="#ef4444" stroke-width="1.5"/>
           <path d="M12 7v5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
@@ -37,10 +39,9 @@
     <!-- 空状态（无任何已索引游戏） -->
     <view v-else-if="games.length === 0" class="state-center">
       <view class="state-center__icon-wrap" aria-hidden="true">
-        <!-- inbox SVG -->
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M2 12h4l2 3h8l2-3h4" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/>
-          <path d="M4.27 5h15.46A2 2 0 0 1 21.73 7.34L21 19a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1L2.27 7.34A2 2 0 0 1 4.27 5Z" stroke="#94a3b8" stroke-width="1.5"/>
+          <path d="M2 12h4l2 3h8l2-3h4" stroke="#d1c4a8" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M4.27 5h15.46A2 2 0 0 1 21.73 7.34L21 19a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1L2.27 7.34A2 2 0 0 1 4.27 5Z" stroke="#d1c4a8" stroke-width="1.5"/>
         </svg>
       </view>
       <text class="state-center__text">暂无可用规则库</text>
@@ -50,11 +51,10 @@
     <!-- 有数据：搜索 + 列表 -->
     <view v-else class="list-section">
       <view class="search-bar" :class="{ 'search-bar--focus': searchFocused }">
-        <!-- search SVG icon -->
         <view class="search-bar__icon" aria-hidden="true">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="11" cy="11" r="8" stroke="#94a3b8" stroke-width="1.6"/>
-            <path d="m21 21-4.35-4.35" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="11" cy="11" r="8" stroke="#a8a29e" stroke-width="1.6"/>
+            <path d="m21 21-4.35-4.35" stroke="#a8a29e" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
         </view>
         <input
@@ -68,10 +68,9 @@
           @blur="searchFocused = false"
         />
         <view v-if="searchQuery" class="search-bar__clear" @tap="searchQuery = ''">
-          <!-- x-circle SVG -->
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" stroke="#94a3b8" stroke-width="1.5"/>
-            <path d="m15 9-6 6M9 9l6 6" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="10" stroke="#a8a29e" stroke-width="1.5"/>
+            <path d="m15 9-6 6M9 9l6 6" stroke="#a8a29e" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </view>
       </view>
@@ -93,11 +92,11 @@
               mode="aspectFill"
             />
             <view v-else class="game-card__cover-placeholder" aria-hidden="true">
-              <!-- layers SVG (规则/书籍感) -->
+              <!-- layers SVG -->
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
-                <path d="m2 12 10 5 10-5" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
-                <path d="m2 17 10 5 10-5" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="#d97706" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="m2 12 10 5 10-5" stroke="#d97706" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="m2 17 10 5 10-5" stroke="#d97706" stroke-width="1.5" stroke-linejoin="round"/>
               </svg>
             </view>
           </view>
@@ -107,10 +106,9 @@
             <view class="game-card__label">查看规则解读</view>
           </view>
 
-          <!-- chevron-right SVG -->
           <view class="game-card__arrow" aria-hidden="true">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="m9 18 6-6-6-6" stroke="#cbd5e1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="m9 18 6-6-6-6" stroke="#d1c4a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </view>
         </view>
@@ -200,20 +198,20 @@ onMounted(loadGames)
 /* ---- 头部 ---- */
 .header {
   background: $br-gradient-header;
-  padding: calc(32rpx + env(safe-area-inset-top, 0px)) 32rpx 32rpx;
+  padding: calc(32rpx + env(safe-area-inset-top, 0px)) 32rpx 28rpx;
   color: #fff;
   flex-shrink: 0;
 
   &__brand {
     display: flex;
     align-items: center;
-    gap: 16rpx;
-    margin-bottom: 10rpx;
+    gap: 14rpx;
+    margin-bottom: 8rpx;
   }
 
   &__logo {
-    width: 48rpx;
-    height: 48rpx;
+    width: 44rpx;
+    height: 44rpx;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -223,7 +221,7 @@ onMounted(loadGames)
   &__title {
     font-size: 40rpx;
     font-weight: 700;
-    letter-spacing: 1rpx;
+    letter-spacing: 0.5rpx;
     line-height: 1.2;
   }
 
@@ -231,12 +229,12 @@ onMounted(loadGames)
     font-size: 26rpx;
     color: rgba(255, 255, 255, 0.82);
     line-height: 1.4;
-    margin-bottom: 14rpx;
+    margin-bottom: 16rpx;
   }
 
   &__disclaimer {
     font-size: 20rpx;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.52);
     line-height: 1.5;
     border-top: 1rpx solid rgba(255, 255, 255, 0.18);
     padding-top: 14rpx;
@@ -311,14 +309,14 @@ onMounted(loadGames)
   padding: 16rpx 20rpx;
   background: $br-bg-card;
   border-radius: 999rpx;
-  border: 2rpx solid #e2e8f0;
+  border: 2rpx solid #e7e0d4;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
   transition: border-color $br-duration-fast, box-shadow $br-duration-fast;
 
   &--focus {
-    border-color: rgba(22, 163, 74, 0.55);
-    box-shadow: 0 0 0 4rpx rgba(22, 163, 74, 0.1);
+    border-color: rgba(217, 119, 6, 0.5);
+    box-shadow: 0 0 0 4rpx rgba(217, 119, 6, 0.1);
   }
 
   &__icon {
@@ -336,7 +334,7 @@ onMounted(loadGames)
   }
 
   &__placeholder {
-    color: #94a3b8;
+    color: #a8a29e;
   }
 
   &__clear {
@@ -368,7 +366,7 @@ onMounted(loadGames)
   gap: 20rpx;
   overflow: hidden;
   min-height: 120rpx;
-  border: 1rpx solid #f0f4f8;
+  border: 1rpx solid #f5ede0;
   transition: transform $br-duration-fast, box-shadow $br-duration-fast;
 
   /* #ifdef H5 */
@@ -376,14 +374,14 @@ onMounted(loadGames)
 
   &:hover {
     box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.1);
-    border-color: rgba(22, 163, 74, 0.2);
+    border-color: rgba(217, 119, 6, 0.25);
   }
   /* #endif */
 
   &--active {
     transform: scale(0.985);
-    box-shadow: 0 6rpx 24rpx rgba(22, 163, 74, 0.14);
-    border-color: rgba(22, 163, 74, 0.25);
+    box-shadow: 0 6rpx 24rpx rgba(180, 83, 9, 0.14);
+    border-color: rgba(217, 119, 6, 0.3);
   }
 
   &__cover {
@@ -392,8 +390,8 @@ onMounted(loadGames)
     border-radius: 16rpx;
     overflow: hidden;
     flex-shrink: 0;
-    background: #f0fdf4;
-    border: 1rpx solid #dcfce7;
+    background: #fef9f0;
+    border: 1rpx solid #fde8c0;
   }
 
   &__cover-img {
