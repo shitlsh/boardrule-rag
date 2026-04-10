@@ -37,31 +37,7 @@ def _headers(api_key: str) -> dict[str, str]:
     }
 
 
-def chat_completion(
-    *,
-    api_key: str,
-    api_base: str,
-    model: str,
-    messages: list[dict[str, Any]],
-    temperature: float,
-    max_tokens: int,
-) -> str:
-    base = resolve_dashscope_api_base(api_base)
-    url = f"{base}/chat/completions"
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-    with httpx.Client(timeout=_timeout_s()) as client:
-        r = client.post(url, headers=_headers(api_key), json=payload)
-        r.raise_for_status()
-        data = r.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise RuntimeError("DashScope returned no choices")
-    msg = choices[0].get("message") or {}
+def _message_content_to_text(msg: dict[str, Any]) -> str:
     content = msg.get("content")
     if content is None or (isinstance(content, str) and not content.strip()):
         raise RuntimeError("DashScope returned empty response")
@@ -81,6 +57,60 @@ def chat_completion(
     return str(content)
 
 
+def chat_completion_with_meta(
+    *,
+    api_key: str,
+    api_base: str,
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    max_tokens: int,
+) -> tuple[str, str | None]:
+    """Returns (text, finish_reason). ``finish_reason`` is ``\"length\"`` when output may be truncated."""
+    base = resolve_dashscope_api_base(api_base)
+    url = f"{base}/chat/completions"
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    with httpx.Client(timeout=_timeout_s()) as client:
+        r = client.post(url, headers=_headers(api_key), json=payload)
+        r.raise_for_status()
+        data = r.json()
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError("DashScope returned no choices")
+    ch0 = choices[0]
+    msg = ch0.get("message") or {}
+    text = _message_content_to_text(msg)
+    fr = ch0.get("finish_reason")
+    if isinstance(fr, str):
+        return text, fr
+    return text, str(fr) if fr is not None else None
+
+
+def chat_completion(
+    *,
+    api_key: str,
+    api_base: str,
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    text, _ = chat_completion_with_meta(
+        api_key=api_key,
+        api_base=api_base,
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return text
+
+
 def chat_completion_text(
     *,
     api_key: str,
@@ -91,6 +121,25 @@ def chat_completion_text(
     max_tokens: int,
 ) -> str:
     return chat_completion(
+        api_key=api_key,
+        api_base=api_base,
+        model=model,
+        messages=[{"role": "user", "content": user_text}],
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
+def chat_completion_text_with_meta(
+    *,
+    api_key: str,
+    api_base: str,
+    model: str,
+    user_text: str,
+    temperature: float,
+    max_tokens: int,
+) -> tuple[str, str | None]:
+    return chat_completion_with_meta(
         api_key=api_key,
         api_base=api_base,
         model=model,
@@ -138,6 +187,26 @@ def chat_completion_from_parts(
 ) -> str:
     messages = parts_to_dashscope_messages(parts)
     return chat_completion(
+        api_key=api_key,
+        api_base=api_base,
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
+def chat_completion_from_parts_with_meta(
+    *,
+    api_key: str,
+    api_base: str,
+    model: str,
+    parts: list[Any],
+    temperature: float,
+    max_tokens: int,
+) -> tuple[str, str | None]:
+    messages = parts_to_dashscope_messages(parts)
+    return chat_completion_with_meta(
         api_key=api_key,
         api_base=api_base,
         model=model,

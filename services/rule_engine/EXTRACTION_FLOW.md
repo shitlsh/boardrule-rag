@@ -74,6 +74,7 @@ flowchart LR
 | `VISION_BATCH_PAGES` | 6 | 仅 **`needs_batching=true`** 时按该页数切段；简单路径下单批页数不受此上限约束（见 `batch_splitter`）。 |
 | `force_full_pipeline` | false | API / Web 传入，写入 `ExtractionState`；为 true 时不走简单门闸。 |
 | `EXTRACTION_SIMPLE_PATH_WARN_BODY_PAGES` | 32 | 简单路径单批覆盖正文超过该页数时打 **warning** 日志（提示可能触 API 或质量上限）。 |
+| `X-Boardrule-Ai-Config` → `slots.pro.maxOutputTokens` / `flash.maxOutputTokens` | 未设置时使用引擎默认 | 单次生成的 **max output**（tokens）。未在 BFF 填写时，引擎默认 **32768**，也可用环境变量 `BOARDRULE_PRO_MAX_OUTPUT_TOKENS_DEFAULT` / `BOARDRULE_FLASH_MAX_OUTPUT_TOKENS_DEFAULT` 覆盖。若仍触顶，`utils/llm_generate.py` 会按 `BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS`（默认 **6**）发起 **续写**；续写或仍截断时的提示会进入任务的 **`errors`**。 |
 
 轮询结果含 **`complexity`**、**`extraction_profile`**（`simple` \| `complex`）、**`toc`**，便于排查当前路径。
 

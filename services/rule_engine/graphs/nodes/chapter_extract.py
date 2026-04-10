@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from graphs.state import ExtractionState
-from utils.gemini import (
+from utils.llm_generate import (
     PRO_EXTRACT,
-    GeminiCallMeta,
+    LlmCallMeta,
     build_labeled_image_parts,
     generate_pro_vision,
     pro_max_output_tokens,
@@ -44,6 +44,7 @@ def run(state: ExtractionState) -> dict:
     errs: list[str] = list(state.get("errors") or [])
     _mot = pro_max_output_tokens()
     merge_retries = 0
+    llm_warns: list[str] = []
 
     if vision_batches:
         filled = render_prompt("chapter_extract_vision.md", state, rule_style_core=rule_style_core)
@@ -78,11 +79,12 @@ def run(state: ExtractionState) -> dict:
                     parts,
                     preset=PRO_EXTRACT,
                     max_output_tokens=_mot,
-                    meta=GeminiCallMeta(
+                    meta=LlmCallMeta(
                         node="chapter_extract",
                         prompt_file="chapter_extract_vision.md",
                         call_tag=f"batch_{i + 1}_of_{len(batch_list)}",
                     ),
+                    out_warnings=llm_warns,
                 )
 
             try:
@@ -122,11 +124,12 @@ def run(state: ExtractionState) -> dict:
                         parts,
                         preset=PRO_EXTRACT,
                         max_output_tokens=_mot,
-                        meta=GeminiCallMeta(
+                        meta=LlmCallMeta(
                             node="chapter_extract",
                             prompt_file="chapter_extract_vision.md",
                             call_tag=f"merged_from_batch_{i + 1}_step_{steps}",
                         ),
+                        out_warnings=llm_warns,
                     )
 
                 try:
@@ -147,7 +150,7 @@ def run(state: ExtractionState) -> dict:
         prev_retry = int(state.get("retry_count") or 0)
         return {
             "chapter_outputs": outputs,
-            "errors": errs,
+            "errors": errs + llm_warns,
             "retry_count": prev_retry + merge_retries,
         }
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import FLASH_QUICKSTART, GeminiCallMeta, flash_max_output_tokens, generate_flash
+from utils.llm_generate import FLASH_QUICKSTART, LlmCallMeta, flash_max_output_tokens, generate_flash
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -19,6 +19,7 @@ def run(state: ExtractionState) -> dict:
         }
     prompt = render_prompt("quickstart_and_questions.md", state, merged=merged[:120_000])
     _mot = flash_max_output_tokens()
+    llm_warns: list[str] = []
     try:
 
         def _call() -> str:
@@ -26,7 +27,8 @@ def run(state: ExtractionState) -> dict:
                 prompt,
                 preset=FLASH_QUICKSTART,
                 max_output_tokens=_mot,
-                meta=GeminiCallMeta(node="quickstart_and_questions", prompt_file="quickstart_and_questions.md"),
+                meta=LlmCallMeta(node="quickstart_and_questions", prompt_file="quickstart_and_questions.md"),
+                out_warnings=llm_warns,
             )
 
         raw = retry(_call, attempts=3)
@@ -40,6 +42,7 @@ def run(state: ExtractionState) -> dict:
         return {
             "quick_start": "",
             "suggested_questions": [],
-            "errors": (state.get("errors") or []) + [f"quickstart_and_questions: {e}"],
+            "errors": (state.get("errors") or []) + llm_warns + [f"quickstart_and_questions: {e}"],
         }
-    return {"quick_start": quick, "suggested_questions": qs}
+    base_errs = list(state.get("errors") or [])
+    return {"quick_start": quick, "suggested_questions": qs, "errors": base_errs + llm_warns}

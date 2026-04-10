@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from graphs.state import ExtractionState
 from ingestion.node_builders import merged_markdown_to_documents
-from utils.gemini import PRO_MERGE, GeminiCallMeta, generate_pro, pro_max_output_tokens
+from utils.llm_generate import PRO_MERGE, LlmCallMeta, generate_pro, pro_max_output_tokens
 from utils.page_markers import (
     page_continuity_warnings,
     supplement_chapter_page_metadata,
@@ -31,6 +31,7 @@ def run(state: ExtractionState) -> dict:
     chunks = state.get("chapter_outputs") or []
     base_errs = list(state.get("errors") or [])
     _mot = pro_max_output_tokens()
+    llm_warns: list[str] = []
 
     if not chunks:
         return {
@@ -72,11 +73,12 @@ def run(state: ExtractionState) -> dict:
                     p,
                     preset=PRO_MERGE,
                     max_output_tokens=_mot,
-                    meta=GeminiCallMeta(
+                    meta=LlmCallMeta(
                         node="merge_and_refine",
                         prompt_file="merge_refine.md",
                         call_tag="split_merge_first_half",
                     ),
+                    out_warnings=llm_warns,
                 )
 
             def _merge_b() -> str:
@@ -90,11 +92,12 @@ def run(state: ExtractionState) -> dict:
                     p,
                     preset=PRO_MERGE,
                     max_output_tokens=_mot,
-                    meta=GeminiCallMeta(
+                    meta=LlmCallMeta(
                         node="merge_and_refine",
                         prompt_file="merge_refine.md",
                         call_tag="split_merge_second_half",
                     ),
+                    out_warnings=llm_warns,
                 )
 
             part_a = retry(_merge_a, attempts=2)
@@ -106,7 +109,7 @@ def run(state: ExtractionState) -> dict:
             return {
                 "merged_markdown": md,
                 "structured_chapters": _structured_from_md(state, md),
-                "errors": base_errs + [f"merge_and_refine split: {e}"] + cont,
+                "errors": base_errs + llm_warns + [f"merge_and_refine split: {e}"] + cont,
             }
 
     prompt = render_prompt(
@@ -122,7 +125,8 @@ def run(state: ExtractionState) -> dict:
                 prompt,
                 preset=PRO_MERGE,
                 max_output_tokens=_mot,
-                meta=GeminiCallMeta(node="merge_and_refine", prompt_file="merge_refine.md", call_tag="final"),
+                meta=LlmCallMeta(node="merge_and_refine", prompt_file="merge_refine.md", call_tag="final"),
+                out_warnings=llm_warns,
             )
 
         merged_md = retry(_final, attempts=3)
@@ -132,12 +136,12 @@ def run(state: ExtractionState) -> dict:
         return {
             "merged_markdown": md,
             "structured_chapters": _structured_from_md(state, md),
-            "errors": base_errs + [f"merge_and_refine: {e}"] + cont,
+            "errors": base_errs + llm_warns + [f"merge_and_refine: {e}"] + cont,
         }
     merged_md = merged_md.strip()
     cont = page_continuity_warnings(merged_md)
     return {
         "merged_markdown": merged_md,
         "structured_chapters": _structured_from_md(state, merged_md),
-        "errors": base_errs + cont,
+        "errors": base_errs + llm_warns + cont,
     }

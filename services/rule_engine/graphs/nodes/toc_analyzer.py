@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.gemini import FLASH_TOC, GeminiCallMeta, build_labeled_image_parts, generate_flash_vision
+from utils.llm_generate import FLASH_TOC, LlmCallMeta, build_labeled_image_parts, generate_flash_vision
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -29,21 +29,23 @@ def run(state: ExtractionState) -> dict:
             preamble=base + "\n\n你将看到以下目录页图片（已标注物理页码）：\n",
             closing="\n\n请严格按照 toc_analyzer_vision 要求只输出 JSON。",
         )
+        llm_warns: list[str] = []
         try:
 
             def _call() -> str:
                 return generate_flash_vision(
                     parts,
                     preset=FLASH_TOC,
-                    meta=GeminiCallMeta(node="toc_analyzer", prompt_file="toc_analyzer_vision.md"),
+                    meta=LlmCallMeta(node="toc_analyzer", prompt_file="toc_analyzer_vision.md"),
+                    out_warnings=llm_warns,
                 )
 
             raw = retry(_call, attempts=3)
             toc = parse_json_object(raw)
         except Exception as e:  # noqa: BLE001
             err = f"toc_analyzer vision: {e}"
-            return {"errors": (state.get("errors") or []) + [err], "toc": {}}
-        return {"toc": toc}
+            return {"errors": (state.get("errors") or []) + llm_warns + [err], "toc": {}}
+        return {"toc": toc, "errors": (state.get("errors") or []) + llm_warns}
 
     errs = list(state.get("errors") or [])
     if not toc_idxs:

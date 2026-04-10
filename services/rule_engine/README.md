@@ -50,6 +50,8 @@ cp .env.example .env
 | `QWEN_CHAT_CONTEXT_WINDOW` | Optional. When the **Chat** slot uses **Qwen** (DashScope OpenAI-compatible), RAG uses LlamaIndex’s **`OpenAILike`** with this context size (tokens). Default **`128000`**. Set to match the model (LlamaIndex does not infer DashScope ids like `qwen-turbo`). |
 | (none) | DashScope **OpenAI-compatible** base URL is configured per **Qwen credential** in **`apps/web`** (models page), stored in settings and sent as **`dashscopeCompatibleBase`** on each qwen slot in `X-Boardrule-Ai-Config`. The rule engine does **not** read a `DASHSCOPE_COMPATIBLE_BASE` environment variable for the base URL. |
 | `DASHSCOPE_HTTP_TIMEOUT_MS` | Optional. HTTP timeouts for **`utils/dashscope_client.py`** (extraction/vision paths that call DashScope chat/completions). |
+| `BOARDRULE_PRO_MAX_OUTPUT_TOKENS_DEFAULT` / `BOARDRULE_FLASH_MAX_OUTPUT_TOKENS_DEFAULT` | Optional. When **`X-Boardrule-Ai-Config`** omits **`maxOutputTokens`** on the **pro** / **flash** slot, these env vars set the engine default (otherwise **32768** per slot). Prefer setting **`maxOutputTokens`** in the web AI Gateway when possible. |
+| `BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS` | Optional. Max extra **continuation** requests when a response hits the model output length limit (default **6**). |
 | `RERANK_MODEL` | SentenceTransformers cross-encoder for reranking (default `BAAI/bge-reranker-base`). |
 
 Prefer **`.env.example`** as the authoritative list (grouped by concern: HTTP, LangSmith, raster defaults, vision graph, chat, index, paths).
@@ -115,9 +117,9 @@ export LANGCHAIN_API_KEY=your-langsmith-key
 export LANGCHAIN_PROJECT=boardrule-rag
 ```
 
-Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`. When tracing is off, or the API key is missing, the rule engine does not open LangSmith runs around native Gemini (`google-genai`) calls.
+Disable by unsetting `LANGCHAIN_TRACING_V2` or setting it to `false`. When tracing is off, or the API key is missing, the rule engine does not open LangSmith runs around slot-based LLM calls (Gemini / OpenRouter / Qwen; see **`utils/llm_generate.py`**).
 
-When tracing is on **and** a LangSmith API key is set (`LANGCHAIN_API_KEY` or `LANGSMITH_API_KEY`), each Gemini call from graph nodes records a child **`llm`** run (via `langsmith.run_helpers.trace`) with metadata such as **`gemini_node`** (graph node name), **`prompt_file`** (template basename when applicable), **`prompt_sha256`** (hash of the rendered prompt or multimodal text parts), and optional **`call_tag`** (for example batch index or merge stage). This does not send full prompts to LangSmith—only hashes and short labels.
+When tracing is on **and** a LangSmith API key is set (`LANGCHAIN_API_KEY` or `LANGSMITH_API_KEY`), each generation call from graph nodes records a child **`llm`** run (via `langsmith.run_helpers.trace`) with metadata such as **`llm_node`** (graph node name), **`llm_provider`**, **`prompt_file`** (template basename when applicable), **`prompt_sha256`** (hash of the rendered prompt or multimodal text parts), and optional **`call_tag`** (for example batch index or merge stage). This does not send full prompts to LangSmith—only hashes and short labels.
 
 ## Batching and concurrency
 
@@ -131,7 +133,7 @@ The graph **sequentially** calls Gemini once per batch **inside** a single node 
 
 Use the official CLI to run the extraction graph against the **LangGraph dev API** and open **Studio** for a visual graph and step debugging. Configuration lives in **`langgraph.json`**; the exported graph is **`langgraph_studio.py`** (same `StateGraph` as production, compiled **without** `PostgresSaver` so Studio does not require a running database for the graph definition itself).
 
-**Prerequisite:** `langgraph dev` imports `langgraph_studio.py`, which pulls in the full node stack (including `utils/gemini.py` and `google-genai`). The **same Python environment** that runs `langgraph` must have the rule engine installed in editable mode, not only `langgraph-cli`.
+**Prerequisite:** `langgraph dev` imports `langgraph_studio.py`, which pulls in the full node stack (including `utils/llm_generate.py` and, for Gemini slots, `google-genai`). The **same Python environment** that runs `langgraph` must have the rule engine installed in editable mode, not only `langgraph-cli`.
 
 From the repository root (with your venv activated), either:
 
