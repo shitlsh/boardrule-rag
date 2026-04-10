@@ -9,25 +9,7 @@
     </view>
 
     <block v-else>
-      <!-- ===== 顶部操作栏（有对话时显示清空） ===== -->
-      <view v-if="chatStore.messages.length > 0" class="top-action-bar">
-        <view class="top-action-bar__spacer" />
-        <view
-          class="top-action-bar__clear-btn"
-          hover-class="top-action-bar__clear-btn--active"
-          :hover-stay-time="100"
-          @tap="confirmClear"
-        >
-          <!-- trash-2 SVG -->
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polyline points="3 6 5 6 21 6" stroke="#78716c" stroke-width="1.6" stroke-linecap="round"/>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="#78716c" stroke-width="1.6" stroke-linejoin="round"/>
-            <path d="M10 11v6M14 11v6" stroke="#78716c" stroke-width="1.6" stroke-linecap="round"/>
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="#78716c" stroke-width="1.6"/>
-          </svg>
-          <text class="top-action-bar__clear-text">清空</text>
-        </view>
-      </view>
+      <!-- ===== 顶部操作栏已移除，清空按钮在输入框左侧 ===== -->
 
       <!-- ===== QuickStart 折叠卡片 ===== -->
       <view v-if="game?.quickStart" class="quickstart-card">
@@ -107,14 +89,13 @@
             { 'br-msg-enter': enterAnim[msg.id] },
           ]"
         >
-          <!-- 助手头像：使用 app logo SVG -->
+          <!-- 助手头像：logo 气泡造型，白色图形在琥珀底上 -->
           <view v-if="msg.role === 'assistant'" class="avatar avatar--assistant" aria-hidden="true">
-            <!-- App logo SVG (simplified from icon.svg, chat bubble shape with sparkle) -->
-            <svg width="38" height="38" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M 100 28 C 143 28 178 58 178 100 C 178 142 143 172 100 172 C 81 172 63 165 49 172 L 40 177 L 44 153 C 33 138 22 120 22 100 C 22 58 57 28 100 28 Z" fill="white" fill-opacity="0.95" stroke="none"/>
-              <circle cx="74" cy="98" r="9" fill="#b45309"/>
-              <circle cx="100" cy="98" r="9" fill="#d97706"/>
-              <circle cx="126" cy="98" r="9" fill="#f59e0b"/>
+            <svg width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 100 28 C 143 28 178 58 178 100 C 178 142 143 172 100 172 C 81 172 63 165 49 172 L 40 177 L 44 153 C 33 138 22 120 22 100 C 22 58 57 28 100 28 Z" fill="white" fill-opacity="0.22" stroke="none"/>
+              <circle cx="74" cy="100" r="11" fill="white"/>
+              <circle cx="100" cy="100" r="11" fill="white"/>
+              <circle cx="126" cy="100" r="11" fill="white"/>
             </svg>
           </view>
 
@@ -154,11 +135,11 @@
         <!-- 打字 loading -->
         <view v-if="chatStore.isLoading" class="msg-row msg-row--assistant">
           <view class="avatar avatar--assistant" aria-hidden="true">
-            <svg width="38" height="38" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M 100 28 C 143 28 178 58 178 100 C 178 142 143 172 100 172 C 81 172 63 165 49 172 L 40 177 L 44 153 C 33 138 22 120 22 100 C 22 58 57 28 100 28 Z" fill="white" fill-opacity="0.95" stroke="none"/>
-              <circle cx="74" cy="98" r="9" fill="#b45309"/>
-              <circle cx="100" cy="98" r="9" fill="#d97706"/>
-              <circle cx="126" cy="98" r="9" fill="#f59e0b"/>
+            <svg width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 100 28 C 143 28 178 58 178 100 C 178 142 143 172 100 172 C 81 172 63 165 49 172 L 40 177 L 44 153 C 33 138 22 120 22 100 C 22 58 57 28 100 28 Z" fill="white" fill-opacity="0.22" stroke="none"/>
+              <circle cx="74" cy="100" r="11" fill="white"/>
+              <circle cx="100" cy="100" r="11" fill="white"/>
+              <circle cx="126" cy="100" r="11" fill="white"/>
             </svg>
           </view>
           <view class="bubble bubble--assistant bubble--loading">
@@ -179,6 +160,21 @@
         :style="{ paddingBottom: inputBarPaddingBottom + 'px' }"
       >
         <view class="input-bar__row">
+          <!-- 清空按钮：有对话时出现，左侧，仅图标，与发送按钮同款圆角矩形 -->
+          <view
+            v-if="chatStore.messages.length > 0"
+            class="input-bar__action input-bar__clear"
+            hover-class="input-bar__action--active"
+            :hover-stay-time="80"
+            @tap="confirmClear"
+          >
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polyline points="3 6 5 6 21 6" stroke="#a8a29e" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="#a8a29e" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M10 11v6M14 11v6" stroke="#a8a29e" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="#a8a29e" stroke-width="1.6"/>
+            </svg>
+          </view>
           <view
             class="input-bar__field"
             :class="{ 'input-bar__field--focus': inputFocused }"
@@ -199,9 +195,9 @@
             />
           </view>
           <view
-            class="input-bar__send"
+            class="input-bar__action input-bar__send"
             :class="{
-              'is-active': canSend,
+              'input-bar__send--active': canSend,
               'br-send-btn--pulse': sendPulse,
             }"
             @animationend="sendPulse = false"
@@ -536,45 +532,6 @@ function confirmClear() {
   overflow-y: auto;
 }
 
-/* ---- 顶部清空操作栏 ---- */
-.top-action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 12rpx 24rpx 8rpx;
-  flex-shrink: 0;
-
-  &__spacer {
-    flex: 1;
-  }
-
-  &__clear-btn {
-    display: flex;
-    align-items: center;
-    gap: 8rpx;
-    padding: 10rpx 20rpx 10rpx 16rpx;
-    border-radius: 999rpx;
-    background: #f5ede0;
-    border: 1rpx solid #e7d9c6;
-    transition: background $br-duration-fast;
-
-    /* #ifdef H5 */
-    cursor: pointer;
-    /* #endif */
-
-    &--active {
-      background: #eddcca;
-    }
-  }
-
-  &__clear-text {
-    font-size: 24rpx;
-    color: #78716c;
-    font-weight: 500;
-    line-height: 1;
-  }
-}
-
 /* ---- QuickStart 卡片 ---- */
 .quickstart-card {
   background: $br-bg-card;
@@ -692,14 +649,13 @@ function confirmClear() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 56rpx 32rpx 40rpx;
-  gap: 18rpx;
+  padding: 32rpx 32rpx 24rpx;
+  gap: 14rpx;
 
   &__icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 4rpx;
   }
 
   &__text {
@@ -711,14 +667,14 @@ function confirmClear() {
   }
 
   &__disclaimer {
-    font-size: 22rpx;
-    color: #a8a29e;
+    font-size: 21rpx;
+    color: #b8b0a4;
     text-align: center;
-    line-height: 1.65;
-    max-width: 88%;
-    padding: 18rpx 20rpx;
+    line-height: 1.6;
+    max-width: 90%;
+    padding: 12rpx 16rpx;
     background: #faf7f2;
-    border-radius: 16rpx;
+    border-radius: 12rpx;
     border: 1rpx solid #ede8df;
   }
 }
@@ -748,9 +704,8 @@ function confirmClear() {
   flex-shrink: 0;
 
   &--assistant {
-    /* 与 logo 背景渐变一致 */
-    background: linear-gradient(135deg, #F2F8FF 0%, #D9EBFF 100%);
-    box-shadow: 0 2rpx 10rpx rgba(180, 83, 9, 0.15);
+    background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+    box-shadow: 0 2rpx 10rpx rgba(180, 83, 9, 0.3);
   }
 
   &--user {
@@ -840,7 +795,54 @@ function confirmClear() {
   &__row {
     display: flex;
     align-items: flex-end;
-    gap: 12rpx;
+    gap: 10rpx;
+  }
+
+  /* 清空 & 发送按钮公共基类 */
+  &__action {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 20rpx;
+    background: #f0ebe2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #a8a29e;
+    transition: background $br-duration-fast, transform $br-duration-fast;
+
+    &--active {
+      background: #e7e0d4;
+      transform: scale(0.94);
+    }
+  }
+
+  /* 发送按钮激活态 */
+  &__send {
+    /* #ifdef H5 */
+    cursor: not-allowed;
+    /* #endif */
+
+    &--active {
+      background: $br-gradient-send-active;
+      box-shadow: 0 4rpx 14rpx rgba(180, 83, 9, 0.35);
+      color: #fff;
+
+      /* #ifdef H5 */
+      cursor: pointer;
+      /* #endif */
+
+      &:active {
+        transform: scale(0.93);
+      }
+    }
+  }
+
+  /* 清空按钮 */
+  &__clear {
+    /* #ifdef H5 */
+    cursor: pointer;
+    /* #endif */
   }
 
   /* 输入框容器：圆角矩形，占满剩余宽度 */
@@ -872,41 +874,8 @@ function confirmClear() {
     color: $br-text-primary;
     background: transparent;
     padding: 18rpx 0;
-    /* 去掉默认边框 */
     border: none;
     outline: none;
-  }
-
-  /* 发送按钮：与输入框等高，圆角矩形 */
-  &__send {
-    width: 80rpx;
-    height: 80rpx;
-    border-radius: 20rpx;
-    background: #e7e0d4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: #a8a29e;
-    transition: background $br-duration-fast, box-shadow $br-duration-fast, color $br-duration-fast;
-
-    /* #ifdef H5 */
-    cursor: not-allowed;
-    /* #endif */
-
-    &.is-active {
-      background: $br-gradient-send-active;
-      box-shadow: 0 4rpx 14rpx rgba(180, 83, 9, 0.35);
-      color: #fff;
-
-      /* #ifdef H5 */
-      cursor: pointer;
-      /* #endif */
-    }
-
-    &.is-active:active {
-      transform: scale(0.93);
-    }
   }
 }
 
