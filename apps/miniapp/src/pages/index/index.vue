@@ -2,8 +2,17 @@
   <view class="page">
     <!-- 头部 -->
     <view class="header">
-      <view class="header__title">桌游规则助手</view>
-      <view class="header__subtitle">选择游戏，开始问答</view>
+      <view class="header__brand">
+        <!-- Book-open SVG icon -->
+        <view class="header__logo" aria-hidden="true">
+          <svg-icon name="book-open" size="44" color="#fff" />
+        </view>
+        <view class="header__title">规则助手</view>
+      </view>
+      <view class="header__subtitle">选择规则库，开始解读</view>
+      <view class="header__disclaimer">
+        仅帮助理解规则内容，回答仅供参考，请以官方规则书为准
+      </view>
     </view>
 
     <!-- 加载中：骨架屏 -->
@@ -13,34 +22,57 @@
 
     <!-- 错误 -->
     <view v-else-if="error" class="state-center">
-      <text class="state-center__icon">⚠️</text>
+      <view class="state-center__icon-wrap" aria-hidden="true">
+        <!-- alert-circle SVG -->
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" stroke="#ef4444" stroke-width="1.5"/>
+          <path d="M12 7v5" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="12" cy="16.5" r="0.75" fill="#ef4444"/>
+        </svg>
+      </view>
       <text class="state-center__text">{{ error }}</text>
       <button class="btn-retry" @tap="loadGames">重试</button>
     </view>
 
     <!-- 空状态（无任何已索引游戏） -->
     <view v-else-if="games.length === 0" class="state-center">
-      <text class="state-center__icon">🎲</text>
-      <text class="state-center__text">暂无可用游戏</text>
+      <view class="state-center__icon-wrap" aria-hidden="true">
+        <!-- inbox SVG -->
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 12h4l2 3h8l2-3h4" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M4.27 5h15.46A2 2 0 0 1 21.73 7.34L21 19a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1L2.27 7.34A2 2 0 0 1 4.27 5Z" stroke="#94a3b8" stroke-width="1.5"/>
+        </svg>
+      </view>
+      <text class="state-center__text">暂无可用规则库</text>
       <text class="state-center__hint">请先在管理后台完成规则提取并建立索引</text>
     </view>
 
     <!-- 有数据：搜索 + 列表 -->
     <view v-else class="list-section">
       <view class="search-bar" :class="{ 'search-bar--focus': searchFocused }">
-        <text class="search-bar__icon" aria-hidden="true">⌕</text>
+        <!-- search SVG icon -->
+        <view class="search-bar__icon" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="11" cy="11" r="8" stroke="#94a3b8" stroke-width="1.6"/>
+            <path d="m21 21-4.35-4.35" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </view>
         <input
           v-model="searchQuery"
           class="search-bar__input"
           type="text"
           confirm-type="search"
-          placeholder="搜索游戏名称"
+          placeholder="搜索规则库..."
           placeholder-class="search-bar__placeholder"
           @focus="searchFocused = true"
           @blur="searchFocused = false"
         />
         <view v-if="searchQuery" class="search-bar__clear" @tap="searchQuery = ''">
-          <text class="search-bar__clear-text">清除</text>
+          <!-- x-circle SVG -->
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="#94a3b8" stroke-width="1.5"/>
+            <path d="m15 9-6 6M9 9l6 6" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
         </view>
       </view>
 
@@ -60,21 +92,32 @@
               class="game-card__cover-img"
               mode="aspectFill"
             />
-            <view v-else class="game-card__cover-placeholder">
-              <text class="game-card__cover-icon">🎲</text>
+            <view v-else class="game-card__cover-placeholder" aria-hidden="true">
+              <!-- layers SVG (规则/书籍感) -->
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="m2 12 10 5 10-5" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="m2 17 10 5 10-5" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
             </view>
           </view>
 
           <view class="game-card__body">
             <view class="game-card__name">{{ game.name }}</view>
+            <view class="game-card__label">查看规则解读</view>
           </view>
 
-          <text class="game-card__arrow">›</text>
+          <!-- chevron-right SVG -->
+          <view class="game-card__arrow" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="m9 18 6-6-6-6" stroke="#cbd5e1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </view>
         </view>
       </scroll-view>
 
       <view v-else class="state-center state-center--compact">
-        <text class="state-center__text">未找到匹配的游戏</text>
+        <text class="state-center__text">未找到匹配的规则库</text>
         <text class="state-center__hint">试试其它关键词或清除搜索</text>
       </view>
     </view>
@@ -157,21 +200,46 @@ onMounted(loadGames)
 /* ---- 头部 ---- */
 .header {
   background: $br-gradient-header;
-  padding: calc(28rpx + env(safe-area-inset-top, 0px)) 32rpx 36rpx;
+  padding: calc(32rpx + env(safe-area-inset-top, 0px)) 32rpx 32rpx;
   color: #fff;
   flex-shrink: 0;
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    margin-bottom: 10rpx;
+  }
+
+  &__logo {
+    width: 48rpx;
+    height: 48rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
 
   &__title {
     font-size: 40rpx;
     font-weight: 700;
     letter-spacing: 1rpx;
+    line-height: 1.2;
   }
 
   &__subtitle {
-    margin-top: 10rpx;
     font-size: 26rpx;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.82);
     line-height: 1.4;
+    margin-bottom: 14rpx;
+  }
+
+  &__disclaimer {
+    font-size: 20rpx;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.5;
+    border-top: 1rpx solid rgba(255, 255, 255, 0.18);
+    padding-top: 14rpx;
   }
 }
 
@@ -191,8 +259,11 @@ onMounted(loadGames)
     min-height: 200rpx;
   }
 
-  &__icon {
-    font-size: 80rpx;
+  &__icon-wrap {
+    margin-bottom: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   &__text {
@@ -235,9 +306,9 @@ onMounted(loadGames)
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 12rpx;
   margin: 20rpx 24rpx 16rpx;
-  padding: 18rpx 24rpx;
+  padding: 16rpx 20rpx;
   background: $br-bg-card;
   border-radius: 999rpx;
   border: 2rpx solid #e2e8f0;
@@ -246,13 +317,13 @@ onMounted(loadGames)
   transition: border-color $br-duration-fast, box-shadow $br-duration-fast;
 
   &--focus {
-    border-color: rgba(37, 99, 235, 0.55);
-    box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.12);
+    border-color: rgba(22, 163, 74, 0.55);
+    box-shadow: 0 0 0 4rpx rgba(22, 163, 74, 0.1);
   }
 
   &__icon {
-    font-size: 30rpx;
-    color: #94a3b8;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
   }
 
@@ -270,18 +341,19 @@ onMounted(loadGames)
 
   &__clear {
     flex-shrink: 0;
-    padding: 8rpx 12rpx;
-  }
+    display: flex;
+    align-items: center;
+    padding: 4rpx;
 
-  &__clear-text {
-    font-size: 24rpx;
-    color: $br-text-secondary;
+    /* #ifdef H5 */
+    cursor: pointer;
+    /* #endif */
   }
 }
 
 .game-list {
   flex: 1;
-  padding: 0 24rpx calc(32rpx + env(safe-area-inset-bottom, 0px));
+  padding: 8rpx 24rpx calc(32rpx + env(safe-area-inset-bottom, 0px));
   min-height: 200rpx;
 }
 
@@ -291,31 +363,37 @@ onMounted(loadGames)
   background: $br-bg-card;
   border-radius: $br-radius-card;
   margin-bottom: 16rpx;
-  padding: 22rpx 20rpx;
+  padding: 20rpx 18rpx;
   box-shadow: $br-shadow-card;
   gap: 20rpx;
   overflow: hidden;
   min-height: 120rpx;
+  border: 1rpx solid #f0f4f8;
   transition: transform $br-duration-fast, box-shadow $br-duration-fast;
 
   /* #ifdef H5 */
+  cursor: pointer;
+
   &:hover {
     box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.1);
+    border-color: rgba(22, 163, 74, 0.2);
   }
   /* #endif */
 
   &--active {
-    transform: scale(0.98);
-    box-shadow: 0 6rpx 24rpx rgba(37, 99, 235, 0.15);
+    transform: scale(0.985);
+    box-shadow: 0 6rpx 24rpx rgba(22, 163, 74, 0.14);
+    border-color: rgba(22, 163, 74, 0.25);
   }
 
   &__cover {
-    width: 112rpx;
-    height: 112rpx;
+    width: 108rpx;
+    height: 108rpx;
     border-radius: 16rpx;
     overflow: hidden;
     flex-shrink: 0;
-    background: #eef1f8;
+    background: #f0fdf4;
+    border: 1rpx solid #dcfce7;
   }
 
   &__cover-img {
@@ -331,16 +409,13 @@ onMounted(loadGames)
     justify-content: center;
   }
 
-  &__cover-icon {
-    font-size: 48rpx;
-  }
-
   &__body {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: 6rpx;
   }
 
   &__name {
@@ -354,11 +429,16 @@ onMounted(loadGames)
     overflow: hidden;
   }
 
+  &__label {
+    font-size: 22rpx;
+    color: $br-color-primary;
+    font-weight: 500;
+  }
+
   &__arrow {
-    font-size: 40rpx;
-    color: #cbd5e1;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
-    padding-left: 8rpx;
   }
 }
 </style>

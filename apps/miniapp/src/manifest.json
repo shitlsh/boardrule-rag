@@ -1,7 +1,7 @@
 {
-    "name" : "桌游规则助手",
+    "name" : "规则助手",
     "appid" : "",
-    "description" : "桌游规则问答小程序",
+    "description" : "游戏规则理解与解读助手",
     "versionName" : "1.0.0",
     "versionCode" : "100",
     "transformPx" : false,

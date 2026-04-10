@@ -75,23 +75,24 @@ $uni-font-size-subtitle: 18px;
 $uni-color-paragraph: #3f536e; // 文章段落颜色
 $uni-font-size-paragraph: 15px;
 
-/* ---- Boardrule miniapp design tokens (NOTE.md) ---- */
-$br-color-primary: #2563eb;
-$br-color-primary-dark: #1e40af;
-$br-color-primary-light: #3b82f6;
-$br-bg-page: #f8fafc;
-$br-bg-card: #ffffff;
-$br-text-primary: #1e293b;
+/* ---- Boardrule miniapp design tokens ---- */
+/* 主色：绿色系，契合规则知识库场景，同时保持专业感 */
+$br-color-primary:       #16a34a;   /* green-600 */
+$br-color-primary-dark:  #166534;   /* green-800 — nav bar, header */
+$br-color-primary-light: #22c55e;   /* green-500 */
+$br-bg-page:   #f8fafc;
+$br-bg-card:   #ffffff;
+$br-text-primary:   #1e293b;
 $br-text-secondary: #64748b;
 $br-color-success: #10b981;
 $br-color-warning: #f59e0b;
-$br-color-error: #ef4444;
-$br-radius-card: 20rpx;
+$br-color-error:   #ef4444;
+$br-radius-card:   20rpx;
 $br-radius-bubble: 24rpx;
 $br-radius-button: 16rpx;
 $br-shadow-card: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
-$br-duration-fast: 0.15s;
+$br-duration-fast:   0.15s;
 $br-duration-normal: 0.25s;
-$br-gradient-header: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-$br-gradient-user-bubble: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-$br-gradient-send-active: linear-gradient(145deg, #2563eb 0%, #3b82f6 100%);
+$br-gradient-header:      linear-gradient(135deg, #166534 0%, #16a34a 100%);
+$br-gradient-user-bubble: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+$br-gradient-send-active: linear-gradient(145deg, #16a34a 0%, #22c55e 100%);

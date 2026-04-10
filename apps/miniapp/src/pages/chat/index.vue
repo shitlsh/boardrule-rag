@@ -13,12 +13,21 @@
       <view v-if="game?.quickStart" class="quickstart-card">
         <view class="quickstart-card__header" @tap="toggleQuickStart">
           <view class="quickstart-card__title">
-            <text class="quickstart-card__icon">📖</text>
-            <text>快速开始指南</text>
+            <!-- book-open SVG -->
+            <view class="quickstart-card__icon" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            </view>
+            <text>规则导读</text>
           </view>
-          <text class="quickstart-card__chevron" :class="{ 'is-open': quickStartOpen }">
-            ›
-          </text>
+          <!-- chevron SVG -->
+          <view class="quickstart-card__chevron" :class="{ 'is-open': quickStartOpen }" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="m9 18 6-6-6-6" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </view>
         </view>
         <view v-if="quickStartOpen" class="quickstart-card__body">
           <!-- #ifdef MP-WEIXIN -->
@@ -48,7 +57,12 @@
             :hover-stay-time="80"
             @tap="sendSuggested(q)"
           >
-            <text class="chip__icon" aria-hidden="true">💬</text>
+            <!-- message-circle SVG -->
+            <view class="chip__icon" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#16a34a" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            </view>
             <text class="chip__text">{{ q }}</text>
           </view>
         </view>
@@ -64,7 +78,15 @@
       >
         <!-- 空状态提示 -->
         <view v-if="chatStore.messages.length === 0" class="empty-hint">
-          <text class="empty-hint__text">向 AI 提问关于《{{ gameName }}》的规则问题</text>
+          <view class="empty-hint__icon" aria-hidden="true">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#94a3b8" stroke-width="1.3" stroke-linejoin="round"/>
+            </svg>
+          </view>
+          <text class="empty-hint__text">向助手提问关于《{{ gameName }}》的规则疑惑</text>
+          <text class="empty-hint__disclaimer">
+            本工具基于已导入的规则内容进行解读，不提供完整规则原文，答案仅供参考，可能存在理解偏差，请以官方规则书为准
+          </text>
         </view>
 
         <view
@@ -77,8 +99,11 @@
           ]"
         >
           <!-- 助手头像 -->
-          <view v-if="msg.role === 'assistant'" class="avatar avatar--assistant">
-            <text>🤖</text>
+          <view v-if="msg.role === 'assistant'" class="avatar avatar--assistant" aria-hidden="true">
+            <!-- sparkles / robot SVG -->
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
           </view>
 
           <view class="bubble-wrapper">
@@ -106,14 +131,22 @@
           </view>
 
           <!-- 用户头像 -->
-          <view v-if="msg.role === 'user'" class="avatar avatar--user">
-            <text>👤</text>
+          <view v-if="msg.role === 'user'" class="avatar avatar--user" aria-hidden="true">
+            <!-- user SVG -->
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" stroke="#16a34a" stroke-width="1.5"/>
+              <path d="M4 20c0-4 3.58-7 8-7s8 3 8 7" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
           </view>
         </view>
 
         <!-- 打字 loading -->
         <view v-if="chatStore.isLoading" class="msg-row msg-row--assistant">
-          <view class="avatar avatar--assistant"><text>🤖</text></view>
+          <view class="avatar avatar--assistant" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </view>
           <view class="bubble bubble--assistant bubble--loading">
             <view class="typing-dots">
               <view class="typing-dots__dot" />
@@ -138,7 +171,13 @@
             hover-class="input-bar__clear-icon--active"
             @tap="confirmClear"
           >
-            <text class="input-bar__clear-emoji" aria-hidden="true">🗑</text>
+            <!-- trash SVG -->
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polyline points="3 6 5 6 21 6" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M10 11v6M14 11v6" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="#94a3b8" stroke-width="1.5"/>
+            </svg>
           </view>
           <textarea
             v-model="inputText"
@@ -164,7 +203,10 @@
             @animationend="sendPulse = false"
             @tap="onSendTap"
           >
-            <text class="input-bar__send-icon">↑</text>
+            <!-- send SVG (arrow-up) -->
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
           </view>
         </view>
       </view>
@@ -427,7 +469,7 @@ async function handleSend() {
     chatStore.addMessage({
       id: errId,
       role: 'assistant',
-      content: isRateLimit ? `⏰ ${errMsg}` : `⚠️ ${errMsg}`,
+      content: isRateLimit ? `今日提问次数已达上限，请明日再试。` : `请求出错，请稍后重试。`,
       createdAt: new Date().toISOString(),
       sources: [],
     })
@@ -502,8 +544,12 @@ function confirmClear() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 28rpx 28rpx 24rpx;
-    min-height: 96rpx;
+    padding: 24rpx 28rpx;
+    min-height: 88rpx;
+
+    /* #ifdef H5 */
+    cursor: pointer;
+    /* #endif */
   }
 
   &__title {
@@ -516,18 +562,18 @@ function confirmClear() {
   }
 
   &__icon {
-    font-size: 32rpx;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   &__chevron {
-    font-size: 36rpx;
-    color: $br-text-secondary;
-    transform: rotate(90deg);
+    display: flex;
+    align-items: center;
     transition: transform $br-duration-normal;
-    display: inline-block;
 
     &.is-open {
-      transform: rotate(270deg);
+      transform: rotate(90deg);
     }
   }
 
@@ -545,7 +591,7 @@ function confirmClear() {
 .chips-bar {
   background: $br-bg-card;
   border-bottom: 1rpx solid #e8ecf1;
-  padding: 20rpx 24rpx 24rpx;
+  padding: 18rpx 24rpx 22rpx;
   flex-shrink: 0;
 }
 
@@ -553,7 +599,7 @@ function confirmClear() {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 16rpx 12rpx;
+  gap: 14rpx 10rpx;
   align-items: flex-start;
 }
 
@@ -561,29 +607,39 @@ function confirmClear() {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10rpx;
+  gap: 8rpx;
   max-width: 100%;
-  padding: 14rpx 22rpx;
-  min-height: 64rpx;
-  background: #eff6ff;
-  border: 1rpx solid rgba(37, 99, 235, 0.2);
+  padding: 12rpx 20rpx;
+  min-height: 60rpx;
+  background: #f0fdf4;
+  border: 1rpx solid rgba(22, 163, 74, 0.22);
   border-radius: 999rpx;
   box-sizing: border-box;
-  transition: transform $br-duration-fast, background $br-duration-fast;
+  transition: background $br-duration-fast, border-color $br-duration-fast;
+
+  /* #ifdef H5 */
+  cursor: pointer;
+
+  &:hover {
+    background: #dcfce7;
+    border-color: rgba(22, 163, 74, 0.4);
+  }
+  /* #endif */
 
   &--active {
-    transform: scale(0.98);
-    background: #dbeafe;
+    background: #dcfce7;
+    border-color: rgba(22, 163, 74, 0.4);
   }
 
   &__icon {
-    font-size: 26rpx;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
   }
 
   &__text {
     font-size: 26rpx;
-    color: #1e40af;
+    color: #15803d;
     line-height: 1.45;
     white-space: normal;
     word-break: break-word;
@@ -601,15 +657,36 @@ function confirmClear() {
 
 .empty-hint {
   display: flex;
-  justify-content: center;
-  padding: 48rpx 32rpx;
+  flex-direction: column;
+  align-items: center;
+  padding: 56rpx 32rpx 40rpx;
+  gap: 18rpx;
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4rpx;
+  }
 
   &__text {
-    font-size: 26rpx;
+    font-size: 28rpx;
     color: $br-text-secondary;
     text-align: center;
     line-height: 1.55;
     max-width: 92%;
+  }
+
+  &__disclaimer {
+    font-size: 22rpx;
+    color: #94a3b8;
+    text-align: center;
+    line-height: 1.65;
+    max-width: 88%;
+    padding: 16rpx 20rpx;
+    background: #f8fafc;
+    border-radius: 16rpx;
+    border: 1rpx solid #e2e8f0;
   }
 }
 
@@ -635,12 +712,11 @@ function confirmClear() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 34rpx;
   flex-shrink: 0;
 
   &--assistant {
-    background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
-    box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.12);
+    background: linear-gradient(145deg, #dcfce7 0%, #bbf7d0 100%);
+    box-shadow: 0 2rpx 8rpx rgba(22, 163, 74, 0.14);
   }
 
   &--user {
@@ -665,7 +741,7 @@ function confirmClear() {
     background: $br-gradient-user-bubble;
     border-bottom-right-radius: 8rpx;
     align-self: flex-end;
-    box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.25);
+    box-shadow: 0 4rpx 16rpx rgba(22, 163, 74, 0.28);
   }
 
   &--assistant {
@@ -694,7 +770,7 @@ function confirmClear() {
     width: 14rpx;
     height: 14rpx;
     border-radius: 50%;
-    background: #93c5fd;
+    background: #86efac;
     animation: typing-wave 1.1s ease-in-out infinite;
 
     &:nth-child(2) {
@@ -752,14 +828,14 @@ function confirmClear() {
     flex-shrink: 0;
     transition: background $br-duration-fast, transform $br-duration-fast;
 
+    /* #ifdef H5 */
+    cursor: pointer;
+    /* #endif */
+
     &--active {
       background: #e2e8f0;
       transform: scale(0.95);
     }
-  }
-
-  &__clear-emoji {
-    font-size: 32rpx;
   }
 
   &__textarea {
@@ -776,8 +852,8 @@ function confirmClear() {
     transition: border-color $br-duration-fast, box-shadow $br-duration-fast;
 
     &--focus {
-      border-color: rgba(37, 99, 235, 0.45);
-      box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+      border-color: rgba(22, 163, 74, 0.45);
+      box-shadow: 0 0 0 4rpx rgba(22, 163, 74, 0.1);
     }
   }
 
@@ -790,26 +866,22 @@ function confirmClear() {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: transform $br-duration-fast, box-shadow $br-duration-fast;
+    transition: background $br-duration-fast, box-shadow $br-duration-fast;
+    color: #94a3b8;
+
+    /* #ifdef H5 */
+    cursor: pointer;
+    /* #endif */
 
     &.is-active {
       background: $br-gradient-send-active;
-      box-shadow: 0 4rpx 14rpx rgba(37, 99, 235, 0.35);
+      box-shadow: 0 4rpx 14rpx rgba(22, 163, 74, 0.38);
+      color: #fff;
     }
 
     &:active.is-active {
       transform: scale(0.94);
     }
-
-    &:not(.is-active) .input-bar__send-icon {
-      color: #94a3b8;
-    }
-  }
-
-  &__send-icon {
-    font-size: 34rpx;
-    color: #fff;
-    font-weight: 700;
   }
 }
 

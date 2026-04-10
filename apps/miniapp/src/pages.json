@@ -3,8 +3,8 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "桌游规则助手",
-        "navigationBarBackgroundColor": "#1e40af",
+        "navigationBarTitleText": "规则助手",
+        "navigationBarBackgroundColor": "#166534",
         "navigationBarTextStyle": "white"
       }
     },
@@ -12,7 +12,7 @@
       "path": "pages/chat/index",
       "style": {
         "navigationBarTitleText": "规则问答",
-        "navigationBarBackgroundColor": "#1e40af",
+        "navigationBarBackgroundColor": "#166534",
         "navigationBarTextStyle": "white",
         "usingComponents": {
           "towxml": "/wxcomponents/towxml/towxml"
@@ -22,8 +22,8 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "white",
-    "navigationBarTitleText": "桌游规则助手",
-    "navigationBarBackgroundColor": "#1e40af",
+    "navigationBarTitleText": "规则助手",
+    "navigationBarBackgroundColor": "#166534",
     "backgroundColor": "#f8fafc"
   }
 }
