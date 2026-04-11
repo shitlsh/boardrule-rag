@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
-import { getAiGatewayStored, getCredentialApiKey, getCredentialVendor } from "@/lib/ai-gateway";
+import { getAiGatewayStored, getCredentialVendor } from "@/lib/ai-gateway";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import { fetchModelsForCredential } from "@/lib/models-for-credential";
 import {
@@ -119,11 +119,20 @@ export async function POST(req: Request) {
   } else if (credentialId) {
     try {
       const stored = await getAiGatewayStored();
-      vendor = getCredentialVendor(stored, credentialId);
-      apiKey = getCredentialApiKey(stored, credentialId);
+      const includeHidden = o.includeHidden === true;
+      if (includeHidden && slot !== null) {
+        return NextResponse.json(
+          { message: "includeHidden 仅可与全量列表（不传 slot）同时使用" },
+          { status: 400 },
+        );
+      }
+      const models = await fetchModelsForCredential(stored, credentialId, slot, { includeHidden });
+      const v = getCredentialVendor(stored, credentialId);
+      return NextResponse.json({ models, slot: slot ?? null, vendor: v });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "读取凭证失败";
-      return NextResponse.json({ message: msg }, { status: 400 });
+      const msg = e instanceof Error ? e.message : "拉取模型列表失败";
+      const status = /凭证|不存在/.test(msg) ? 400 : 502;
+      return NextResponse.json({ message: msg }, { status });
     }
   } else {
     return NextResponse.json({ message: "请提供 apiKey+vendor 或 credentialId" }, { status: 400 });

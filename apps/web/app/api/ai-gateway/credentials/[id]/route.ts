@@ -40,6 +40,20 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         : undefined
       : undefined;
 
+  const enabled =
+    o.enabled !== undefined ? (typeof o.enabled === "boolean" ? o.enabled : undefined) : undefined;
+  if (o.enabled !== undefined && enabled === undefined) {
+    return NextResponse.json({ message: "enabled 须为布尔值" }, { status: 400 });
+  }
+
+  let hiddenModelIds: string[] | undefined;
+  if (o.hiddenModelIds !== undefined) {
+    if (!Array.isArray(o.hiddenModelIds)) {
+      return NextResponse.json({ message: "hiddenModelIds 须为字符串数组" }, { status: 400 });
+    }
+    hiddenModelIds = o.hiddenModelIds.filter((x): x is string => typeof x === "string");
+  }
+
   try {
     const data = await updateCredential({
       id: id.trim(),
@@ -47,6 +61,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       ...(apiKey !== undefined ? { apiKey } : {}),
       ...(vendor !== undefined ? { vendor } : {}),
       ...(dashscopeCompatibleBase !== undefined ? { dashscopeCompatibleBase } : {}),
+      ...(enabled !== undefined ? { enabled } : {}),
+      ...(hiddenModelIds !== undefined ? { hiddenModelIds } : {}),
     });
     return NextResponse.json(data);
   } catch (e) {

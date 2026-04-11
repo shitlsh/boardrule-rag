@@ -14,6 +14,13 @@ export type AiCredentialStored = {
   /** Globally unique (case-insensitive after trim). */
   alias: string;
   apiKeyEnc: string;
+  /** Default true. When false, credential is hidden from slot pickers and engine resolution. */
+  enabled?: boolean;
+  /**
+   * Model `name` values excluded from slot dropdowns for this credential (opt-out).
+   * Same strings as GeminiModelOption.name (e.g. models/gemini-2.0-flash, qwen-plus).
+   */
+  hiddenModelIds?: string[];
   /**
    * vendor === "qwen" only: DashScope OpenAI-compatible base URL (no trailing slash).
    * Persisted when adding/editing Qwen credentials; drives model list + rule engine.
@@ -69,6 +76,10 @@ export type AiCredentialPublic = {
   alias: string;
   hasKey: boolean;
   keyLast4: string | null;
+  /** False when credential is disabled in UI. */
+  enabled: boolean;
+  /** Models hidden from slot pickers (same ids as stored). */
+  hiddenModelIds: string[];
   /** Set when vendor is qwen (normalized base URL). */
   dashscopeCompatibleBase?: string;
 };

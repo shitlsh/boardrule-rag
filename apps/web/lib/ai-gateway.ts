@@ -24,6 +24,47 @@ const SLOTS: SlotKey[] = ["flash", "pro", "embed", "chat"];
 
 const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
 
+const MAX_HIDDEN_MODEL_IDS = 8000;
+
+function normalizeHiddenModelIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const u = [
+    ...new Set(
+      raw
+        .filter((x): x is string => typeof x === "string")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return u.slice(0, MAX_HIDDEN_MODEL_IDS);
+}
+
+function normalizeCredentialFromStored(c: AiCredentialStored): AiCredentialStored {
+  const enabled = c.enabled === false ? false : true;
+  const hiddenModelIds = normalizeHiddenModelIds(c.hiddenModelIds);
+  const next: AiCredentialStored = { ...c, enabled };
+  if (hiddenModelIds.length > 0) {
+    next.hiddenModelIds = hiddenModelIds;
+  } else {
+    delete next.hiddenModelIds;
+  }
+  return next;
+}
+
+function clearSlotsReferencingCredential(
+  stored: AiGatewayStored,
+  credentialId: string,
+): AiGatewayStored["slotBindings"] {
+  const slotBindings = { ...stored.slotBindings };
+  for (const s of SLOTS) {
+    const b = slotBindings[s];
+    if (b?.credentialId === credentialId) {
+      slotBindings[s] = null;
+    }
+  }
+  return slotBindings;
+}
+
 function normalizeRagOptions(raw: unknown): RagOptionsStored | undefined {
   if (raw === undefined || raw === null || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
@@ -87,12 +128,13 @@ function parseStored(raw: string): AiGatewayStored {
         }).map((c) => {
           const base =
             typeof c.dashscopeCompatibleBase === "string" ? c.dashscopeCompatibleBase.trim() : "";
-          return {
+          const merged: AiCredentialStored = {
             ...c,
             ...(c.vendor === "qwen" && base
               ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(base) }
               : {}),
           };
+          return normalizeCredentialFromStored(merged);
         })
       : [];
     const sb = (o.slotBindings || {}) as Record<string, unknown>;
@@ -199,6 +241,8 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
       alias: c.alias.trim(),
       hasKey,
       keyLast4: last4,
+      enabled: c.enabled !== false,
+      hiddenModelIds: c.hiddenModelIds ?? [],
       ...(c.vendor === "qwen"
         ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(c.dashscopeCompatibleBase) }
         : {}),
@@ -278,6 +322,15 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
       } else {
         throw new Error(`新凭证 ${alias} 必须提供 API Key`);
       }
+      const inherited =
+        prev && (prev.enabled === false || (prev.hiddenModelIds && prev.hiddenModelIds.length > 0))
+          ? {
+              ...(prev.enabled === false ? { enabled: false as const } : {}),
+              ...(prev.hiddenModelIds && prev.hiddenModelIds.length > 0
+                ? { hiddenModelIds: [...prev.hiddenModelIds] }
+                : {}),
+            }
+          : {};
       if (p.vendor === "qwen") {
         const raw =
           typeof p.dashscopeCompatibleBase === "string" ? p.dashscopeCompatibleBase.trim() : "";
@@ -287,15 +340,26 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
             : "";
         const merged = raw || fromPrev || "";
         assertValidDashscopeCompatibleBase(merged || DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
-        next.push({
-          id: p.id,
-          vendor: p.vendor,
-          alias,
-          apiKeyEnc,
-          dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(merged),
-        });
+        next.push(
+          normalizeCredentialFromStored({
+            ...inherited,
+            id: p.id,
+            vendor: p.vendor,
+            alias,
+            apiKeyEnc,
+            dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(merged),
+          }),
+        );
       } else {
-        next.push({ id: p.id, vendor: p.vendor, alias, apiKeyEnc });
+        next.push(
+          normalizeCredentialFromStored({
+            ...inherited,
+            id: p.id,
+            vendor: p.vendor,
+            alias,
+            apiKeyEnc,
+          }),
+        );
       }
     }
     credentials = next;
@@ -380,6 +444,9 @@ function resolveSlot(
   }
   const cred = stored.credentials.find((c) => c.id === b.credentialId);
   if (!cred) throw new Error(`槽位 ${slot} 引用的凭证不存在`);
+  if (cred.enabled === false) {
+    throw new Error(`凭证「${cred.alias}」已停用`);
+  }
   const apiKey = decryptSecret(cred.apiKeyEnc).trim();
   if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
   const dashscopeCompatibleBase =
@@ -474,6 +541,13 @@ export function getCredentialVendor(stored: AiGatewayStored, credentialId: strin
   return cred.vendor;
 }
 
+export function getStoredCredential(
+  stored: AiGatewayStored,
+  credentialId: string,
+): AiCredentialStored | undefined {
+  return stored.credentials.find((c) => c.id === credentialId);
+}
+
 /** Resolved DashScope OpenAI-compatible base for a saved Qwen credential. */
 export function getCredentialDashscopeCompatibleBase(
   stored: AiGatewayStored,
@@ -563,6 +637,8 @@ export async function updateCredential(params: {
   vendor?: AiVendor;
   apiKey?: string;
   dashscopeCompatibleBase?: string;
+  enabled?: boolean;
+  hiddenModelIds?: string[];
 }): Promise<AiGatewayPublic> {
   const cur = await getAiGatewayStored();
   const idx = cur.credentials.findIndex((c) => c.id === params.id);
@@ -605,13 +681,40 @@ export async function updateCredential(params: {
     }
   }
 
-  const nextCred: AiCredentialStored =
-    vendor === "qwen"
-      ? { id: prev.id, vendor, alias, apiKeyEnc, dashscopeCompatibleBase: dashscopeCompatibleBase! }
-      : { id: prev.id, vendor, alias, apiKeyEnc };
+  const nextCred: AiCredentialStored = {
+    ...prev,
+    id: prev.id,
+    vendor,
+    alias,
+    apiKeyEnc,
+  };
+  if (vendor === "qwen") {
+    nextCred.dashscopeCompatibleBase = dashscopeCompatibleBase!;
+  } else {
+    delete nextCred.dashscopeCompatibleBase;
+  }
+
+  if (params.enabled !== undefined) {
+    nextCred.enabled = params.enabled;
+  }
+  if (params.hiddenModelIds !== undefined) {
+    const h = normalizeHiddenModelIds(params.hiddenModelIds);
+    if (h.length > 0) {
+      nextCred.hiddenModelIds = h;
+    } else {
+      delete nextCred.hiddenModelIds;
+    }
+  }
+
   const credentials = [...cur.credentials];
-  credentials[idx] = nextCred;
-  return persistStored({ ...cur, credentials });
+  credentials[idx] = normalizeCredentialFromStored(nextCred);
+
+  let slotBindings = cur.slotBindings;
+  if (params.enabled === false) {
+    slotBindings = clearSlotsReferencingCredential(cur, prev.id);
+  }
+
+  return persistStored({ ...cur, credentials, slotBindings });
 }
 
 /** @deprecated Use updateCredential */
@@ -630,13 +733,7 @@ export async function removeCredentialById(id: string): Promise<AiGatewayPublic>
     throw new Error("凭证不存在");
   }
   const credentials = cur.credentials.filter((c) => c.id !== id);
-  const slotBindings = { ...cur.slotBindings };
-  for (const s of SLOTS) {
-    const b = slotBindings[s];
-    if (b?.credentialId === id) {
-      slotBindings[s] = null;
-    }
-  }
+  const slotBindings = clearSlotsReferencingCredential(cur, id);
   return persistStored({ ...cur, credentials, slotBindings });
 }
 
@@ -656,6 +753,10 @@ export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): P
     const model = binding.model.trim();
     if (!cid || !model) throw new Error("请选择凭证并填写模型");
     if (!credIds.has(cid)) throw new Error("凭证不存在");
+    const credRow = cur.credentials.find((c) => c.id === cid);
+    if (credRow?.enabled === false) {
+      throw new Error("凭证已停用，请先在模型管理中启用");
+    }
     const base: SlotBinding = { credentialId: cid, model };
 
     if (slot === "flash" || slot === "pro") {

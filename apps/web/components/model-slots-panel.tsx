@@ -275,11 +275,13 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">未选择</SelectItem>
-                      {data.credentials.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.alias}（{vendorShort(c.vendor)}）
-                        </SelectItem>
-                      ))}
+                      {data.credentials
+                        .filter((c) => c.enabled)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.alias}（{vendorShort(c.vendor)}）
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Field>

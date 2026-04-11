@@ -140,9 +140,16 @@ export function GeminiModelPicker({
               <CommandEmpty>{loading ? "加载中…" : "无匹配模型"}</CommandEmpty>
               <CommandGroup heading="模型">
                 {models.map((m) => {
-                  const ctx = formatTokenShort(m.inputTokenLimit);
-                  const out = formatTokenShort(m.outputTokenLimit);
+                  const ctxTokens = m.litellmMaxInputTokens ?? m.inputTokenLimit;
+                  const outTokens = m.litellmMaxOutputTokens ?? m.outputTokenLimit;
+                  const ctx = formatTokenShort(ctxTokens);
+                  const out = formatTokenShort(outTokens);
                   const idShort = m.name.replace(/^models\//, "");
+                  const modeLabel = m.litellmMode?.trim()
+                    ? m.litellmMode.trim().toUpperCase().replace(/-/g, "_")
+                    : null;
+                  const visionOn =
+                    m.supportsVision === true || (m.supportsVision !== false && m.visionHint);
                   return (
                     <CommandItem
                       key={m.name}
@@ -152,6 +159,7 @@ export function GeminiModelPicker({
                         m.name,
                         idShort,
                         m.description ?? "",
+                        m.litellmMode ?? "",
                       ]}
                       onSelect={() => {
                         onChange(m.name);
@@ -168,6 +176,11 @@ export function GeminiModelPicker({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-medium leading-snug">{m.displayName}</span>
+                          {modeLabel ? (
+                            <Badge variant="outline" className="text-[10px] font-normal uppercase">
+                              {modeLabel}
+                            </Badge>
+                          ) : null}
                           {ctx ? (
                             <Badge variant="secondary" className="text-[10px] font-normal">
                               {ctx} 上下文
@@ -178,10 +191,10 @@ export function GeminiModelPicker({
                               输出 {out}
                             </Badge>
                           ) : null}
-                          {showVision && m.visionHint ? (
+                          {showVision && visionOn ? (
                             <Badge variant="outline" className="gap-0.5 text-[10px] font-normal">
                               <ImageIcon className="size-3" />
-                              多模态
+                              VISION
                             </Badge>
                           ) : null}
                         </div>
