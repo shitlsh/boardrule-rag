@@ -1,0 +1,3927 @@
+{
+  "qwen": {
+    "MiniMax-M2.5": {
+      "model": "MiniMax-M2.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 196608,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "agent-thought",
+        "multi-tool-call"
+      ]
+    },
+    "Moonshot-Kimi-K2-Instruct": {
+      "model": "Moonshot-Kimi-K2-Instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek-r1-distill-qwen-14b": {
+      "model": "deepseek-r1-distill-qwen-14b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-r1-distill-qwen-32b": {
+      "model": "deepseek-r1-distill-qwen-32b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-r1": {
+      "model": "deepseek-r1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-v3.1": {
+      "model": "deepseek-v3.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-v3.2-exp": {
+      "model": "deepseek-v3.2-exp",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-v3.2": {
+      "model": "deepseek-v3.2",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek-v3": {
+      "model": "deepseek-v3",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 64000,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "farui-plus": {
+      "model": "farui-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 12288,
+      "supportsVision": false,
+      "maxOutputTokens": 2000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "glm-4.7": {
+      "model": "glm-4.7",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 202752,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "glm-5": {
+      "model": "glm-5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 202752,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "kimi-k2-thinking": {
+      "model": "kimi-k2-thinking",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "kimi-k2.5": {
+      "model": "kimi-k2.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "qvq-max-latest": {
+      "model": "qvq-max-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qvq-max": {
+      "model": "qvq-max",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-coder-turbo-0919": {
+      "model": "qwen-coder-turbo-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-coder-turbo-latest": {
+      "model": "qwen-coder-turbo-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-coder-turbo": {
+      "model": "qwen-coder-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-flash-2025-07-28": {
+      "model": "qwen-flash-2025-07-28",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 995904,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-flash": {
+      "model": "qwen-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-long": {
+      "model": "qwen-long",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 10000000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "qwen-math-plus-0816": {
+      "model": "qwen-math-plus-0816",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-plus-0919": {
+      "model": "qwen-math-plus-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-plus-latest": {
+      "model": "qwen-math-plus-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-plus": {
+      "model": "qwen-math-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-turbo-0919": {
+      "model": "qwen-math-turbo-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-turbo-latest": {
+      "model": "qwen-math-turbo-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-math-turbo": {
+      "model": "qwen-math-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 4096,
+      "supportsVision": false,
+      "maxOutputTokens": 3072,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-max-0125": {
+      "model": "qwen-max-0125",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max-0403": {
+      "model": "qwen-max-0403",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8000,
+      "supportsVision": false,
+      "maxOutputTokens": 2000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max-0428": {
+      "model": "qwen-max-0428",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8000,
+      "supportsVision": false,
+      "maxOutputTokens": 2000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max-0919": {
+      "model": "qwen-max-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max-latest": {
+      "model": "qwen-max-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max-longcontext": {
+      "model": "qwen-max-longcontext",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-max": {
+      "model": "qwen-max",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-mt-plus": {
+      "model": "qwen-mt-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 16384,
+      "supportsVision": false,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-mt-turbo": {
+      "model": "qwen-mt-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 16384,
+      "supportsVision": false,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-plus-0112": {
+      "model": "qwen-plus-0112",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-0125": {
+      "model": "qwen-plus-0125",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-0723": {
+      "model": "qwen-plus-0723",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-0806": {
+      "model": "qwen-plus-0806",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-0919": {
+      "model": "qwen-plus-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-1125": {
+      "model": "qwen-plus-1125",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-1127": {
+      "model": "qwen-plus-1127",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-1220": {
+      "model": "qwen-plus-1220",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-2025-04-28": {
+      "model": "qwen-plus-2025-04-28",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-2025-07-28": {
+      "model": "qwen-plus-2025-07-28",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-chat": {
+      "model": "qwen-plus-chat",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 2000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus-latest": {
+      "model": "qwen-plus-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-plus": {
+      "model": "qwen-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-turbo-0624": {
+      "model": "qwen-turbo-0624",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8000,
+      "supportsVision": false,
+      "maxOutputTokens": 2000,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-turbo-0919": {
+      "model": "qwen-turbo-0919",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen-turbo-2025-04-28": {
+      "model": "qwen-turbo-2025-04-28",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-turbo-2025-07-15": {
+      "model": "qwen-turbo-2025-07-15",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-turbo-chat": {
+      "model": "qwen-turbo-chat",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8192,
+      "supportsVision": false,
+      "maxOutputTokens": 1500,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-turbo-latest": {
+      "model": "qwen-turbo-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-turbo": {
+      "model": "qwen-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen-vl-max-0809": {
+      "model": "qwen-vl-max-0809",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": true,
+      "maxOutputTokens": 2000,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-max-2025-01-25": {
+      "model": "qwen-vl-max-2025-01-25",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-max-latest": {
+      "model": "qwen-vl-max-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-max": {
+      "model": "qwen-vl-max",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-plus-0809": {
+      "model": "qwen-vl-plus-0809",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 2000,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-plus-2025-01-02": {
+      "model": "qwen-vl-plus-2025-01-02",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 2048,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-plus-2025-01-25": {
+      "model": "qwen-vl-plus-2025-01-25",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-plus-latest": {
+      "model": "qwen-vl-plus-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen-vl-plus": {
+      "model": "qwen-vl-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen2.5-0.5b-instruct": {
+      "model": "qwen2.5-0.5b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-1.5b-instruct": {
+      "model": "qwen2.5-1.5b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-14b-instruct-1m": {
+      "model": "qwen2.5-14b-instruct-1m",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-14b-instruct": {
+      "model": "qwen2.5-14b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-32b-instruct": {
+      "model": "qwen2.5-32b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-3b-instruct": {
+      "model": "qwen2.5-3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-72b-instruct": {
+      "model": "qwen2.5-72b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-7b-instruct-1m": {
+      "model": "qwen2.5-7b-instruct-1m",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-7b-instruct": {
+      "model": "qwen2.5-7b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen2.5-coder-7b-instruct": {
+      "model": "qwen2.5-coder-7b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen2.5-vl-3b-instruct": {
+      "model": "qwen2.5-vl-3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen2.5-vl-72b-instruct": {
+      "model": "qwen2.5-vl-72b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen2.5-vl-7b-instruct": {
+      "model": "qwen2.5-vl-7b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen3-0.6b": {
+      "model": "qwen3-0.6b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-1.7b": {
+      "model": "qwen3-1.7b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-14b": {
+      "model": "qwen3-14b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-235b-a22b-instruct-2507": {
+      "model": "qwen3-235b-a22b-instruct-2507",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-235b-a22b-thinking-2507": {
+      "model": "qwen3-235b-a22b-thinking-2507",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-235b-a22b": {
+      "model": "qwen3-235b-a22b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-30b-a3b-instruct-2507": {
+      "model": "qwen3-30b-a3b-instruct-2507",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-30b-a3b": {
+      "model": "qwen3-30b-a3b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-32b": {
+      "model": "qwen3-32b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-4b": {
+      "model": "qwen3-4b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-8b": {
+      "model": "qwen3-8b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-coder-30b-a3b-instruct": {
+      "model": "qwen3-coder-30b-a3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen3-coder-480b-a35b-instruct": {
+      "model": "qwen3-coder-480b-a35b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen3-coder-plus-2025-09-23": {
+      "model": "qwen3-coder-plus-2025-09-23",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen3-coder-plus": {
+      "model": "qwen3-coder-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen3-max-2025-09-23": {
+      "model": "qwen3-max-2025-09-23",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-max-2026-01-23": {
+      "model": "qwen3-max-2026-01-23",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-max-preview": {
+      "model": "qwen3-max-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-max": {
+      "model": "qwen3-max",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-next-80b-a3b-instruct": {
+      "model": "qwen3-next-80b-a3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-next-80b-a3b-thinking": {
+      "model": "qwen3-next-80b-a3b-thinking",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3-omni-flash-2025-12-01": {
+      "model": "qwen3-omni-flash-2025-12-01",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 65536,
+      "supportsVision": true,
+      "maxOutputTokens": 16384,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video",
+        "audio"
+      ]
+    },
+    "qwen3-vl-235b-a22b-instruct": {
+      "model": "qwen3-vl-235b-a22b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "video"
+      ]
+    },
+    "qwen3-vl-235b-a22b-thinking": {
+      "model": "qwen3-vl-235b-a22b-thinking",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "video"
+      ]
+    },
+    "qwen3-vl-30b-a3b-instruct": {
+      "model": "qwen3-vl-30b-a3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "video"
+      ]
+    },
+    "qwen3-vl-30b-a3b-thinking": {
+      "model": "qwen3-vl-30b-a3b-thinking",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "video"
+      ]
+    },
+    "qwen3-vl-flash": {
+      "model": "qwen3-vl-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "video"
+      ]
+    },
+    "qwen3-vl-plus-2025-09-23": {
+      "model": "qwen3-vl-plus-2025-09-23",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen3-vl-plus": {
+      "model": "qwen3-vl-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "agent-thought",
+        "video"
+      ]
+    },
+    "qwen3.5-flash-2026-02-23": {
+      "model": "qwen3.5-flash-2026-02-23",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3.5-flash": {
+      "model": "qwen3.5-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3.5-plus-2026-02-15": {
+      "model": "qwen3.5-plus-2026-02-15",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3.5-plus": {
+      "model": "qwen3.5-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3.6-plus-2026-04-02": {
+      "model": "qwen3.6-plus-2026-04-02",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwen3.6-plus": {
+      "model": "qwen3.6-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "vision",
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwq-32b": {
+      "model": "qwq-32b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwq-plus-0305": {
+      "model": "qwq-plus-0305",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "qwq-plus": {
+      "model": "qwq-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "multimodal-embedding-v1": {
+      "model": "multimodal-embedding-v1",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "text-embedding-v1": {
+      "model": "text-embedding-v1",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 2048,
+      "supportsVision": false
+    },
+    "text-embedding-v2": {
+      "model": "text-embedding-v2",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 2048,
+      "supportsVision": false
+    },
+    "text-embedding-v3": {
+      "model": "text-embedding-v3",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "text-embedding-v4": {
+      "model": "text-embedding-v4",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    }
+  },
+  "gemini": {
+    "gemini-1.5-flash-001": {
+      "model": "gemini-1.5-flash-001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash-002": {
+      "model": "gemini-1.5-flash-002",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash-8b-exp-0827": {
+      "model": "gemini-1.5-flash-8b-exp-0827",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash-8b-exp-0924": {
+      "model": "gemini-1.5-flash-8b-exp-0924",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash-exp-0827": {
+      "model": "gemini-1.5-flash-exp-0827",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash-latest": {
+      "model": "gemini-1.5-flash-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-flash": {
+      "model": "gemini-1.5-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro-001": {
+      "model": "gemini-1.5-pro-001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro-002": {
+      "model": "gemini-1.5-pro-002",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro-exp-0801": {
+      "model": "gemini-1.5-pro-exp-0801",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro-exp-0827": {
+      "model": "gemini-1.5-pro-exp-0827",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro-latest": {
+      "model": "gemini-1.5-pro-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-1.5-pro": {
+      "model": "gemini-1.5-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-001": {
+      "model": "gemini-2.0-flash-001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-exp": {
+      "model": "gemini-2.0-flash-exp",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-lite-001": {
+      "model": "gemini-2.0-flash-lite-001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-lite-preview-02-05": {
+      "model": "gemini-2.0-flash-lite-preview-02-05",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-lite-preview": {
+      "model": "gemini-2.0-flash-lite-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-lite": {
+      "model": "gemini-2.0-flash-lite",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-preview-image-generation": {
+      "model": "gemini-2.0-flash-preview-image-generation",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-thinking-exp-01-21": {
+      "model": "gemini-2.0-flash-thinking-exp-01-21",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash-thinking-exp-1219": {
+      "model": "gemini-2.0-flash-thinking-exp-1219",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-flash": {
+      "model": "gemini-2.0-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-pro-exp-02-05": {
+      "model": "gemini-2.0-pro-exp-02-05",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.0-pro-exp": {
+      "model": "gemini-2.0-pro-exp",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-flash-image": {
+      "model": "gemini-2.5-flash-image",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "document"
+      ]
+    },
+    "gemini-2.5-flash-lite-preview-06-17": {
+      "model": "gemini-2.5-flash-lite-preview-06-17",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-flash-lite": {
+      "model": "gemini-2.5-flash-lite",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-flash-preview-04-17": {
+      "model": "gemini-2.5-flash-preview-04-17",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-flash-preview-05-20": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-flash": {
+      "model": "gemini-2.5-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-pro-exp-03-25": {
+      "model": "gemini-2.5-pro-exp-03-25",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-pro-preview-03-25": {
+      "model": "gemini-2.5-pro-preview-03-25",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-pro-preview-05-06": {
+      "model": "gemini-2.5-pro-preview-05-06",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-pro-preview-06-05": {
+      "model": "gemini-2.5-pro-preview-06-05",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-2.5-pro": {
+      "model": "gemini-2.5-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-3-flash-preview": {
+      "model": "gemini-3-flash-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-3-pro-image-preview": {
+      "model": "gemini-3-pro-image-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "document",
+        "structured-output"
+      ]
+    },
+    "gemini-3-pro-preview": {
+      "model": "gemini-3-pro-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-3.1-flash-lite-preview": {
+      "model": "gemini-3.1-flash-lite-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-3.1-pro-preview-customtools": {
+      "model": "gemini-3.1-pro-preview-customtools",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-3.1-pro-preview": {
+      "model": "gemini-3.1-pro-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-exp-1114": {
+      "model": "gemini-exp-1114",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32767,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-exp-1121": {
+      "model": "gemini-exp-1121",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32767,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-exp-1206": {
+      "model": "gemini-exp-1206",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2097152,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-flash-latest": {
+      "model": "gemini-flash-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio",
+        "structured-output"
+      ]
+    },
+    "gemini-flash-lite-latest": {
+      "model": "gemini-flash-lite-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "tool-call",
+        "multi-tool-call",
+        "agent-thought",
+        "vision",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "gemini-pro-vision": {
+      "model": "gemini-pro-vision",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 12288,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "gemini-pro": {
+      "model": "gemini-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 30720,
+      "supportsVision": false,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "learnlm-1.5-pro-experimental": {
+      "model": "learnlm-1.5-pro-experimental",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32767,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "embedding-001": {
+      "model": "embedding-001",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 2048,
+      "supportsVision": false
+    },
+    "gemini-embedding-001": {
+      "model": "gemini-embedding-001",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 2048,
+      "supportsVision": false
+    },
+    "gemini-embedding-2-preview": {
+      "model": "gemini-embedding-2-preview",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "text-embedding-004": {
+      "model": "text-embedding-004",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 2048,
+      "supportsVision": false
+    }
+  },
+  "openrouter": {
+    "openai/chatgpt-4o-latest": {
+      "model": "openai/chatgpt-4o-latest",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "anthropic/claude-3-5-haiku": {
+      "model": "anthropic/claude-3-5-haiku",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3.5-sonnet": {
+      "model": "anthropic/claude-3.5-sonnet",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3-haiku": {
+      "model": "anthropic/claude-3-haiku",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3-opus": {
+      "model": "anthropic/claude-3-opus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3-sonnet": {
+      "model": "anthropic/claude-3-sonnet",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3.7-sonnet:thinking": {
+      "model": "anthropic/claude-3.7-sonnet:thinking",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-3.7-sonnet": {
+      "model": "anthropic/claude-3.7-sonnet",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-haiku-4.5": {
+      "model": "anthropic/claude-haiku-4.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 200000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "anthropic/claude-opus-4.5": {
+      "model": "anthropic/claude-opus-4.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 32000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-opus-4.6": {
+      "model": "anthropic/claude-opus-4.6",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-opus-4.1": {
+      "model": "anthropic/claude-opus-4.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 32000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-opus-4": {
+      "model": "anthropic/claude-opus-4",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document"
+      ]
+    },
+    "anthropic/claude-sonnet-4.5": {
+      "model": "anthropic/claude-sonnet-4.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-sonnet-4.6": {
+      "model": "anthropic/claude-sonnet-4.6",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-sonnet-4": {
+      "model": "anthropic/claude-sonnet-4",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "cohere/command-r-plus": {
+      "model": "cohere/command-r-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "cohere/command-r": {
+      "model": "cohere/command-r",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek/deepseek-chat-v3-0324": {
+      "model": "deepseek/deepseek-chat-v3-0324",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek/deepseek-chat-v3.1": {
+      "model": "deepseek/deepseek-chat-v3.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek/deepseek-chat": {
+      "model": "deepseek/deepseek-chat",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek/deepseek-coder": {
+      "model": "deepseek/deepseek-coder",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-prover-v2": {
+      "model": "deepseek/deepseek-prover-v2",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-0528-qwen3-8b": {
+      "model": "deepseek/deepseek-r1-0528-qwen3-8b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-0528": {
+      "model": "deepseek/deepseek-r1-0528",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-llama-70b": {
+      "model": "deepseek/deepseek-r1-distill-llama-70b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-llama-8b": {
+      "model": "deepseek/deepseek-r1-distill-llama-8b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-qwen-1.5b": {
+      "model": "deepseek/deepseek-r1-distill-qwen-1.5b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-qwen-14b": {
+      "model": "deepseek/deepseek-r1-distill-qwen-14b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 64000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-qwen-32b": {
+      "model": "deepseek/deepseek-r1-distill-qwen-32b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1-distill-qwen-7b": {
+      "model": "deepseek/deepseek-r1-distill-qwen-7b",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-r1": {
+      "model": "deepseek/deepseek-r1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "deepseek/deepseek-v3-base": {
+      "model": "deepseek/deepseek-v3-base",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 163840,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "google/gst": {
+      "model": "google/gst",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemini-pro-1.5": {
+      "model": "google/gemini-pro-1.5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemini-2.0-flash-lite-001": {
+      "model": "google/gemini-2.0-flash-lite-001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemini-2.5-flash-image-preview:free": {
+      "model": "google/gemini-2.5-flash-image-preview:free",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "document"
+      ]
+    },
+    "google/gemini-2.5-flash-image-preview": {
+      "model": "google/gemini-2.5-flash-image-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 32768,
+      "features": [
+        "vision",
+        "document"
+      ]
+    },
+    "google/gemini-2.5-flash-lite-preview-06-17": {
+      "model": "google/gemini-2.5-flash-lite-preview-06-17",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemini-2.5-flash-lite-preview-09-2025": {
+      "model": "google/gemini-2.5-flash-lite-preview-09-2025",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemini-2.5-flash-lite": {
+      "model": "google/gemini-2.5-flash-lite",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-2.5-flash-preview-09-2025": {
+      "model": "google/gemini-2.5-flash-preview-09-2025",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "google/gemini-2.5-flash": {
+      "model": "google/gemini-2.5-flash",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "google/gemini-2.5-pro": {
+      "model": "google/gemini-2.5-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-3-flash-preview": {
+      "model": "google/gemini-3-flash-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-3-pro-preview": {
+      "model": "google/gemini-3-pro-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-3.1-flash-lite-preview": {
+      "model": "google/gemini-3.1-flash-lite-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-3.1-pro-preview": {
+      "model": "google/gemini-3.1-pro-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document",
+        "video",
+        "audio"
+      ]
+    },
+    "google/gemini-pro": {
+      "model": "google/gemini-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 30720,
+      "supportsVision": false,
+      "maxOutputTokens": 2048,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "google/gemma-3n-e2b-it:free": {
+      "model": "google/gemma-3n-e2b-it:free",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-3.5-turbo": {
+      "model": "openai/gpt-3.5-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 16385,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/gpt-4-32k": {
+      "model": "openai/gpt-4-32k",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/gpt-4.1-mini": {
+      "model": "openai/gpt-4.1-mini",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1047576,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/gpt-4.1-nano": {
+      "model": "openai/gpt-4.1-nano",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1047576,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/gpt-4.1": {
+      "model": "openai/gpt-4.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1047576,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/gpt-4": {
+      "model": "openai/gpt-4",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 8192,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "gpt-4o-2024-08-06": {
+      "model": "gpt-4o-2024-08-06",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-4o-2024-11-20": {
+      "model": "openai/gpt-4o-2024-11-20",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-4o-mini": {
+      "model": "openai/gpt-4o-mini",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "maxOutputTokens": 16384,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-4o": {
+      "model": "openai/gpt-4o",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-5-chat": {
+      "model": "openai/gpt-5-chat",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "features": [
+        "agent-thought",
+        "vision",
+        "document"
+      ]
+    },
+    "openai/gpt-5-mini": {
+      "model": "openai/gpt-5-mini",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 400000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-5-nano": {
+      "model": "openai/gpt-5-nano",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 400000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openai/gpt-5.1-chat": {
+      "model": "openai/gpt-5.1-chat",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": true,
+      "features": [
+        "agent-thought",
+        "vision",
+        "document"
+      ]
+    },
+    "openai/gpt-5.1": {
+      "model": "openai/gpt-5.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 400000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document"
+      ]
+    },
+    "openai/gpt-5": {
+      "model": "openai/gpt-5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 400000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision",
+        "document"
+      ]
+    },
+    "x-ai/grok-3-beta": {
+      "model": "x-ai/grok-3-beta",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "x-ai/grok-3-mini-beta": {
+      "model": "x-ai/grok-3-mini-beta",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "x-ai/grok-4-fast:free": {
+      "model": "x-ai/grok-4-fast:free",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "x-ai/grok-4-fast": {
+      "model": "x-ai/grok-4-fast",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "x-ai/grok-4.1-fast": {
+      "model": "x-ai/grok-4.1-fast",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "moonshotai/kimi-k2-0711": {
+      "model": "moonshotai/kimi-k2-0711",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "moonshotai/kimi-k2-0905": {
+      "model": "moonshotai/kimi-k2-0905",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "meta-llama/llama-3-70b-instruct": {
+      "model": "meta-llama/llama-3-70b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 8192,
+      "supportsVision": false,
+      "maxOutputTokens": 2048
+    },
+    "meta-llama/llama-3-8b-instruct": {
+      "model": "meta-llama/llama-3-8b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 8192,
+      "supportsVision": false,
+      "maxOutputTokens": 2048
+    },
+    "meta-llama/llama-3.1-405b-instruct": {
+      "model": "meta-llama/llama-3.1-405b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 131072
+    },
+    "meta-llama/llama-3.1-70b-instruct": {
+      "model": "meta-llama/llama-3.1-70b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 131072
+    },
+    "meta-llama/llama-3.1-8b-instruct": {
+      "model": "meta-llama/llama-3.1-8b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 131072
+    },
+    "meta-llama/llama-3.2-11b-vision-instruct": {
+      "model": "meta-llama/llama-3.2-11b-vision-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "features": [
+        "agent-thought",
+        "vision"
+      ]
+    },
+    "meta-llama/llama-3.2-1b-instruct": {
+      "model": "meta-llama/llama-3.2-1b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "meta-llama/llama-3.2-3b-instruct": {
+      "model": "meta-llama/llama-3.2-3b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "meta-llama/llama-3.2-90b-vision-instruct": {
+      "model": "meta-llama/llama-3.2-90b-vision-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": true,
+      "features": [
+        "agent-thought",
+        "vision"
+      ]
+    },
+    "mistralai/mistral-7b-instruct": {
+      "model": "mistralai/mistral-7b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 8000,
+      "supportsVision": false,
+      "maxOutputTokens": 2048,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "mistralai/mixtral-8x22b-instruct": {
+      "model": "mistralai/mixtral-8x22b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 64000,
+      "supportsVision": false,
+      "maxOutputTokens": 8000,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "mistralai/mixtral-8x7b-instruct": {
+      "model": "mistralai/mixtral-8x7b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 8000,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "openai/o1-mini": {
+      "model": "openai/o1-mini",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "openai/o1-preview": {
+      "model": "openai/o1-preview",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "openai/o3-mini-2025-01-31": {
+      "model": "openai/o3-mini-2025-01-31",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 100000,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "openai/o3-mini-high": {
+      "model": "openai/o3-mini-high",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 100000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "openai/o3-mini": {
+      "model": "openai/o3-mini",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 100000,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "openai/o4-mini-high": {
+      "model": "openai/o4-mini-high",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 100000,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "openrouter/auto": {
+      "model": "openrouter/auto",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "qwen/qwen-2-72b-instruct": {
+      "model": "qwen/qwen-2-72b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen/qwen-2.5-72b-instruct": {
+      "model": "qwen/qwen-2.5-72b-instruct",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 131072,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought"
+      ]
+    },
+    "qwen/qwen3-max": {
+      "model": "qwen/qwen3-max",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "openai/text-embedding-3-large": {
+      "model": "openai/text-embedding-3-large",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8191,
+      "supportsVision": false
+    },
+    "openai/text-embedding-3-small": {
+      "model": "openai/text-embedding-3-small",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8191,
+      "supportsVision": false
+    }
+  }
+}

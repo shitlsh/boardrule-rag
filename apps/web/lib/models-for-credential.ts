@@ -12,7 +12,7 @@ import {
 } from "@/lib/ai-gateway";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
-import { enrichModelsWithLitellm } from "@/lib/litellm-model-registry";
+import { enrichModelMetadata } from "@/lib/model-metadata-enrich";
 import {
   fetchOpenRouterModelsForSlot,
   fetchOpenRouterModelsFromApi,
@@ -59,7 +59,7 @@ export async function fetchModelsForCredential(
   } else {
     models = slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
   }
-  models = enrichModelsWithLitellm(vendor, models);
+  models = enrichModelMetadata(vendor, models);
   if (options?.includeHidden) {
     return models;
   }

@@ -12,12 +12,12 @@ export type GeminiModelOption = {
   };
   /** Heuristic: likely supports image / multimodal inputs (for UI badge only) */
   visionHint: boolean;
-  /** From LiteLLM registry when matched (e.g. chat, embedding). */
+  /** Overlay mode when matched (e.g. chat, embedding) — Dify plugin YAML (tongyi / gemini / openrouter). */
   litellmMode?: string;
-  /** From LiteLLM max_input_tokens when matched. */
+  /** Overlay max input tokens — Dify `context_size`. */
   litellmMaxInputTokens?: number;
-  /** From LiteLLM max_output_tokens when matched. */
+  /** Overlay max output tokens — Dify parameter_rules max when present. */
   litellmMaxOutputTokens?: number;
-  /** From LiteLLM supports_vision when matched; overrides heuristic for badge when set. */
+  /** Overlay: vision — Dify features (vision/video). */
   supportsVision?: boolean;
 };
