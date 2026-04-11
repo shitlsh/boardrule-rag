@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ImageIcon, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -449,9 +449,9 @@ function CredentialSlotModelsCollapsible({
             <ul className="divide-y divide-border text-sm">
               {models.map((m) => {
                 const visible = !hiddenSet.has(m.name);
-                const ctx = m.litellmMaxInputTokens ?? m.inputTokenLimit;
-                const mode = m.litellmMode?.trim()
-                  ? m.litellmMode.trim().toUpperCase().replace(/-/g, "_")
+                const ctx = m.inputTokenLimit;
+                const mode = m.modelMode?.trim()
+                  ? m.modelMode.trim().toUpperCase().replace(/-/g, "_")
                   : null;
                 const visionOn =
                   m.supportsVision === true || (m.supportsVision !== false && m.visionHint);
@@ -477,7 +477,8 @@ function CredentialSlotModelsCollapsible({
                           </Badge>
                         ) : null}
                         {visionOn ? (
-                          <Badge variant="outline" className="text-[10px] font-normal">
+                          <Badge variant="outline" className="gap-0.5 text-[10px] font-normal">
+                            <ImageIcon className="size-3" />
                             VISION
                           </Badge>
                         ) : null}

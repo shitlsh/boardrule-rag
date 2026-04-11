@@ -153,7 +153,7 @@ async function main() {
   }
 
   mkdirSync(dirname(OUT), { recursive: true });
-  writeFileSync(OUT, `${JSON.stringify(byVendor, null, 0)}\n`, "utf8");
+  writeFileSync(OUT, `${JSON.stringify(byVendor, null, 2)}\n`, "utf8");
   console.log(`Wrote -> ${OUT}`);
 }
 

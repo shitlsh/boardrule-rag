@@ -140,13 +140,13 @@ export function GeminiModelPicker({
               <CommandEmpty>{loading ? "加载中…" : "无匹配模型"}</CommandEmpty>
               <CommandGroup heading="模型">
                 {models.map((m) => {
-                  const ctxTokens = m.litellmMaxInputTokens ?? m.inputTokenLimit;
-                  const outTokens = m.litellmMaxOutputTokens ?? m.outputTokenLimit;
+                  const ctxTokens = m.inputTokenLimit;
+                  const outTokens = m.outputTokenLimit;
                   const ctx = formatTokenShort(ctxTokens);
                   const out = formatTokenShort(outTokens);
                   const idShort = m.name.replace(/^models\//, "");
-                  const modeLabel = m.litellmMode?.trim()
-                    ? m.litellmMode.trim().toUpperCase().replace(/-/g, "_")
+                  const modeLabel = m.modelMode?.trim()
+                    ? m.modelMode.trim().toUpperCase().replace(/-/g, "_")
                     : null;
                   const visionOn =
                     m.supportsVision === true || (m.supportsVision !== false && m.visionHint);
@@ -159,7 +159,7 @@ export function GeminiModelPicker({
                         m.name,
                         idShort,
                         m.description ?? "",
-                        m.litellmMode ?? "",
+                        m.modelMode ?? "",
                       ]}
                       onSelect={() => {
                         onChange(m.name);

@@ -10,14 +10,13 @@ export type GeminiModelOption = {
     generateContent: boolean;
     embedContent: boolean;
   };
-  /** Heuristic: likely supports image / multimodal inputs (for UI badge only) */
+  /**
+   * Heuristic: likely supports image / multimodal (UI). When a row exists in vendored Dify YAML,
+   * enrichment overwrites this from `supportsVision`.
+   */
   visionHint: boolean;
-  /** Overlay mode when matched (e.g. chat, embedding) — Dify plugin YAML (tongyi / gemini / openrouter). */
-  litellmMode?: string;
-  /** Overlay max input tokens — Dify `context_size`. */
-  litellmMaxInputTokens?: number;
-  /** Overlay max output tokens — Dify parameter_rules max when present. */
-  litellmMaxOutputTokens?: number;
-  /** Overlay: vision — Dify features (vision/video). */
+  /** Dify plugin `model_properties.mode` (e.g. chat, embedding) when this model id matched YAML. */
+  modelMode?: string;
+  /** Dify plugin features include vision/video — authoritative when set by enrichment. */
   supportsVision?: boolean;
 };
