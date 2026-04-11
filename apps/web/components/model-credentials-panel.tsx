@@ -6,6 +6,7 @@ import { ChevronDown, ImageIcon, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -19,13 +20,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModelTagFilterChips } from "@/components/model-tag-filter-chips";
 import { QwenEndpointPicker } from "@/components/qwen-endpoint-picker";
 import type { AiCredentialPublic, AiGatewayPublic, AiVendor } from "@/lib/ai-gateway-types";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import {
+  filterModelsByTagIds,
+  listAvailableTagIds,
+  type ModelTagFilterOptions,
+} from "@/lib/model-option-filters";
+import {
   DASHSCOPE_COMPATIBLE_BASE_DEFAULT,
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
+
+const CREDENTIAL_SLOT_TAG_OPTS: ModelTagFilterOptions = { showVisionFilter: true };
 
 type Props = {
   data: AiGatewayPublic;
@@ -341,6 +350,8 @@ function formatTokShort(n: number | null | undefined): string | null {
   return String(n);
 }
 
+type SlotModelVisibilityFilter = "all" | "visible" | "hidden";
+
 function CredentialSlotModelsCollapsible({
   credential,
   onUpdated,
@@ -353,7 +364,11 @@ function CredentialSlotModelsCollapsible({
   const [open, setOpen] = useState(false);
   const [models, setModels] = useState<GeminiModelOption[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [patchingModel, setPatchingModel] = useState<string | null>(null);
+  const [patching, setPatching] = useState<string | "bulk" | null>(null);
+  const [filterText, setFilterText] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<SlotModelVisibilityFilter>("all");
+  const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
+  const [selectedNames, setSelectedNames] = useState<string[]>([]);
   const prevIdRef = useRef(credential.id);
 
   useEffect(() => {
@@ -361,10 +376,58 @@ function CredentialSlotModelsCollapsible({
       prevIdRef.current = credential.id;
       setModels(null);
       setOpen(false);
+      setFilterText("");
+      setVisibilityFilter("all");
+      setTagFilterIds([]);
+      setSelectedNames([]);
     }
   }, [credential.id]);
 
   const hiddenSet = useMemo(() => new Set(credential.hiddenModelIds), [credential.hiddenModelIds]);
+
+  const availableTagIds = useMemo(
+    () => (models ? listAvailableTagIds(models, CREDENTIAL_SLOT_TAG_OPTS) : []),
+    [models],
+  );
+
+  const filteredModels = useMemo(() => {
+    if (!models) return [];
+    let list = models;
+    if (visibilityFilter === "visible") list = list.filter((m) => !hiddenSet.has(m.name));
+    else if (visibilityFilter === "hidden") list = list.filter((m) => hiddenSet.has(m.name));
+
+    const q = filterText.trim().toLowerCase();
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean);
+      list = list.filter((m) => {
+        const hay = `${m.displayName}\n${m.name}\n${m.description ?? ""}`.toLowerCase();
+        return tokens.every((t) => hay.includes(t));
+      });
+    }
+    list = filterModelsByTagIds(list, tagFilterIds, CREDENTIAL_SLOT_TAG_OPTS);
+    return list;
+  }, [models, hiddenSet, filterText, visibilityFilter, tagFilterIds]);
+
+  const filteredIds = useMemo(() => filteredModels.map((m) => m.name), [filteredModels]);
+  const selectedSet = useMemo(() => new Set(selectedNames), [selectedNames]);
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selectedSet.has(id));
+  const someFilteredSelected = filteredIds.some((id) => selectedSet.has(id));
+
+  const toggleSelectOne = (name: string) => {
+    setSelectedNames((prev) =>
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
+    );
+  };
+
+  const toggleSelectAllFiltered = (checked: boolean) => {
+    const f = new Set(filteredIds);
+    if (checked) {
+      setSelectedNames((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    } else {
+      setSelectedNames((prev) => prev.filter((id) => !f.has(id)));
+    }
+  };
 
   useEffect(() => {
     if (!open || models !== null || disabled) return;
@@ -393,8 +456,8 @@ function CredentialSlotModelsCollapsible({
     };
   }, [open, models, credential.id, disabled]);
 
-  const patchHidden = async (nextHidden: string[], modelKey: string) => {
-    setPatchingModel(modelKey);
+  const patchHidden = async (nextHidden: string[], progress: string | "bulk") => {
+    setPatching(progress);
     try {
       const res = await fetch(`/api/ai-gateway/credentials/${encodeURIComponent(credential.id)}`, {
         method: "PATCH",
@@ -404,10 +467,14 @@ function CredentialSlotModelsCollapsible({
       const json = (await res.json()) as AiGatewayPublic & { message?: string };
       if (!res.ok) throw new Error(json.message || "保存失败");
       onUpdated(json);
+      if (progress === "bulk") {
+        setSelectedNames([]);
+        toast.success("已批量更新槽位可见性");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "保存失败");
     } finally {
-      setPatchingModel(null);
+      setPatching(null);
     }
   };
 
@@ -416,6 +483,16 @@ function CredentialSlotModelsCollapsible({
     if (visible) h.delete(name);
     else h.add(name);
     void patchHidden(Array.from(h), name);
+  };
+
+  const bulkSetVisibleInSlot = (visible: boolean) => {
+    if (selectedNames.length === 0) return;
+    const h = new Set(credential.hiddenModelIds);
+    for (const name of selectedNames) {
+      if (visible) h.delete(name);
+      else h.add(name);
+    }
+    void patchHidden(Array.from(h), "bulk");
   };
 
   return (
@@ -445,62 +522,168 @@ function CredentialSlotModelsCollapsible({
         ) : models && models.length === 0 ? (
           <p className="text-muted-foreground text-xs py-2">未获取到模型，请检查密钥或网络。</p>
         ) : models ? (
-          <ScrollArea className="h-[min(22rem,50vh)] rounded-md border border-border">
-            <ul className="divide-y divide-border text-sm">
-              {models.map((m) => {
-                const visible = !hiddenSet.has(m.name);
-                const ctx = m.inputTokenLimit;
-                const mode = m.modelMode?.trim()
-                  ? m.modelMode.trim().toUpperCase().replace(/-/g, "_")
-                  : null;
-                const visionOn =
-                  m.supportsVision === true || (m.supportsVision !== false && m.visionHint);
-                return (
-                  <li
-                    key={m.name}
-                    className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="font-medium leading-snug truncate">{m.displayName}</p>
-                      <p className="text-[11px] text-muted-foreground font-mono truncate" title={m.name}>
-                        {m.name}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {mode ? (
-                          <Badge variant="outline" className="text-[10px] font-normal uppercase">
-                            {mode}
-                          </Badge>
-                        ) : null}
-                        {formatTokShort(ctx) ? (
-                          <Badge variant="secondary" className="text-[10px] font-normal">
-                            {formatTokShort(ctx)} 上下文
-                          </Badge>
-                        ) : null}
-                        {visionOn ? (
-                          <Badge variant="outline" className="gap-0.5 text-[10px] font-normal">
-                            <ImageIcon className="size-3" />
-                            VISION
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 sm:pl-2">
-                      <span className="text-muted-foreground text-xs whitespace-nowrap">在槽位中显示</span>
-                      <Switch
-                        checked={visible}
-                        disabled={patchingModel !== null}
-                        onCheckedChange={(v) => onToggleModel(m.name, v)}
-                        aria-label={`在槽位中显示 ${m.displayName}`}
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <Input
+                placeholder="筛选显示名、模型 ID 或描述（多词需同时命中）"
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="max-w-full sm:max-w-md"
+                disabled={patching !== null}
+              />
+              <Select
+                value={visibilityFilter}
+                onValueChange={(v) => setVisibilityFilter(v as SlotModelVisibilityFilter)}
+                disabled={patching !== null}
+              >
+                <SelectTrigger className="w-full sm:w-[11rem]">
+                  <SelectValue placeholder="可见性" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部模型</SelectItem>
+                  <SelectItem value="visible">仅槽位可见</SelectItem>
+                  <SelectItem value="hidden">仅已隐藏</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {availableTagIds.length > 0 ? (
+              <ModelTagFilterChips
+                availableIds={availableTagIds}
+                selectedIds={tagFilterIds}
+                onToggle={(id) =>
+                  setTagFilterIds((prev) =>
+                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                  )
+                }
+                onClear={() => setTagFilterIds([])}
+                disabled={patching !== null}
+                label="标签（与列表徽章一致，多选为且）"
+              />
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {patching === "bulk" ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={selectedNames.length === 0 || patching !== null}
+                onClick={() => bulkSetVisibleInSlot(true)}
+              >
+                所选显示在槽位
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={selectedNames.length === 0 || patching !== null}
+                onClick={() => bulkSetVisibleInSlot(false)}
+              >
+                所选从槽位隐藏
+              </Button>
+              <span className="text-muted-foreground text-xs">
+                已选 {selectedNames.length} 个
+                {filteredModels.length !== models.length ? (
+                  <span className="text-muted-foreground/80"> · 当前列表 {filteredModels.length} 个</span>
+                ) : null}
+              </span>
+            </div>
+            <ScrollArea className="h-[min(22rem,50vh)] rounded-md border border-border">
+              <ul className="divide-y divide-border text-sm">
+                {filteredModels.length === 0 ? (
+                  <li className="px-3 py-8 text-center text-muted-foreground text-sm">没有符合筛选条件的模型</li>
+                ) : (
+                  <>
+                    <li className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
+                      <Checkbox
+                        id={`slot-models-select-all-${credential.id}`}
+                        checked={
+                          allFilteredSelected ? true : someFilteredSelected ? "indeterminate" : false
+                        }
+                        onCheckedChange={(v) => toggleSelectAllFiltered(v === true)}
+                        disabled={patching !== null || filteredIds.length === 0}
+                        aria-label="全选当前筛选结果"
                       />
-                      {patchingModel === m.name ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </ScrollArea>
+                      <label
+                        htmlFor={`slot-models-select-all-${credential.id}`}
+                        className="text-xs text-muted-foreground cursor-pointer select-none"
+                      >
+                        全选当前筛选结果
+                      </label>
+                    </li>
+                    {filteredModels.map((m) => {
+                      const visible = !hiddenSet.has(m.name);
+                      const ctx = m.inputTokenLimit;
+                      const mode = m.modelMode?.trim()
+                        ? m.modelMode.trim().toUpperCase().replace(/-/g, "_")
+                        : null;
+                      const visionOn =
+                        m.supportsVision === true || (m.supportsVision !== false && m.visionHint);
+                      const rowBusy = patching === m.name;
+                      return (
+                        <li
+                          key={m.name}
+                          className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-start gap-2 min-w-0 flex-1 sm:items-center">
+                            <Checkbox
+                              checked={selectedSet.has(m.name)}
+                              onCheckedChange={() => toggleSelectOne(m.name)}
+                              disabled={patching !== null}
+                              className="mt-0.5 sm:mt-0"
+                              aria-label={`选择 ${m.displayName}`}
+                            />
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <p className="font-medium leading-snug truncate">{m.displayName}</p>
+                              <p
+                                className="text-[11px] text-muted-foreground font-mono truncate"
+                                title={m.name}
+                              >
+                                {m.name}
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {mode ? (
+                                  <Badge variant="outline" className="text-[10px] font-normal uppercase">
+                                    {mode}
+                                  </Badge>
+                                ) : null}
+                                {formatTokShort(ctx) ? (
+                                  <Badge variant="secondary" className="text-[10px] font-normal">
+                                    {formatTokShort(ctx)} 上下文
+                                  </Badge>
+                                ) : null}
+                                {visionOn ? (
+                                  <Badge variant="outline" className="gap-0.5 text-[10px] font-normal">
+                                    <ImageIcon className="size-3" />
+                                    VISION
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 sm:pl-2 pl-7 sm:pl-2">
+                            <span className="text-muted-foreground text-xs whitespace-nowrap">
+                              在槽位中显示
+                            </span>
+                            <Switch
+                              checked={visible}
+                              disabled={patching !== null}
+                              onCheckedChange={(v) => onToggleModel(m.name, v)}
+                              aria-label={`在槽位中显示 ${m.displayName}`}
+                            />
+                            {rowBusy ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </>
+                )}
+              </ul>
+            </ScrollArea>
+          </div>
         ) : null}
       </CollapsibleContent>
     </Collapsible>

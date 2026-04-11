@@ -14,8 +14,14 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ModelTagFilterChips } from "@/components/model-tag-filter-chips";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
+import {
+  filterModelsByTagIds,
+  listAvailableTagIds,
+  type ModelTagFilterOptions,
+} from "@/lib/model-option-filters";
 import { cn } from "@/lib/utils";
 
 function formatTokenShort(n: number | null): string | null {
@@ -72,8 +78,21 @@ export function GeminiModelPicker({
   disabled,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
   const selected = useMemo(() => models.find((m) => m.name === value), [models, value]);
   const showVision = slot !== "embed";
+  const tagFilterOpts: ModelTagFilterOptions = useMemo(
+    () => ({ showVisionFilter: slot !== "embed" }),
+    [slot],
+  );
+  const availableTagIds = useMemo(
+    () => listAvailableTagIds(models, tagFilterOpts),
+    [models, tagFilterOpts],
+  );
+  const modelsAfterTags = useMemo(
+    () => filterModelsByTagIds(models, tagFilterIds, tagFilterOpts),
+    [models, tagFilterIds, tagFilterOpts],
+  );
   const orphanSaved = Boolean(value.trim()) && !selected && !loading;
 
   const triggerLabel = (() => {
@@ -136,10 +155,25 @@ export function GeminiModelPicker({
                 "focus-visible:bg-muted/40",
               )}
             />
+            {availableTagIds.length > 0 ? (
+              <div className="border-b border-border px-2 py-2">
+                <ModelTagFilterChips
+                  availableIds={availableTagIds}
+                  selectedIds={tagFilterIds}
+                  onToggle={(id) =>
+                    setTagFilterIds((prev) =>
+                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                    )
+                  }
+                  onClear={() => setTagFilterIds([])}
+                  label="标签（与徽章一致，多选为且）"
+                />
+              </div>
+            ) : null}
             <CommandList>
               <CommandEmpty>{loading ? "加载中…" : "无匹配模型"}</CommandEmpty>
               <CommandGroup heading="模型">
-                {models.map((m) => {
+                {modelsAfterTags.map((m) => {
                   const ctxTokens = m.inputTokenLimit;
                   const outTokens = m.outputTokenLimit;
                   const ctx = formatTokenShort(ctxTokens);
@@ -210,10 +244,10 @@ export function GeminiModelPicker({
 
       <p className="text-muted-foreground text-[11px] leading-snug">
         {vendor === "openrouter"
-          ? "在显示名、模型 ID（如 openai/gpt-4o-mini）、描述中做包含匹配；多词用空格时需同时命中。"
+          ? "可按标签（如 VISION）缩小列表，再结合搜索；显示名、模型 ID、描述中做包含匹配，多词用空格时需同时命中。"
           : vendor === "qwen"
-            ? "在显示名、模型 ID（如 qwen-turbo）、描述中做包含匹配；多词用空格时需同时命中。"
-            : "在显示名、模型 ID（含或不含 models/ 前缀）、描述中做包含匹配；多词用空格时需同时命中。"}
+            ? "可按标签缩小列表，再结合搜索；显示名、模型 ID、描述中做包含匹配，多词用空格时需同时命中。"
+            : "可按标签缩小列表，再结合搜索；显示名、模型 ID（含或不含 models/ 前缀）、描述中做包含匹配，多词用空格时需同时命中。"}
       </p>
 
       {orphanSaved ? (
