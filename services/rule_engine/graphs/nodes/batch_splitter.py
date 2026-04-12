@@ -12,7 +12,7 @@ from graphs.state import ExtractionState
 _DEFAULT_BATCH_PAGES = 6
 _MAX_BATCHES = 64
 
-_LOG = logging.getLogger(__name__)
+_LOG = logging.getLogger("boardrule.batch_splitter")
 
 
 def _pages_per_batch() -> int:
@@ -67,8 +67,23 @@ def run(state: ExtractionState) -> dict:
                 n,
                 warn_at,
             )
-        vb = _split_body_into_vision_batches(body, by_page, max(per, n))
-        return {"vision_batches": vb}
+        per_effective = max(per, n)
+        vb = _split_body_into_vision_batches(body, by_page, per_effective)
+    else:
+        per_effective = per
+        vb = _split_body_into_vision_batches(body, by_page, per_effective)
 
-    vb = _split_body_into_vision_batches(body, by_page, per)
+    batch_sizes = [len(b) for b in vb]
+    _LOG.info(
+        "batch_splitter: needs_batching=%s body_pages=%s VISION_BATCH_PAGES=%s effective_pages_per_call=%s "
+        "num_batches=%s batch_sizes=%s page_min=%s page_max=%s",
+        needs_batching,
+        len(body),
+        per,
+        per_effective,
+        len(vb),
+        batch_sizes,
+        body[0] if body else None,
+        body[-1] if body else None,
+    )
     return {"vision_batches": vb}

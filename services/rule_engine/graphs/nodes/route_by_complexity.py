@@ -10,7 +10,7 @@ from graphs.extraction_settings import (
 )
 from graphs.state import ExtractionState
 
-_LOG = logging.getLogger(__name__)
+_LOG = logging.getLogger("boardrule.route_by_complexity")
 
 
 def run(state: ExtractionState) -> dict:

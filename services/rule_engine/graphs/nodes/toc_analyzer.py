@@ -10,7 +10,7 @@ from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
 
-_LOG = logging.getLogger(__name__)
+_LOG = logging.getLogger("boardrule.toc_analyzer")
 
 # When no TOC pages are selected, skip Flash and pass a neutral outline for routing.
 _SKIPPED_TOC_OUTLINE: dict[str, object] = {

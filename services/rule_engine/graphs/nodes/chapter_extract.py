@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from ingestion.node_builders import sanitize_invisible_unicode_for_rules_markdow
 from utils.page_markers import text_contains_need_more_context
 from utils.prompt_context import render_prompt
 from utils.retry import retry
+
+_LOG = logging.getLogger("boardrule.chapter_extract")
 
 
 def _vision_batch_pages() -> int:
@@ -53,6 +56,16 @@ def run(state: ExtractionState) -> dict:
         batch_list: list[list[dict[str, Any]]] = [list(b) for b in vision_batches]
         max_merge = _max_merged_vision_pages()
         expand_cap = _max_expand_steps()
+        _LOG.info(
+            "chapter_extract: num_vision_batches=%s batch_sizes=%s body_page_indices=%s "
+            "max_merge_pages=%s need_more_expand_cap=%s max_output_tokens=%s",
+            len(batch_list),
+            [len(b) for b in batch_list],
+            state.get("body_page_indices") or [],
+            max_merge,
+            expand_cap,
+            _mot,
+        )
         i = 0
         while i < len(batch_list):
             combined: list[dict[str, Any]] = list(batch_list[i])
@@ -88,6 +101,13 @@ def run(state: ExtractionState) -> dict:
                     out_warnings=llm_warns,
                 )
 
+            _LOG.info(
+                "chapter_extract: pro_vision call batch=%s/%s pages=%s image_count=%s",
+                i + 1,
+                len(batch_list),
+                page_nums,
+                len(labeled),
+            )
             try:
                 out = retry(_call, attempts=3)
             except Exception as e:  # noqa: BLE001
@@ -133,6 +153,13 @@ def run(state: ExtractionState) -> dict:
                         out_warnings=llm_warns,
                     )
 
+                _LOG.info(
+                    "chapter_extract: pro_vision merged_expand batch_start=%s step=%s pages=%s image_count=%s",
+                    i + 1,
+                    steps,
+                    page_nums,
+                    len(labeled),
+                )
                 try:
                     out = retry(_call_merged, attempts=3)
                 except Exception as e:  # noqa: BLE001
