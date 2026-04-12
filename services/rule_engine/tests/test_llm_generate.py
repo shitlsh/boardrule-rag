@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
+from utils.ai_gateway import BoardruleAiConfigV2, boardrule_ai_runtime
 
 
-def _v2_cfg(*, pro_max_tokens: int | None = None) -> BoardruleAiConfig:
+def _v2_cfg(*, pro_max_tokens: int | None = None) -> BoardruleAiConfigV2:
     pro: dict = {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.5-pro"}
     if pro_max_tokens is not None:
         pro["maxOutputTokens"] = pro_max_tokens
@@ -28,7 +28,7 @@ def _v2_cfg(*, pro_max_tokens: int | None = None) -> BoardruleAiConfig:
             },
         },
     }
-    return BoardruleAiConfig.model_validate(raw)
+    return BoardruleAiConfigV2.model_validate(raw)
 
 
 def test_pro_max_output_defaults_to_32k_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:

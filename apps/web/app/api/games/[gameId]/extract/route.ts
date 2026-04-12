@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { assertStaffSession } from "@/lib/request-auth";
 import { startExtractionWithPagePlan } from "@/lib/ingestion";
 import { parsePageIndices } from "@/lib/page-indices";
+import { getExtractionProfileConfigById } from "@/lib/ai-runtime-profiles";
 import { isStalePageJobEngineError } from "@/lib/stale-page-job";
 
 export const runtime = "nodejs";
@@ -16,6 +17,8 @@ type Body = {
   terminologyContext?: string;
   /** Skip simple-profile gate on the rule engine (force multi-stage routing). */
   forceFullPipeline?: boolean;
+  /** Optional EXTRACTION profile id (`AiRuntimeProfile` kind EXTRACTION). */
+  extractionProfileId?: string;
 };
 
 export async function POST(req: Request, { params }: RouteParams) {
@@ -51,6 +54,23 @@ export async function POST(req: Request, { params }: RouteParams) {
       ? body.terminologyContext.trim()
       : undefined;
 
+  const extractionProfileId =
+    typeof body.extractionProfileId === "string" && body.extractionProfileId.trim()
+      ? body.extractionProfileId.trim()
+      : undefined;
+
+  let extractionProfileConfig = null;
+  if (extractionProfileId) {
+    extractionProfileConfig = await getExtractionProfileConfigById(extractionProfileId);
+    if (!extractionProfileConfig) {
+      return NextResponse.json({ message: "提取配置模版不存在或无效" }, { status: 404 });
+    }
+  }
+
+  const forceFullPipeline =
+    body.forceFullPipeline === true ||
+    (extractionProfileConfig?.forceFullPipelineDefault === true);
+
   const task = await prisma.task.create({
     data: {
       gameId,
@@ -68,7 +88,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       pageJobId,
       tocPageIndices,
       excludePageIndices,
-      forceFullPipeline: body.forceFullPipeline === true,
+      forceFullPipeline,
+      extractionProfileId: extractionProfileId ?? null,
     });
 
     await prisma.task.update({

@@ -15,10 +15,10 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from api.middleware_api_key import RuleEngineApiKeyMiddleware
-from api.routers import chat, extract, health
+from api.routers import chat, extract, graph_meta, health
 from api.routers import index as index_api
 from graphs.extraction_graph import build_extraction_graph
-from utils.ai_gateway import BoardruleAiConfig
+from utils.ai_gateway import parse_boardrule_ai_header
 from utils.paths import page_assets_root
 
 load_dotenv()
@@ -122,7 +122,7 @@ async def boardrule_ai_header_middleware(request: Request, call_next):
     raw = request.headers.get("x-boardrule-ai-config")
     if raw:
         try:
-            request.state.boardrule_ai = BoardruleAiConfig.model_validate_json(raw)
+            request.state.boardrule_ai = parse_boardrule_ai_header(raw)
             request.state.boardrule_ai_invalid = False
         except Exception:
             request.state.boardrule_ai = None
@@ -143,6 +143,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(graph_meta.router)
 app.include_router(extract.router)
 app.include_router(index_api.router)
 app.include_router(chat.router)

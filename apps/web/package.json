@@ -16,7 +16,8 @@
     "db:reset-app-schema": "node scripts/reset-app-schema.cjs",
     "db:apply-migration": "node scripts/apply-migration.cjs",
     "seed:admin": "node scripts/seed-admin.cjs",
-    "sync:dify-model-metadata": "node scripts/sync-dify-model-metadata.mjs"
+    "sync:dify-model-metadata": "node scripts/sync-dify-model-metadata.mjs",
+    "print:extraction-mermaid": "cd ../services/rule_engine && PYTHONPATH=. python3 scripts/print_extraction_mermaid.py"
   },
   "dependencies": {
     "@auth/supabase-adapter": "^1.11.1",
@@ -63,6 +64,7 @@
     "input-otp": "^1.4.2",
     "jose": "^6.2.2",
     "lucide-react": "^1.7.0",
+    "mermaid": "^11.14.0",
     "next": "^16.2.0",
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",

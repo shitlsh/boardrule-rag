@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from graphs.state import ExtractionState
 from ingestion.node_builders import merged_markdown_to_documents, sanitize_invisible_unicode_for_rules_markdown
-from utils.llm_generate import PRO_MERGE, LlmCallMeta, generate_pro, pro_max_output_tokens
+from utils.llm_generate import PRO_MERGE, LlmCallMeta, generate_pro, pro_max_output_tokens_for_call
 from utils.page_markers import (
     page_continuity_warnings,
     supplement_chapter_page_metadata,
@@ -35,7 +35,7 @@ def run(state: ExtractionState) -> dict:
     rule_style_core = render_prompt("rule_style_core.md", state)
     chunks = state.get("chapter_outputs") or []
     base_errs = list(state.get("errors") or [])
-    _mot = pro_max_output_tokens()
+    _mot = pro_max_output_tokens_for_call(LlmCallMeta(node="merge_and_refine"), PRO_MERGE)
     llm_warns: list[str] = []
 
     if not chunks:

@@ -63,6 +63,8 @@ export async function startExtractionWithPagePlan(params: {
   excludePageIndices: number[];
   /** Skip simple-profile gate; use complex-route heuristics (multipart `force_full_pipeline`). */
   forceFullPipeline?: boolean;
+  /** Optional EXTRACTION runtime profile (DB id). */
+  extractionProfileId?: string | null;
 }): Promise<ExtractStartResponse> {
   const base = getRuleEngineBaseUrl();
   const form = new FormData();
@@ -79,7 +81,10 @@ export async function startExtractionWithPagePlan(params: {
   form.append("force_full_pipeline", params.forceFullPipeline ? "true" : "false");
   form.append("resume", "false");
 
-  const ai = await ruleEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders({
+    mode: "extraction",
+    extractionProfileId: params.extractionProfileId,
+  });
   const res = await fetch(`${base}/extract`, {
     method: "POST",
     headers: ai,

@@ -1,6 +1,6 @@
 """X-Boardrule-Ai-Config JSON (v2) parsing."""
 
-from utils.ai_gateway import BoardruleAiConfig
+from utils.ai_gateway import BoardruleAiConfigV2, BoardruleAiConfigV3, parse_boardrule_ai_header
 
 
 def test_boardrule_ai_config_v2_slots() -> None:
@@ -15,7 +15,7 @@ def test_boardrule_ai_config_v2_slots() -> None:
       }
     }
     """
-    cfg = BoardruleAiConfig.model_validate_json(raw)
+    cfg = BoardruleAiConfigV2.model_validate_json(raw)
     assert cfg.version == 2
     assert cfg.slots.flash.provider == "gemini"
     assert cfg.slots.pro.provider == "openrouter"
@@ -47,9 +47,32 @@ def test_boardrule_ai_config_v2_qwen_chat() -> None:
       }
     }
     """
-    cfg = BoardruleAiConfig.model_validate_json(raw)
+    cfg = BoardruleAiConfigV2.model_validate_json(raw)
     assert cfg.slots.embed.provider == "qwen"
     assert cfg.slots.chat.provider == "qwen"
     assert cfg.slots.chat.model == "qwen-turbo"
     assert cfg.slots.embed.dashscope_compatible_base is not None
     assert "compatible-mode" in cfg.slots.embed.dashscope_compatible_base
+
+
+def test_boardrule_ai_config_v3_fine_slots_and_runtime() -> None:
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.0-flash"},
+        "pro": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.5-pro"},
+        "embed": {"provider": "gemini", "apiKey": "k", "model": "models/text-embedding-004"},
+        "chat": {"provider": "gemini", "apiKey": "k", "model": "m", "temperature": 0.2, "maxTokens": 8192},
+        "flashToc": {"provider": "gemini", "apiKey": "k", "model": "toc-model", "maxOutputTokens": 100},
+        "proExtract": {"provider": "gemini", "apiKey": "k", "model": "extract-model"}
+      },
+      "extractionRuntime": {"visionBatchPages": 3}
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    assert isinstance(cfg, BoardruleAiConfigV3)
+    assert cfg.slots.flash_toc is not None
+    assert cfg.slots.flash_toc.model == "toc-model"
+    assert cfg.extraction_runtime is not None
+    assert cfg.extraction_runtime.vision_batch_pages == 3

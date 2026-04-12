@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +62,8 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
   const [gstoneExcluded, setGstoneExcluded] = useState<Set<number>>(new Set());
   const [loadingGstonePreview, setLoadingGstonePreview] = useState(false);
   const [limits, setLimits] = useState<RulebookLimits | null>(null);
+  const [extractionProfiles, setExtractionProfiles] = useState<{ id: string; name: string }[]>([]);
+  const [extractionProfileId, setExtractionProfileId] = useState("");
 
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +84,32 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ai-runtime-profiles")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.profiles) return;
+        const list = (data.profiles as { id: string; name: string; kind: string }[])
+          .filter((p) => p.kind === "EXTRACTION")
+          .map((p) => ({ id: p.id, name: p.name }));
+        setExtractionProfiles(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(`boardrule.extractionProfileId.${game.id}`);
+      if (v) setExtractionProfileId(v);
+    } catch {
+      /* ignore */
+    }
+  }, [game.id]);
 
   const toggleGstoneExcluded = (index: number) => {
     setGstoneExcluded((prev) => {
@@ -293,6 +328,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           excludePages: excludePages || undefined,
           terminologyContext: terminologyContext.trim() || undefined,
           forceFullPipeline: forceFullPipeline || undefined,
+          extractionProfileId: extractionProfileId.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -307,6 +343,13 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           return;
         }
         throw new Error(error.message || "启动提取失败");
+      }
+      try {
+        if (extractionProfileId.trim()) {
+          localStorage.setItem(`boardrule.extractionProfileId.${game.id}`, extractionProfileId.trim());
+        }
+      } catch {
+        /* ignore */
       }
       toast.success("规则提取任务已启动");
       onUpdate();
@@ -519,6 +562,29 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
                 disabled={isExtracting || isProcessing}
                 rows={3}
               />
+            </Field>
+            <Field>
+              <FieldLabel>提取配置模版（可选）</FieldLabel>
+              <Select
+                value={extractionProfileId || "__default__"}
+                onValueChange={(v) => setExtractionProfileId(v === "__default__" ? "" : v)}
+                disabled={isExtracting || isProcessing}
+              >
+                <SelectTrigger id="extractionProfileId">
+                  <SelectValue placeholder="默认（与模型管理单槽兼容）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">默认（与模型管理 Flash/Pro 单槽兼容）</SelectItem>
+                  {extractionProfiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                在「设置 → AI 运行时」中维护；未选择时使用与全局模型槽位一致的 v2 载荷。
+              </FieldDescription>
             </Field>
             <div className="flex w-full min-w-0 items-start gap-3">
               <Checkbox

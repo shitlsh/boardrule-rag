@@ -56,6 +56,30 @@ model Task {
   @@schema("app")
 }
 
+/// EXTRACTION = rulebook pipeline slot overrides + runtime; CHAT = chat slot + RAG defaults for synthesis / indexing.
+enum AiRuntimeProfileKind {
+  EXTRACTION
+  CHAT
+
+  @@schema("app")
+}
+
+/// Named AI runtime template (credentials still reference global AI Gateway).
+model AiRuntimeProfile {
+  id          String               @id @default(cuid())
+  name        String
+  description String?
+  kind        AiRuntimeProfileKind
+  /// JSON: see `lib/ai-runtime-profile-schema.ts` (Zod-validated EXTRACTION vs CHAT shapes).
+  configJson  String               @default("{}")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  appSettingsActiveAsChat AppSettings? @relation("ActiveChatProfile")
+
+  @@schema("app")
+}
+
 /// Singleton row (`id = "default"`): ingestion limits and page raster hints for the rule engine.
 model AppSettings {
   id String @id @default("default")
@@ -75,6 +99,9 @@ model AppSettings {
   dailyChatLimit     Int    @default(20)
   /// C-end 全站每 UTC 日对话总次数上限（所有 IP 合计）。0 = 不限制。默认 1000 防止用量失控。
   dailyChatLimitGlobal Int @default(1000)
+  /// Optional CHAT profile: when set, chat + default RAG options for synthesis/indexing come from that template (credentials still global).
+  activeChatProfileId String?                @unique
+  activeChatProfile   AiRuntimeProfile? @relation("ActiveChatProfile", fields: [activeChatProfileId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from graphs.state import ExtractionState
-from utils.llm_generate import FLASH_QUICKSTART, LlmCallMeta, flash_max_output_tokens, generate_flash
+from utils.llm_generate import FLASH_QUICKSTART, LlmCallMeta, flash_max_output_tokens_for_call, generate_flash
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
 from utils.retry import retry
@@ -18,7 +18,7 @@ def run(state: ExtractionState) -> dict:
             "errors": (state.get("errors") or []) + ["quickstart_and_questions: empty merged_markdown"],
         }
     prompt = render_prompt("quickstart_and_questions.md", state, merged=merged[:120_000])
-    _mot = flash_max_output_tokens()
+    _mot = flash_max_output_tokens_for_call(LlmCallMeta(node="quickstart_and_questions"), FLASH_QUICKSTART)
     llm_warns: list[str] = []
     try:
 

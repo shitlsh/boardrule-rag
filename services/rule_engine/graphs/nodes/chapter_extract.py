@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from graphs.state import ExtractionState
+from utils.ai_gateway import get_extraction_runtime
 from utils.llm_generate import (
     PRO_EXTRACT,
     LlmCallMeta,
     build_labeled_image_parts,
     generate_pro_vision,
-    pro_max_output_tokens,
+    pro_max_output_tokens_for_call,
 )
 from ingestion.node_builders import sanitize_invisible_unicode_for_rules_markdown
 from utils.page_markers import text_contains_need_more_context
@@ -24,11 +25,17 @@ _LOG = logging.getLogger("boardrule.chapter_extract")
 
 
 def _vision_batch_pages() -> int:
+    o = get_extraction_runtime()
+    if o is not None and o.vision_batch_pages is not None:
+        return max(1, int(o.vision_batch_pages))
     raw = os.environ.get("VISION_BATCH_PAGES", "6").strip()
     return int(raw) if raw.isdigit() else 6
 
 
 def _max_merged_vision_pages() -> int:
+    o = get_extraction_runtime()
+    if o is not None and o.gemini_vision_max_merge_pages is not None:
+        return max(1, int(o.gemini_vision_max_merge_pages))
     raw = os.environ.get("GEMINI_VISION_MAX_MERGE_PAGES", "").strip()
     if raw.isdigit():
         return int(raw)
@@ -37,6 +44,9 @@ def _max_merged_vision_pages() -> int:
 
 
 def _max_expand_steps() -> int:
+    o = get_extraction_runtime()
+    if o is not None and o.need_more_context_max_expand is not None:
+        return max(0, int(o.need_more_context_max_expand))
     raw = os.environ.get("NEED_MORE_CONTEXT_MAX_EXPAND", "8").strip()
     return int(raw) if raw.isdigit() else 8
 
@@ -46,7 +56,7 @@ def run(state: ExtractionState) -> dict:
     vision_batches = state.get("vision_batches") or []
     page_rows = state.get("page_rows") or []
     errs: list[str] = list(state.get("errors") or [])
-    _mot = pro_max_output_tokens()
+    _mot = pro_max_output_tokens_for_call(LlmCallMeta(node="chapter_extract"), PRO_EXTRACT)
     merge_retries = 0
     llm_warns: list[str] = []
 

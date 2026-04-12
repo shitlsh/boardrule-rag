@@ -7,6 +7,7 @@ import os
 
 from graphs.extraction_settings import simple_path_warn_body_pages
 from graphs.state import ExtractionState
+from utils.ai_gateway import get_extraction_runtime
 
 # Max physical pages per Gemini vision call (payload / quota)
 _DEFAULT_BATCH_PAGES = 6
@@ -16,6 +17,9 @@ _LOG = logging.getLogger("boardrule.batch_splitter")
 
 
 def _pages_per_batch() -> int:
+    o = get_extraction_runtime()
+    if o is not None and o.vision_batch_pages is not None:
+        return max(1, int(o.vision_batch_pages))
     raw = os.environ.get("VISION_BATCH_PAGES", str(_DEFAULT_BATCH_PAGES)).strip()
     return int(raw) if raw.isdigit() else _DEFAULT_BATCH_PAGES
 

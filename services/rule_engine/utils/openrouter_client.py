@@ -13,6 +13,17 @@ OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 
 
 def _timeout_s() -> float:
+    try:
+        from utils.ai_gateway import get_extraction_runtime
+
+        o = get_extraction_runtime()
+        if o is not None and o.openrouter_http_timeout_ms is not None:
+            ms = int(o.openrouter_http_timeout_ms)
+            if ms <= 0:
+                return 300.0
+            return max(1.0, ms / 1000.0)
+    except RuntimeError:
+        pass
     raw = (os.environ.get("OPENROUTER_HTTP_TIMEOUT_MS") or "").strip()
     if raw == "":
         return 120.0

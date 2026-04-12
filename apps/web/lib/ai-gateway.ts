@@ -9,10 +9,14 @@ import type {
   AiGatewayStored,
   AiVendor,
   EngineAiPayloadV2,
+  EngineAiPayloadV3,
+  ExtractionRuntimeOverrides,
   RagOptionsStored,
   SlotBinding,
   SlotKey,
 } from "@/lib/ai-gateway-types";
+import type { ChatProfileConfigParsed, ExtractionProfileConfigParsed } from "@/lib/ai-runtime-profile-schema";
+import { getActiveChatProfileConfig } from "@/lib/ai-runtime-profiles";
 import { isAiVendor } from "@/lib/ai-gateway-types";
 import {
   assertValidDashscopeCompatibleBase,
@@ -429,6 +433,34 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
   return toPublic(stored);
 }
 
+/** Resolve a concrete slot binding to API key + model (same rules as named slots). */
+export function resolveSlotBinding(
+  stored: AiGatewayStored,
+  binding: SlotBinding,
+  labelForError: string,
+): {
+  apiKey: string;
+  model: string;
+  vendor: AiVendor;
+  dashscopeCompatibleBase?: string;
+} {
+  if (!binding.credentialId || !binding.model?.trim()) {
+    throw new Error(`${labelForError}：请选择凭证并填写模型`);
+  }
+  const cred = stored.credentials.find((c) => c.id === binding.credentialId);
+  if (!cred) throw new Error(`${labelForError}：引用的凭证不存在`);
+  if (cred.enabled === false) {
+    throw new Error(`凭证「${cred.alias}」已停用`);
+  }
+  const apiKey = decryptSecret(cred.apiKeyEnc).trim();
+  if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
+  const dashscopeCompatibleBase =
+    cred.vendor === "qwen"
+      ? normalizeDashscopeCompatibleBase(cred.dashscopeCompatibleBase)
+      : undefined;
+  return { apiKey, model: binding.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
+}
+
 function resolveSlot(
   stored: AiGatewayStored,
   slot: SlotKey,
@@ -442,18 +474,7 @@ function resolveSlot(
   if (!b?.credentialId || !b.model?.trim()) {
     throw new Error(`AI 槽位未配置: ${slot}`);
   }
-  const cred = stored.credentials.find((c) => c.id === b.credentialId);
-  if (!cred) throw new Error(`槽位 ${slot} 引用的凭证不存在`);
-  if (cred.enabled === false) {
-    throw new Error(`凭证「${cred.alias}」已停用`);
-  }
-  const apiKey = decryptSecret(cred.apiKeyEnc).trim();
-  if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
-  const dashscopeCompatibleBase =
-    cred.vendor === "qwen"
-      ? normalizeDashscopeCompatibleBase(cred.dashscopeCompatibleBase)
-      : undefined;
-  return { apiKey, model: b.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
+  return resolveSlotBinding(stored, b, `槽位 ${slot}`);
 }
 
 /** Resolved payload for rule_engine (v2). Throws if any slot incomplete. */
@@ -524,9 +545,138 @@ export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2
   };
 }
 
+function engineFlashProFromBinding(
+  stored: AiGatewayStored,
+  binding: SlotBinding,
+  labelForError: string,
+): EngineAiPayloadV2["slots"]["flash"] {
+  const r = resolveSlotBinding(stored, binding, labelForError);
+  const mot =
+    binding.maxOutputTokens != null && binding.maxOutputTokens > 0
+      ? Math.trunc(binding.maxOutputTokens)
+      : undefined;
+  return {
+    provider: r.vendor,
+    apiKey: r.apiKey,
+    model: r.model,
+    ...(mot != null ? { maxOutputTokens: mot } : {}),
+    ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
+  };
+}
+
+function engineChatFromBinding(
+  stored: AiGatewayStored,
+  binding: SlotBinding,
+  fallback: { temperature: number; maxTokens: number },
+): EngineAiPayloadV2["slots"]["chat"] {
+  const r = resolveSlotBinding(stored, binding, "聊天模版 Chat 槽位");
+  const temperature = binding.temperature ?? fallback.temperature;
+  const maxTokens = binding.maxTokens ?? fallback.maxTokens;
+  return {
+    provider: r.vendor,
+    apiKey: r.apiKey,
+    model: r.model,
+    temperature,
+    maxTokens,
+    ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
+  };
+}
+
+function mergeRagOptions(
+  base: RagOptionsStored | undefined,
+  override: RagOptionsStored | undefined,
+): RagOptionsStored | undefined {
+  const o = override && Object.keys(override).length > 0 ? override : undefined;
+  const b = base && Object.keys(base).length > 0 ? base : undefined;
+  if (!o) return b;
+  return { ...(b ?? {}), ...o };
+}
+
+function hasRagOptionsContent(ro: RagOptionsStored | undefined): boolean {
+  if (!ro) return false;
+  return (
+    Boolean(ro.rerankModel && ro.rerankModel.trim()) ||
+    (typeof ro.chunkSize === "number" && Number.isFinite(ro.chunkSize)) ||
+    (typeof ro.chunkOverlap === "number" && Number.isFinite(ro.chunkOverlap)) ||
+    ro.bm25TokenProfile != null ||
+    (typeof ro.similarityTopK === "number" && Number.isFinite(ro.similarityTopK)) ||
+    (typeof ro.rerankTopN === "number" && Number.isFinite(ro.rerankTopN)) ||
+    ro.retrievalMode != null ||
+    typeof ro.useRerank === "boolean"
+  );
+}
+
+/** Chat + index: global credentials; chat slot and RAG defaults may come from an active CHAT profile. */
+export function buildEngineAiPayloadForChatAndIndex(
+  stored: AiGatewayStored,
+  chatProfile: ChatProfileConfigParsed | null,
+): EngineAiPayloadV2 {
+  const base = buildEngineAiPayload(stored);
+  if (!chatProfile) return base;
+  const chatEngine = engineChatFromBinding(stored, chatProfile.chat, {
+    temperature: stored.chatOptions.temperature,
+    maxTokens: stored.chatOptions.maxTokens,
+  });
+  const ragMerged = mergeRagOptions(stored.ragOptions, chatProfile.ragOptions);
+  const hasRag = hasRagOptionsContent(ragMerged);
+  return {
+    version: 2,
+    slots: { ...base.slots, chat: chatEngine },
+    ...(hasRag && ragMerged ? { ragOptions: ragMerged } : {}),
+  };
+}
+
+/** Extraction: optional fine slots + extractionRuntime (v3); null profile keeps v2 behavior. */
+export function buildEngineAiPayloadFromExtractionProfile(
+  stored: AiGatewayStored,
+  profile: ExtractionProfileConfigParsed | null,
+): EngineAiPayloadV2 | EngineAiPayloadV3 {
+  const base = buildEngineAiPayload(stored);
+  if (!profile) return base;
+
+  const sb = profile.slotBindings;
+  const slotsV3: EngineAiPayloadV3["slots"] = { ...base.slots };
+
+  if (sb.flashToc) {
+    slotsV3.flashToc = engineFlashProFromBinding(stored, sb.flashToc, "提取模版 Flash（目录）");
+  }
+  if (sb.flashQuickstart) {
+    slotsV3.flashQuickstart = engineFlashProFromBinding(
+      stored,
+      sb.flashQuickstart,
+      "提取模版 Flash（快路径）",
+    );
+  }
+  if (sb.proExtract) {
+    slotsV3.proExtract = engineFlashProFromBinding(stored, sb.proExtract, "提取模版 Pro（章节）");
+  }
+  if (sb.proMerge) {
+    slotsV3.proMerge = engineFlashProFromBinding(stored, sb.proMerge, "提取模版 Pro（合并）");
+  }
+
+  const extractionRuntime: ExtractionRuntimeOverrides = {
+    ...(profile.extractionRuntime ?? {}),
+    ...(profile.forceFullPipelineDefault !== undefined
+      ? { forceFullPipelineDefault: profile.forceFullPipelineDefault }
+      : {}),
+  };
+  const hasRuntime = Object.keys(extractionRuntime).length > 0;
+
+  const ro = base.ragOptions;
+  const hasRag = hasRagOptionsContent(ro);
+
+  return {
+    version: 3,
+    slots: slotsV3,
+    ...(hasRag && ro ? { ragOptions: ro } : {}),
+    ...(hasRuntime ? { extractionRuntime } : {}),
+  };
+}
+
 export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV2> {
   const stored = await getAiGatewayStored();
-  return buildEngineAiPayload(stored);
+  const chat = await getActiveChatProfileConfig();
+  return buildEngineAiPayloadForChatAndIndex(stored, chat);
 }
 
 export function getCredentialApiKey(stored: AiGatewayStored, credentialId: string): string {

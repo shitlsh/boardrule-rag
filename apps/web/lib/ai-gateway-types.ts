@@ -128,3 +128,37 @@ export type EngineAiPayloadV2 = {
   };
   ragOptions?: RagOptionsStored;
 };
+
+/** Optional extraction pipeline overrides (rule engine prefers these over env when set). */
+export type ExtractionRuntimeOverrides = {
+  visionBatchPages?: number;
+  extractionSimpleMaxBodyPages?: number;
+  extractionComplexRouteBodyPages?: number;
+  extractionSimplePathWarnBodyPages?: number;
+  geminiVisionMaxMergePages?: number;
+  needMoreContextMaxExpand?: number;
+  /** Use `null` to mean unlimited (engine-specific). */
+  geminiHttpTimeoutMs?: number | null;
+  dashscopeHttpTimeoutMs?: number | null;
+  openrouterHttpTimeoutMs?: number | null;
+  llmMaxContinuationRounds?: number;
+  /** Default suggestion for full pipeline; BFF may OR with per-request `forceFullPipeline`. */
+  forceFullPipelineDefault?: boolean;
+};
+
+export type EngineAiSlotsV3 = EngineAiPayloadV2["slots"] & {
+  flashToc?: EngineSlotFlashPro;
+  flashQuickstart?: EngineSlotFlashPro;
+  proExtract?: EngineSlotFlashPro;
+  proMerge?: EngineSlotFlashPro;
+};
+
+/** v3: optional fine-grained slots + extraction runtime (backward compatible when extras omitted). */
+export type EngineAiPayloadV3 = {
+  version: 3;
+  slots: EngineAiSlotsV3;
+  ragOptions?: RagOptionsStored;
+  extractionRuntime?: ExtractionRuntimeOverrides;
+};
+
+export type EngineAiPayload = EngineAiPayloadV2 | EngineAiPayloadV3;

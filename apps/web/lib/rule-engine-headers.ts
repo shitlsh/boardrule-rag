@@ -1,4 +1,4 @@
-import { getEngineAiHeaders } from "@/lib/engine-ai";
+import { getEngineAiHeaders, type RuleEngineAiHeaderOptions } from "@/lib/engine-ai";
 
 /** Service-to-service auth for rule_engine (see `RULE_ENGINE_API_KEY`). */
 export function ruleEngineBearerAuth(): Record<string, string> {
@@ -13,7 +13,7 @@ export function ruleEngineBearerAuth(): Record<string, string> {
 }
 
 /** AI config headers plus optional Bearer API key. */
-export async function ruleEngineAiHeaders(): Promise<Record<string, string>> {
-  const ai = await getEngineAiHeaders();
+export async function ruleEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Promise<Record<string, string>> {
+  const ai = await getEngineAiHeaders(opts);
   return { ...ruleEngineBearerAuth(), ...ai };
 }

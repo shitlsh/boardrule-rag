@@ -20,7 +20,14 @@ from google import genai
 from google.genai import types
 
 from utils import dashscope_client as _dashscope
-from utils.ai_gateway import get_slots
+from utils.ai_gateway import (
+    BoardruleAiConfigV3,
+    FlashProSlot,
+    SlotsBundleV3,
+    get_config,
+    get_extraction_runtime,
+    get_slots,
+)
 from utils.dashscope_client import resolve_dashscope_api_base
 from utils.openrouter_client import chat_completion_with_meta
 
@@ -65,27 +72,85 @@ def _env_positive_int(name: str, default: int) -> int:
 
 
 def _max_continuation_rounds() -> int:
+    o = get_extraction_runtime()
+    if o is not None and o.llm_max_continuation_rounds is not None:
+        return max(0, int(o.llm_max_continuation_rounds))
     return _env_positive_int(_ENV_MAX_CONTINUATION, 6)
 
 
-def flash_max_output_tokens() -> int:
-    g = get_slots().flash
-    if g.max_output_tokens is not None:
-        return int(g.max_output_tokens)
+def _slots_v3() -> SlotsBundleV3 | None:
+    c = get_config()
+    if isinstance(c, BoardruleAiConfigV3):
+        return c.slots
+    return None
+
+
+def _resolve_flash_slot(meta: LlmCallMeta | None, preset: FlashPreset) -> FlashProSlot:
+    s3 = _slots_v3()
+    base = get_slots().flash
+    if s3 is None:
+        return base
+    node = (meta.node if meta else "") or ""
+    if node == "toc_analyzer" and s3.flash_toc is not None:
+        return s3.flash_toc
+    if node == "quickstart_and_questions" and s3.flash_quickstart is not None:
+        return s3.flash_quickstart
+    if preset == FLASH_TOC and s3.flash_toc is not None:
+        return s3.flash_toc
+    if preset == FLASH_QUICKSTART and s3.flash_quickstart is not None:
+        return s3.flash_quickstart
+    return base
+
+
+def _resolve_pro_slot(meta: LlmCallMeta | None, preset: ProPreset) -> FlashProSlot:
+    s3 = _slots_v3()
+    base = get_slots().pro
+    if s3 is None:
+        return base
+    node = (meta.node if meta else "") or ""
+    if node == "chapter_extract" and s3.pro_extract is not None:
+        return s3.pro_extract
+    if node == "merge_and_refine" and s3.pro_merge is not None:
+        return s3.pro_merge
+    if preset == PRO_EXTRACT and s3.pro_extract is not None:
+        return s3.pro_extract
+    if preset == PRO_MERGE and s3.pro_merge is not None:
+        return s3.pro_merge
+    return base
+
+
+def _max_output_for_flash_slot(slot: FlashProSlot) -> int:
+    if slot.max_output_tokens is not None:
+        return int(slot.max_output_tokens)
     raw = (os.environ.get(_ENV_FLASH_DEFAULT) or "").strip()
     if raw.isdigit():
         return max(1, int(raw))
     return _DEFAULT_SLOT_MAX_OUTPUT
 
 
-def pro_max_output_tokens() -> int:
-    g = get_slots().pro
-    if g.max_output_tokens is not None:
-        return int(g.max_output_tokens)
+def _max_output_for_pro_slot(slot: FlashProSlot) -> int:
+    if slot.max_output_tokens is not None:
+        return int(slot.max_output_tokens)
     raw = (os.environ.get(_ENV_PRO_DEFAULT) or "").strip()
     if raw.isdigit():
         return max(1, int(raw))
     return _DEFAULT_SLOT_MAX_OUTPUT
+
+
+def flash_max_output_tokens() -> int:
+    return _max_output_for_flash_slot(get_slots().flash)
+
+
+def pro_max_output_tokens() -> int:
+    return _max_output_for_pro_slot(get_slots().pro)
+
+
+def flash_max_output_tokens_for_call(meta: LlmCallMeta | None, preset: FlashPreset) -> int:
+    return _max_output_for_flash_slot(_resolve_flash_slot(meta, preset))
+
+
+def pro_max_output_tokens_for_call(meta: LlmCallMeta | None, preset: ProPreset) -> int:
+    return _max_output_for_pro_slot(_resolve_pro_slot(meta, preset))
 
 
 def _qwen_api_base(slot: object) -> str:
@@ -117,6 +182,12 @@ def _tracing_enabled_for_llm() -> bool:
 
 
 def _gemini_http_timeout_ms() -> int | None:
+    o = get_extraction_runtime()
+    if o is not None and o.gemini_http_timeout_ms is not None:
+        v = o.gemini_http_timeout_ms
+        if v <= 0:
+            return None
+        return max(1, int(v))
     raw = (os.environ.get("GEMINI_HTTP_TIMEOUT_MS") or "").strip()
     if raw == "":
         return 120_000
@@ -541,9 +612,9 @@ def generate_flash(
     meta: LlmCallMeta | None = None,
     out_warnings: list[str] | None = None,
 ) -> str:
-    slot = get_slots().flash
+    slot = _resolve_flash_slot(meta, preset)
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
-    mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
+    mot = max_output_tokens if max_output_tokens is not None else _max_output_for_flash_slot(slot)
     node = meta.node if meta else "flash"
 
     if slot.provider == "openrouter":
@@ -620,9 +691,9 @@ def generate_pro(
     meta: LlmCallMeta | None = None,
     out_warnings: list[str] | None = None,
 ) -> str:
-    slot = get_slots().pro
+    slot = _resolve_pro_slot(meta, preset)
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
-    mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
+    mot = max_output_tokens if max_output_tokens is not None else _max_output_for_pro_slot(slot)
     node = meta.node if meta else "pro"
 
     if slot.provider == "openrouter":
@@ -729,9 +800,9 @@ def generate_flash_vision(
     out_warnings: list[str] | None = None,
 ) -> str:
     """Multimodal Flash (images + text parts)."""
-    slot = get_slots().flash
+    slot = _resolve_flash_slot(meta, preset)
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
-    mot = max_output_tokens if max_output_tokens is not None else flash_max_output_tokens()
+    mot = max_output_tokens if max_output_tokens is not None else _max_output_for_flash_slot(slot)
     node = meta.node if meta else "flash"
 
     if slot.provider == "openrouter":
@@ -809,9 +880,9 @@ def generate_pro_vision(
     out_warnings: list[str] | None = None,
 ) -> str:
     """Multimodal Pro (images + text parts)."""
-    slot = get_slots().pro
+    slot = _resolve_pro_slot(meta, preset)
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
-    mot = max_output_tokens if max_output_tokens is not None else pro_max_output_tokens()
+    mot = max_output_tokens if max_output_tokens is not None else _max_output_for_pro_slot(slot)
     node = meta.node if meta else "pro"
 
     if slot.provider == "openrouter":
