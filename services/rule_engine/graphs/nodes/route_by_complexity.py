@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from graphs.extraction_settings import (
     complex_route_body_pages_threshold,
     extraction_simple_max_body_pages,
 )
 from graphs.state import ExtractionState
+
+_LOG = logging.getLogger(__name__)
 
 
 def run(state: ExtractionState) -> dict:
@@ -23,11 +27,21 @@ def run(state: ExtractionState) -> dict:
 
     # Simple profile: thin rulebooks — prefer single vision batch, minimal merge drift.
     if not force_full and body_pages <= simple_max:
-        return {
+        out = {
             "complexity": "simple",
             "needs_batching": False,
             "extraction_profile": "simple",
         }
+        _LOG.info(
+            "route_by_complexity: profile=simple body_pages=%s toc_needs=%s n_sections=%s "
+            "needs_batching=%s force_full=%s",
+            body_pages,
+            toc_needs,
+            n_sections,
+            out["needs_batching"],
+            force_full,
+        )
+        return out
 
     # Complex profile: multi-stage batching acceptable; optional user override to always batch.
     complex_body_threshold = complex_route_body_pages_threshold()
@@ -39,8 +53,19 @@ def run(state: ExtractionState) -> dict:
         or body_pages > complex_body_threshold
     )
     complexity = "complex" if needs_batching else "simple"
-    return {
+    out = {
         "complexity": complexity,
         "needs_batching": needs_batching,
         "extraction_profile": "complex",
     }
+    _LOG.info(
+        "route_by_complexity: profile=complex body_pages=%s toc_needs=%s n_sections=%s "
+        "needs_batching=%s complexity=%s force_full=%s",
+        body_pages,
+        toc_needs,
+        n_sections,
+        needs_batching,
+        complexity,
+        force_full,
+    )
+    return out

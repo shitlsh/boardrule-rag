@@ -22,7 +22,6 @@ from pydantic import BaseModel, Field
 
 from api.deps import require_boardrule_ai
 from graphs.extraction_graph import run_extraction
-from graphs.extraction_settings import extraction_simple_max_body_pages
 from graphs.state import ExtractionState
 from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
@@ -517,20 +516,30 @@ async def start_extract(
             raise HTTPException(status_code=400, detail="Page job has no pages")
 
         explicit_toc = len(toc_from_request) > 0
-        toc = toc_from_request if explicit_toc else [page_rows[0]["page"]]
+        toc = list(toc_from_request) if explicit_toc else []
         total_pages = len(page_rows)
-        simple_max = extraction_simple_max_body_pages()
-        # 未选手动目录时仍用第 1 页喂 Flash 目录分析；薄册（≤simple_max）则正文不再排除该页，避免配件在第 1 页却被移出 vision 批次。
-        if not explicit_toc and total_pages <= simple_max:
-            body = _all_body_pages_excluding_only_ads(page_rows, exclude)
-        else:
+        if explicit_toc:
             body = _compute_body_page_indices(page_rows, toc, exclude)
+        else:
+            body = _all_body_pages_excluding_only_ads(page_rows, exclude)
         if not body:
             raise HTTPException(
                 status_code=400,
                 detail="No body pages after excluding TOC and ads; adjust toc_page_indices / exclude_page_indices",
             )
         _validate_rasterized_pages(page_rows, toc, body)
+
+        logger.info(
+            "extract start: game_id=%s job_id=%s explicit_toc=%s toc_pages=%s total_pages=%s "
+            "body_pages=%s exclude_pages=%s",
+            game_id,
+            jid,
+            explicit_toc,
+            toc,
+            total_pages,
+            len(body),
+            len(exclude),
+        )
 
         gn = game_name or ""
         tc = terminology_context if terminology_context is not None else ""

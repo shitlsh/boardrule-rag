@@ -73,6 +73,7 @@ flowchart LR
 | `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES` | 15 | 仅 **复杂路径** 内：正文页数大于该值时参与 `needs_batching` 判定。 |
 | `VISION_BATCH_PAGES` | 6 | 仅 **`needs_batching=true`** 时按该页数切段；简单路径下单批页数不受此上限约束（见 `batch_splitter`）。 |
 | `force_full_pipeline` | false | API / Web 传入，写入 `ExtractionState`；为 true 时不走简单门闸。 |
+| `toc_page_indices`（`POST /extract`） | 未传或 `[]` | **不**假定存在目录页：正文页 = 全页 − 排除页；`toc_analyzer` **不**调用 Flash，写入空 `sections` 的中性 outline。若传了至少一页，则正文排除这些页并对所选页跑 Flash。 |
 | `EXTRACTION_SIMPLE_PATH_WARN_BODY_PAGES` | 32 | 简单路径单批覆盖正文超过该页数时打 **warning** 日志（提示可能触 API 或质量上限）。 |
 | `X-Boardrule-Ai-Config` → `slots.pro.maxOutputTokens` / `flash.maxOutputTokens` | 未设置时使用引擎默认 | 单次生成的 **max output**（tokens）。未在 BFF 填写时，引擎默认 **32768**，也可用环境变量 `BOARDRULE_PRO_MAX_OUTPUT_TOKENS_DEFAULT` / `BOARDRULE_FLASH_MAX_OUTPUT_TOKENS_DEFAULT` 覆盖。若仍触顶，`utils/llm_generate.py` 会按 `BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS`（默认 **6**）发起 **续写**；续写或仍截断时的提示会进入任务的 **`errors`**。 |
 
@@ -99,7 +100,7 @@ flowchart TB
   end
 
   subgraph gate [入口校验]
-    v{"每页 TOC 与 body 均有 path?"}
+    v{"正文页与已选目录页均有 path?"}
     bad[HTTP 400]
     ok[构建 ExtractionState]
     s4 --> v
@@ -108,7 +109,7 @@ flowchart TB
   end
 
   subgraph lg [LangGraph 顺序执行]
-    n5["toc_analyzer Flash 目录图 JSON"]
+    n5["toc_analyzer：有目录页则 Flash，否则跳过"]
     n6["route_by_complexity needs_batching"]
     n7["batch_splitter vision_batches"]
     n8["chapter_extract Pro 按批 vision"]
@@ -118,7 +119,7 @@ flowchart TB
   end
 ```
 
-说明：**未在 UI 标记任何目录页**时，仍会用 **第 1 页** 参与 Flash 目录分析（与 `toc_page_indices` 默认一致，见 `extract.py`）。若此时 **总页数 ≤ `EXTRACTION_SIMPLE_MAX_BODY_PAGES`（默认 10）**，**正文页集合会包含全部页（含第 1 页）**，仅排除「排除页」——避免薄册把第 1 页当目录后，vision 批次缺配件页。若用户**明确**把第 1 页标为目录，则正文不含该页。**`chapter_extract` 节点内部**：若某批输出含 `NEED_MORE_CONTEXT`，会在上限内 **合并相邻图片批次** 再次调用 Pro（非图中的独立节点）。
+说明：**未在 UI 标记任何目录页**时，`toc_page_indices` 为空：**不**调用 Flash 做目录图分析；`toc_analyzer` 写入中性 outline（空 `sections`），`route_by_complexity` 仅按正文页数、`force_full_pipeline` 等与 Flash 目录无关的启发式分流。正文页 = **全页减去「排除页」**（不把第 1 页默认当作目录页排除）。若用户**标记了目录页**，正文不含这些页，并对所选页运行 Flash。**`chapter_extract` 节点内部**：若某批输出含 `NEED_MORE_CONTEXT`，会在上限内 **合并相邻图片批次** 再次调用 Pro（非图中的独立节点）。
 
 ### 3.2 merge 对 NEED_MORE_CONTEXT 的分支（逻辑在 `merge_and_refine` 内）
 

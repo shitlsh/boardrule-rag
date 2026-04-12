@@ -497,8 +497,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           <CardDescription>
             在分页完成后，点选目录页与需排除的广告/全图页；也可填写术语上下文。
             <span className="mt-2 block text-xs text-muted-foreground">
-              未标记任何「目录页」时，引擎仍会用第 1 页做目录结构分析；若总页数较少（默认 ≤10），正文抽取会包含全部页（含第 1
-              页），避免薄册配件页被误排除。若你明确把第 1 页标为目录，则正文不含该页。
+              未标记任何「目录页」时，不会对目录做 Flash 分析；正文为「全部页减去排除页」（不把第 1 页默认当目录）。若你标记了目录页，抽正文时会跳过这些页，并对所选页做目录结构分析。
             </span>
           </CardDescription>
         </CardHeader>

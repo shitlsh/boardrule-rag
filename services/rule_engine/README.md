@@ -14,7 +14,7 @@ Python service for board-game rule extraction: **PDF → per-page images** (`pdf
 
 ### Vision-only extraction
 
-Rule extraction **requires** rasterized page images from **`POST /extract/pages`** (and `POST /extract` with `page_job_id`). The graph uses **`prompts/toc_analyzer_vision.md`** and **`prompts/chapter_extract_vision.md`** only. The API validates that every **TOC** and **body** page index has a non-empty image path in `page_rows`.
+Rule extraction **requires** rasterized page images from **`POST /extract/pages`** (and `POST /extract` with `page_job_id`). When **`toc_page_indices`** is non-empty, the graph runs Flash with **`prompts/toc_analyzer_vision.md`**; otherwise the TOC node skips Flash and uses a neutral empty outline. **`prompts/chapter_extract_vision.md`** drives chapter extraction. The API validates that every **TOC** (if any) and **body** page index has a non-empty image path in `page_rows`.
 
 ## Requirements
 
