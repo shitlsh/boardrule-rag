@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import Any, Literal, Union
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config", default=None)
 
@@ -103,12 +103,7 @@ class ExtractionRuntimeOverrides(BaseModel):
         ge=1,
         le=500,
     )
-    vision_max_merge_pages: int | None = Field(
-        None,
-        validation_alias=AliasChoices("visionMaxMergePages", "geminiVisionMaxMergePages"),
-        ge=1,
-        le=200,
-    )
+    vision_max_merge_pages: int | None = Field(None, alias="visionMaxMergePages", ge=1, le=200)
     need_more_context_max_expand: int | None = Field(None, alias="needMoreContextMaxExpand", ge=0, le=64)
     gemini_http_timeout_ms: int | None = Field(None, alias="geminiHttpTimeoutMs")
     dashscope_http_timeout_ms: int | None = Field(None, alias="dashscopeHttpTimeoutMs")

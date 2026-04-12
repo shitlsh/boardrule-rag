@@ -36,10 +36,7 @@ def _max_merged_vision_pages() -> int:
     o = get_extraction_runtime()
     if o is not None and o.vision_max_merge_pages is not None:
         return max(1, int(o.vision_max_merge_pages))
-    raw = (
-        os.environ.get("VISION_MAX_MERGE_PAGES", "").strip()
-        or os.environ.get("GEMINI_VISION_MAX_MERGE_PAGES", "").strip()
-    )
+    raw = os.environ.get("VISION_MAX_MERGE_PAGES", "").strip()
     if raw.isdigit():
         return int(raw)
     # Default: allow merging several adjacent batches (typical API image limits)

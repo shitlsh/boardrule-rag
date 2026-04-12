@@ -78,26 +78,6 @@ def test_boardrule_ai_config_v3_fine_slots_and_runtime() -> None:
     assert cfg.extraction_runtime.vision_batch_pages == 3
 
 
-def test_boardrule_ai_config_v3_extraction_runtime_legacy_merge_key() -> None:
-    """BFF may still send legacy camelCase geminiVisionMaxMergePages."""
-    raw = """
-    {
-      "version": 3,
-      "slots": {
-        "flash": {"provider": "gemini", "apiKey": "k", "model": "f"},
-        "pro": {"provider": "gemini", "apiKey": "k", "model": "p"},
-        "embed": {"provider": "gemini", "apiKey": "k", "model": "e"},
-        "chat": {"provider": "gemini", "apiKey": "k", "model": "c", "temperature": 0.2, "maxTokens": 8192}
-      },
-      "extractionRuntime": {"geminiVisionMaxMergePages": 20}
-    }
-    """
-    cfg = parse_boardrule_ai_header(raw)
-    assert isinstance(cfg, BoardruleAiConfigV3)
-    assert cfg.extraction_runtime is not None
-    assert cfg.extraction_runtime.vision_max_merge_pages == 20
-
-
 def test_boardrule_ai_config_v3_extraction_runtime_vision_max_merge_key() -> None:
     raw = """
     {

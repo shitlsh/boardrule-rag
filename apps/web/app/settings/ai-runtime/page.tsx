@@ -711,22 +711,59 @@ export default function AiRuntimeSettingsPage() {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-4 space-y-3">
                       <p className="text-muted-foreground text-xs">
-                        未填写时引擎使用容器环境变量默认。数值将覆盖 EXTRACTION_* / VISION_* 等。
+                        未填写时继承规则引擎进程的环境变量（见{" "}
+                        <code className="text-xs">services/rule_engine/.env.example</code>
+                        ）。以下为提取管线常用覆盖项；嵌入批大小、槽位默认 maxOutput 等仍建议只在部署环境配置。
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {(
                           [
-                            ["visionBatchPages", "每批视觉页数"],
+                            ["visionBatchPages", "每批视觉页数（VISION_BATCH_PAGES）"],
                             ["extractionSimpleMaxBodyPages", "简单路径正文页上限"],
-                            ["extractionComplexRouteBodyPages", "复杂路由阈值"],
-                            ["visionMaxMergePages", "合并视觉批上限（NEED_MORE_CONTEXT 合并时最多几页图）"],
-                            ["needMoreContextMaxExpand", "NEED_MORE 扩展步数"],
-                            ["llmMaxContinuationRounds", "续写轮数"],
+                            ["extractionComplexRouteBodyPages", "复杂路由正文页阈值"],
+                            [
+                              "extractionSimplePathWarnBodyPages",
+                              "简单路径单批正文页告警阈值（仅打日志）",
+                            ],
+                            ["visionMaxMergePages", "NEED_MORE_CONTEXT 合并时单请求最多几页图"],
+                            ["needMoreContextMaxExpand", "NEED_MORE_CONTEXT 邻批合并最多步数"],
+                            ["llmMaxContinuationRounds", "输出截断后续写轮数"],
                           ] as const
                         ).map(([field, lab]) => (
                           <Field key={field}>
                             <FieldLabel>{lab}</FieldLabel>
                             <Input
+                              type="number"
+                              min={0}
+                              placeholder="继承环境"
+                              value={
+                                extractionCfg.extractionRuntime?.[field] != null
+                                  ? String(extractionCfg.extractionRuntime[field])
+                                  : ""
+                              }
+                              onChange={(e) => setExtractionRuntimeField(field, e.target.value)}
+                            />
+                          </Field>
+                        ))}
+                      </div>
+                      <p className="text-muted-foreground text-xs">HTTP 超时（毫秒）</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {(
+                          [
+                            [
+                              "geminiHttpTimeoutMs",
+                              "Gemini / Google GenAI（填 0 表示客户端不限制）",
+                            ],
+                            ["dashscopeHttpTimeoutMs", "DashScope（Qwen 等）"],
+                            ["openrouterHttpTimeoutMs", "OpenRouter"],
+                          ] as const
+                        ).map(([field, lab]) => (
+                          <Field key={field}>
+                            <FieldLabel>{lab}</FieldLabel>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={1000}
                               placeholder="继承环境"
                               value={
                                 extractionCfg.extractionRuntime?.[field] != null
