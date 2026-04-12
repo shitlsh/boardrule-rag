@@ -135,7 +135,8 @@ export type ExtractionRuntimeOverrides = {
   extractionSimpleMaxBodyPages?: number;
   extractionComplexRouteBodyPages?: number;
   extractionSimplePathWarnBodyPages?: number;
-  geminiVisionMaxMergePages?: number;
+  /** Max page images when merging batches after NEED_MORE_CONTEXT (any vision provider). */
+  visionMaxMergePages?: number;
   needMoreContextMaxExpand?: number;
   /** Use `null` to mean unlimited (engine-specific). */
   geminiHttpTimeoutMs?: number | null;

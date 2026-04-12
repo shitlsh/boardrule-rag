@@ -719,7 +719,7 @@ export default function AiRuntimeSettingsPage() {
                             ["visionBatchPages", "每批视觉页数"],
                             ["extractionSimpleMaxBodyPages", "简单路径正文页上限"],
                             ["extractionComplexRouteBodyPages", "复杂路由阈值"],
-                            ["geminiVisionMaxMergePages", "合并视觉批上限"],
+                            ["visionMaxMergePages", "合并视觉批上限（NEED_MORE_CONTEXT 合并时最多几页图）"],
                             ["needMoreContextMaxExpand", "NEED_MORE 扩展步数"],
                             ["llmMaxContinuationRounds", "续写轮数"],
                           ] as const

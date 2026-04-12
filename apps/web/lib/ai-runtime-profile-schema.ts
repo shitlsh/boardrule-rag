@@ -33,7 +33,7 @@ export const extractionRuntimeOverridesSchema = z
     extractionSimpleMaxBodyPages: z.number().int().min(1).max(500).optional(),
     extractionComplexRouteBodyPages: z.number().int().min(1).max(500).optional(),
     extractionSimplePathWarnBodyPages: z.number().int().min(1).max(500).optional(),
-    geminiVisionMaxMergePages: z.number().int().min(1).max(200).optional(),
+    visionMaxMergePages: z.number().int().min(1).max(200).optional(),
     needMoreContextMaxExpand: z.number().int().min(0).max(64).optional(),
     geminiHttpTimeoutMs: z.union([z.number().int().min(1), z.null()]).optional(),
     dashscopeHttpTimeoutMs: z.union([z.number().int().min(1), z.null()]).optional(),
@@ -71,6 +71,21 @@ export type ExtractionProfileConfigParsed = z.infer<typeof extractionProfileConf
 export type ChatProfileConfigParsed = z.infer<typeof chatProfileConfigSchema>;
 export type ExtractionRuntimeOverridesParsed = z.infer<typeof extractionRuntimeOverridesSchema>;
 
+function migrateLegacyExtractionRuntimeKeys(data: unknown): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
+  const o = data as Record<string, unknown>;
+  const er = o.extractionRuntime;
+  if (!er || typeof er !== "object" || Array.isArray(er)) return data;
+  const e = { ...(er as Record<string, unknown>) };
+  if (e.visionMaxMergePages == null && typeof e.geminiVisionMaxMergePages === "number") {
+    e.visionMaxMergePages = e.geminiVisionMaxMergePages;
+  }
+  if ("geminiVisionMaxMergePages" in e) {
+    delete e.geminiVisionMaxMergePages;
+  }
+  return { ...o, extractionRuntime: e };
+}
+
 export function parseExtractionProfileConfigJson(raw: string): ExtractionProfileConfigParsed {
   let data: unknown;
   try {
@@ -78,7 +93,7 @@ export function parseExtractionProfileConfigJson(raw: string): ExtractionProfile
   } catch {
     throw new Error("配置 JSON 无效");
   }
-  return extractionProfileConfigSchema.parse(data);
+  return extractionProfileConfigSchema.parse(migrateLegacyExtractionRuntimeKeys(data));
 }
 
 export function parseChatProfileConfigJson(raw: string): ChatProfileConfigParsed {
