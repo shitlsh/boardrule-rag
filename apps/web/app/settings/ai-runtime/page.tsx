@@ -188,21 +188,46 @@ export default function AiRuntimeSettingsPage() {
 
   const createProfile = async (kind: "EXTRACTION" | "CHAT") => {
     try {
-      const configJson =
-        kind === "EXTRACTION"
-          ? emptyExtractionConfig()
-          : {
-              ...emptyChatConfig(),
-              chat: {
-                credentialId: gateway?.credentials[0]?.id ?? "",
-                model: "",
-                temperature: gateway?.chatOptions.temperature ?? 0.2,
-                maxTokens: gateway?.chatOptions.maxTokens ?? 8192,
-              },
-            };
-      if (kind === "CHAT" && !gateway?.credentials[0]?.id) {
-        toast.error("请先在「模型管理」中添加至少一个 API 凭证");
-        return;
+      let configJson: ExtractionProfileConfigParsed | ChatProfileConfigParsed;
+      if (kind === "EXTRACTION") {
+        configJson = emptyExtractionConfig();
+      } else {
+        if (!gateway) {
+          toast.error("无法加载 AI 网关");
+          return;
+        }
+        const cred =
+          gateway.credentials.find((c) => c.enabled) ?? gateway.credentials[0] ?? null;
+        const credentialId =
+          gateway.slotBindings.chat?.credentialId?.trim() || cred?.id || "";
+        if (!credentialId) {
+          toast.error("请先在「模型管理」中添加至少一个 API 凭证");
+          return;
+        }
+        let model = gateway.slotBindings.chat?.model?.trim() ?? "";
+        if (!model) {
+          const mRes = await fetch("/api/ai/models", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credentialId, slot: "chat" }),
+          });
+          const mJson = (await mRes.json()) as { models?: { name: string }[]; message?: string };
+          if (!mRes.ok) throw new Error(mJson.message || "拉取聊天模型失败");
+          model = mJson.models?.[0]?.name?.trim() ?? "";
+        }
+        if (!model) {
+          toast.error("未找到可用聊天模型。请在「模型管理」中为聊天槽位选择模型，或检查 API 凭证");
+          return;
+        }
+        configJson = {
+          ...emptyChatConfig(),
+          chat: {
+            credentialId,
+            model,
+            temperature: gateway.chatOptions.temperature ?? 0.2,
+            maxTokens: gateway.chatOptions.maxTokens ?? 8192,
+          },
+        };
       }
       const res = await fetch("/api/ai-runtime-profiles", {
         method: "POST",
