@@ -158,7 +158,6 @@ export type EngineAiPayloadV2 = {
 export type ExtractionRuntimeOverrides = {
   visionBatchPages?: number;
   extractionSimpleMaxBodyPages?: number;
-  extractionComplexRouteBodyPages?: number;
   extractionSimplePathWarnBodyPages?: number;
   /** Max page images when merging batches after NEED_MORE_CONTEXT (any vision provider). */
   visionMaxMergePages?: number;

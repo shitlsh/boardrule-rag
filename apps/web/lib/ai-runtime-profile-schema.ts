@@ -31,7 +31,6 @@ export const extractionRuntimeOverridesSchema = z
   .object({
     visionBatchPages: z.number().int().min(1).max(64).optional(),
     extractionSimpleMaxBodyPages: z.number().int().min(1).max(500).optional(),
-    extractionComplexRouteBodyPages: z.number().int().min(1).max(500).optional(),
     extractionSimplePathWarnBodyPages: z.number().int().min(1).max(500).optional(),
     visionMaxMergePages: z.number().int().min(1).max(200).optional(),
     needMoreContextMaxExpand: z.number().int().min(0).max(64).optional(),
@@ -43,7 +42,7 @@ export const extractionRuntimeOverridesSchema = z
     llmMaxContinuationRounds: z.number().int().min(0).max(32).optional(),
     forceFullPipelineDefault: z.boolean().optional(),
   })
-  .strict();
+  .passthrough();
 
 const fineSlotNullable = slotBindingSchema.nullable();
 

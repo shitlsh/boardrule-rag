@@ -7,7 +7,6 @@
 export const EXTRACTION_RUNTIME_DEFAULTS = {
   visionBatchPages: 6,
   extractionSimpleMaxBodyPages: 10,
-  extractionComplexRouteBodyPages: 15,
   extractionSimplePathWarnBodyPages: 32,
   needMoreContextMaxExpand: 8,
   llmMaxContinuationRounds: 6,

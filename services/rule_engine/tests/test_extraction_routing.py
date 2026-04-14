@@ -7,6 +7,7 @@ import os
 import pytest
 
 from graphs.nodes import batch_splitter, route_by_complexity
+from utils.ai_gateway import boardrule_ai_runtime, parse_boardrule_ai_header
 
 
 def _minimal_state(
@@ -55,11 +56,69 @@ def test_force_full_skips_simple_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["needs_batching"] is True
 
 
-def test_complex_route_respects_extraction_complex_route_body_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_above_simple_max_sets_needs_batching_for_vision_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Past simple_max, batch_splitter must split by VISION_BATCH_PAGES (not merge into one call)."""
     monkeypatch.setenv("EXTRACTION_SIMPLE_MAX_BODY_PAGES", "5")
-    monkeypatch.setenv("EXTRACTION_COMPLEX_ROUTE_BODY_PAGES", "20")
-    # 10 body pages: above simple gate (5), below legacy body threshold (20); keep effective under 40k.
     st = _minimal_state(body_pages=list(range(1, 11)))
     out = route_by_complexity.run(st)
     assert out["extraction_profile"] == "complex"
-    assert out["needs_batching"] is False
+    assert out["needs_batching"] is True
+    monkeypatch.setenv("VISION_BATCH_PAGES", "5")
+    bs = batch_splitter.run({**st, **out})
+    assert len(bs["vision_batches"]) == 2
+    assert [len(b) for b in bs["vision_batches"]] == [5, 5]
+
+
+def test_v3_header_extraction_simple_max_body_pages_overrides_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same as BFF: extractionRuntime.extractionSimpleMaxBodyPages in X-Boardrule-Ai-Config snapshot."""
+    monkeypatch.setenv("EXTRACTION_SIMPLE_MAX_BODY_PAGES", "100")
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.0-flash"},
+        "pro": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.5-pro"},
+        "embed": {"provider": "gemini", "apiKey": "k", "model": "models/text-embedding-004"},
+        "chat": {"provider": "gemini", "apiKey": "k", "model": "m", "temperature": 0.2, "maxTokens": 8192}
+      },
+      "extractionRuntime": {"extractionSimpleMaxBodyPages": 5}
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    st = _minimal_state(body_pages=list(range(1, 9)))
+    with boardrule_ai_runtime(cfg):
+        out = route_by_complexity.run(st)
+    assert out["extraction_profile"] == "complex"
+    assert out["needs_batching"] is True
+    monkeypatch.setenv("VISION_BATCH_PAGES", "5")
+    with boardrule_ai_runtime(cfg):
+        out2 = route_by_complexity.run(st)
+    bs = batch_splitter.run({**st, **out2})
+    assert len(bs["vision_batches"]) == 2
+    assert [len(x) for x in bs["vision_batches"]] == [5, 3]
+
+
+def test_v3_runtime_simple_max_equality_still_simple_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gate is body_pages <= simple_max (not strict <)."""
+    monkeypatch.delenv("EXTRACTION_SIMPLE_MAX_BODY_PAGES", raising=False)
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.0-flash"},
+        "pro": {"provider": "gemini", "apiKey": "k", "model": "models/gemini-2.5-pro"},
+        "embed": {"provider": "gemini", "apiKey": "k", "model": "models/text-embedding-004"},
+        "chat": {"provider": "gemini", "apiKey": "k", "model": "m", "temperature": 0.2, "maxTokens": 8192}
+      },
+      "extractionRuntime": {"extractionSimpleMaxBodyPages": 5}
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    st = _minimal_state(body_pages=list(range(1, 6)))
+    with boardrule_ai_runtime(cfg):
+        out = route_by_complexity.run(st)
+    assert out["extraction_profile"] == "simple"

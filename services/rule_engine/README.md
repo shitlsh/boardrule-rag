@@ -39,8 +39,7 @@ cp .env.example .env
 | `LANGCHAIN_PROJECT` | Project name in LangSmith (e.g. `boardrule-rag`). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed by CORS (default `http://localhost:3000`). |
 | `PAGE_RASTER_DPI` / `PAGE_RASTER_MAX_SIDE` | PDF rasterization for `/extract/pages`. |
-| `EXTRACTION_SIMPLE_MAX_BODY_PAGES` | Simple-profile gate: max **body** page count (default `10`; see `EXTRACTION_FLOW.md` §2.1). |
-| `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES` | Complex-profile only: `needs_batching` when body pages exceed this (default `15`). |
+| `EXTRACTION_SIMPLE_MAX_BODY_PAGES` | Simple-profile gate: max **body** page count (default `10`; ≤ this uses simple profile and a single merged vision batch when possible; above triggers batched vision per `VISION_BATCH_PAGES`; see `EXTRACTION_FLOW.md` §2.1). |
 | `VISION_BATCH_PAGES` | Pages per vision batch when `needs_batching` is true (default `6`). |
 | `INDEX_STORAGE_ROOT` | BM25 + manifests (default `data/indexes/` under this service). |
 | `INDEX_STORAGE_MODE` + `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Optional. Set `INDEX_STORAGE_MODE=supabase` to store per-game index bundles (zip of BM25 + manifest + on-disk vectors when used) in **Supabase Storage** bucket `INDEX_STORAGE_BUCKET` (default **`boardrule-indexes`**). Use the same URL and service role as **`apps/web`**; local dev uses `supabase start` values. See repo **[DEPLOY.md](../../DEPLOY.md)**. |

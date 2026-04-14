@@ -500,12 +500,7 @@ export function ModelsExtractionTemplates() {
                             [
                               "extractionSimpleMaxBodyPages",
                               "简单路径：正文页数上限",
-                              `EXTRACTION_SIMPLE_MAX_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionSimpleMaxBodyPages}（超过则不走简单画像）`,
-                            ],
-                            [
-                              "extractionComplexRouteBodyPages",
-                              "复杂路由：正文页阈值",
-                              `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionComplexRouteBodyPages}`,
+                              `EXTRACTION_SIMPLE_MAX_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionSimpleMaxBodyPages}。计数为正文页（排除目录/广告后），非 PDF 总页数；正文页数 ≤ 该值时走简单画像与单批 vision（等于也走）；超过则按「每批视觉页数」分批。`,
                             ],
                             [
                               "extractionSimplePathWarnBodyPages",

@@ -103,12 +103,6 @@ class ExtractionRuntimeOverrides(BaseModel):
 
     vision_batch_pages: int | None = Field(None, alias="visionBatchPages", ge=1, le=64)
     extraction_simple_max_body_pages: int | None = Field(None, alias="extractionSimpleMaxBodyPages", ge=1, le=500)
-    extraction_complex_route_body_pages: int | None = Field(
-        None,
-        alias="extractionComplexRouteBodyPages",
-        ge=1,
-        le=500,
-    )
     extraction_simple_path_warn_body_pages: int | None = Field(
         None,
         alias="extractionSimplePathWarnBodyPages",
