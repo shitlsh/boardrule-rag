@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import queue
 import threading
 import time
 from collections.abc import AsyncIterator, Iterator
@@ -191,12 +192,14 @@ async def chat_stream(
     ``next()`` on a **different** worker thread. ``boardrule_ai_runtime`` uses a
     ``contextvars.Token`` that must be reset on the **same** thread that called ``set``,
     so we run the entire sync generator in **one** dedicated thread and bridge chunks with
-    an asyncio queue (async iterable — no per-chunk thread hopping).
+    a **stdlib** ``queue.Queue`` bridged with ``asyncio.to_thread(q.get)`` — avoids
+    ``run_coroutine_threadsafe(...).result()`` failing to deliver the end sentinel, which
+    would leave the async generator stuck on ``await q.get()`` and never close the HTTP
+    body (browser: fetch never completes; UI stays in sending state).
     """
 
     async def agen() -> AsyncIterator[bytes]:
-        loop = asyncio.get_running_loop()
-        q: asyncio.Queue[bytes | None] = asyncio.Queue()
+        sq: queue.Queue[bytes | None] = queue.Queue()
         sync_err: list[BaseException] = []
         chunks_sent = 0
 
@@ -211,22 +214,17 @@ async def chat_stream(
                         game_index_dir(body.game_id),
                     )
                     for chunk in _chat_stream_impl(body):
-                        fut = asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
-                        fut.result()
+                        sq.put(chunk)
             except BaseException as e:
                 sync_err.append(e)
             finally:
-                try:
-                    fut_done = asyncio.run_coroutine_threadsafe(q.put(None), loop)
-                    fut_done.result()
-                except Exception:
-                    logger.exception("chat stream: failed to send end sentinel to queue")
+                sq.put(None)
 
         t = threading.Thread(target=worker, daemon=True)
         t.start()
         try:
             while True:
-                item = await q.get()
+                item = await asyncio.to_thread(sq.get)
                 if item is None:
                     break
                 chunks_sent += 1

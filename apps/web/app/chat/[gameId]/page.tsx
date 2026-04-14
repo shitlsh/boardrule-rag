@@ -27,7 +27,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useGame } from "@/hooks/use-game";
 import { CHAT_PHASE_LABEL_ZH } from "@/lib/chat-sse-protocol";
-import { createSseBuffer, feedSseBuffer } from "@/lib/chat-sse-parse";
+import { createSseBuffer, feedSseBuffer, flushSseBufferTail } from "@/lib/chat-sse-parse";
 import type { ChatSseEvent, ChatSsePhaseId } from "@/lib/chat-sse-protocol";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
@@ -169,6 +169,7 @@ export default function GameChatPage() {
         feedSseBuffer(sseBuf, decoder.decode(value, { stream: true }), applyEvent);
       }
       feedSseBuffer(sseBuf, decoder.decode(), applyEvent);
+      flushSseBufferTail(sseBuf, applyEvent);
 
       setMessages((prev) =>
         prev.map((m) => {

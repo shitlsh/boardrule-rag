@@ -48,3 +48,26 @@ export function feedSseBuffer(
     }
   }
 }
+
+/** After stream EOF, parse any trailing `data:` line (see web `flushSseBufferTail`). */
+export function flushSseBufferTail(
+  buffer: SseBuffer,
+  onEvent: (event: ChatSseEvent) => void,
+): void {
+  const raw = buffer.text
+  if (!raw.trim()) {
+    buffer.text = ''
+    return
+  }
+  for (const line of raw.split('\n')) {
+    if (!line.startsWith('data:')) continue
+    const payload = line.slice(5).trim()
+    if (!payload) continue
+    try {
+      onEvent(JSON.parse(payload) as ChatSseEvent)
+    } catch {
+      /* ignore */
+    }
+  }
+  buffer.text = ''
+}

@@ -3,6 +3,7 @@ import { getCachedAccessToken } from '../utils/auth'
 import {
   createSseBuffer,
   feedSseBuffer,
+  flushSseBufferTail,
   type ChatSseEvent,
 } from '../utils/chat-sse'
 import type { Game, GameListItem, ChatRequest } from '../types/index'
@@ -114,6 +115,7 @@ export async function streamChatMessage(
       feedSseBuffer(buf, decoder.decode(value, { stream: true }), onEvent)
     }
     feedSseBuffer(buf, decoder.decode(), onEvent)
+    flushSseBufferTail(buf, onEvent)
     return
   }
 
@@ -129,6 +131,7 @@ export async function streamChatMessage(
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           feedSseBuffer(sseBuf, decoder.decode(), onEvent)
+          flushSseBufferTail(sseBuf, onEvent)
           resolve()
         } else {
           let msg = `请求失败 (${res.statusCode})`

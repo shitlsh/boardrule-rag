@@ -35,3 +35,30 @@ export function feedSseBuffer(
     }
   }
 }
+
+/**
+ * After the byte stream ends, parse any remaining text (e.g. last `data:` line not
+ * followed by a blank line). Prevents the client from waiting forever if the server
+ * closed the socket mid-frame.
+ */
+export function flushSseBufferTail(
+  buffer: SseBuffer,
+  onEvent: (event: ChatSseEvent) => void,
+): void {
+  const raw = buffer.text;
+  if (!raw.trim()) {
+    buffer.text = "";
+    return;
+  }
+  for (const line of raw.split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload) continue;
+    try {
+      onEvent(JSON.parse(payload) as ChatSseEvent);
+    } catch {
+      /* ignore */
+    }
+  }
+  buffer.text = "";
+}
