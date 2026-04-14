@@ -58,7 +58,9 @@ def test_pro_max_output_bff_overrides_env(monkeypatch: pytest.MonkeyPatch) -> No
         assert pro_max_output_tokens() == 16384
 
 
-def test_openrouter_chat_completion_returns_finish_reason() -> None:
+def test_openrouter_chat_completion_returns_truncated_false_on_stop() -> None:
+    """chat_completion_with_meta now returns (text, is_truncated: bool).
+    finish_reason='stop' means not truncated → False."""
     fake = {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}]}
     with patch("utils.openrouter_client.httpx.Client") as m_client:
         m_inst = MagicMock()
@@ -69,7 +71,7 @@ def test_openrouter_chat_completion_returns_finish_reason() -> None:
         m_client.return_value.__enter__.return_value = m_inst
         from utils.openrouter_client import chat_completion_with_meta
 
-        text, fr = chat_completion_with_meta(
+        text, truncated = chat_completion_with_meta(
             api_key="k",
             model="m",
             messages=[{"role": "user", "content": "x"}],
@@ -77,4 +79,27 @@ def test_openrouter_chat_completion_returns_finish_reason() -> None:
             max_tokens=100,
         )
         assert text == "hi"
-        assert fr == "stop"
+        assert truncated is False
+
+
+def test_openrouter_chat_completion_returns_truncated_true_on_length() -> None:
+    """finish_reason='length' means truncated → True."""
+    fake = {"choices": [{"message": {"content": "long output..."}, "finish_reason": "length"}]}
+    with patch("utils.openrouter_client.httpx.Client") as m_client:
+        m_inst = MagicMock()
+        m_resp = MagicMock()
+        m_resp.raise_for_status = MagicMock()
+        m_resp.json.return_value = fake
+        m_inst.post.return_value = m_resp
+        m_client.return_value.__enter__.return_value = m_inst
+        from utils.openrouter_client import chat_completion_with_meta
+
+        text, truncated = chat_completion_with_meta(
+            api_key="k",
+            model="m",
+            messages=[{"role": "user", "content": "x"}],
+            temperature=0.0,
+            max_tokens=100,
+        )
+        assert text == "long output..."
+        assert truncated is True
