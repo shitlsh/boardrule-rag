@@ -224,20 +224,17 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
 
   return (
     <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg">API 凭证</CardTitle>
-        <CardDescription>
-          选择供应商并填写密钥。别名全局唯一（不区分大小写）。凭证可在下方槽位中复用；与具体模型 ID 分开配置，可随时增删。添加凭证请在弹窗中完成，便于排布 Bedrock 等多字段。
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
-          <p className="text-sm text-muted-foreground min-w-0">
-            点击打开弹窗填写 API Key 或 IAM 信息；表单为纵向布局，避免窄屏下字段挤在一行。
-          </p>
+      <CardHeader className="space-y-0 pb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <CardTitle className="text-lg">API 凭证</CardTitle>
+            <CardDescription>
+              选择供应商并填写密钥。别名全局唯一（不区分大小写）。凭证可在下方槽位中复用；与具体模型 ID 分开配置，可随时增删。
+            </CardDescription>
+          </div>
           <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button type="button" className="shrink-0 w-full sm:w-auto">
+              <Button type="button" size="sm" className="shrink-0 self-stretch sm:self-start">
                 <Plus className="h-4 w-4" />
                 <span className="ml-2">添加凭证</span>
               </Button>
@@ -445,7 +442,8 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
             </DialogContent>
           </Dialog>
         </div>
-
+      </CardHeader>
+      <CardContent className="space-y-6">
         {data.credentials.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">暂无已保存凭证。请先添加。</p>
         ) : (

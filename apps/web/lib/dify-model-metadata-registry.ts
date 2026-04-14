@@ -125,6 +125,76 @@ function lookupGemini(registry: VendorRegistry, modelName: string): DifyModelMet
   return null;
 }
 
+/**
+ * Dify Bedrock YAML keys are often provider families ("anthropic claude", "amazon nova") or
+ * dotted model ids ("amazon.titan-embed-text-v2:0"). ListFoundationModels returns full
+ * foundation model ids (e.g. anthropic.claude-opus-4-5-…); map those to the closest registry row.
+ */
+function inferBedrockFamilyDifyKey(modelId: string): string | null {
+  const s = modelId.trim().toLowerCase();
+  if (!s) return null;
+  if (s.startsWith("anthropic.")) return "anthropic claude";
+  if (s.startsWith("amazon.nova")) return "amazon nova";
+  if (s.startsWith("amazon.titan")) return null;
+  if (s.startsWith("amazon.")) return "amazon nova";
+  if (s.startsWith("cohere.")) return "cohere";
+  if (s.startsWith("meta.")) return "meta";
+  if (s.startsWith("mistral.")) return "mistral";
+  if (s.startsWith("ai21.")) return "ai21";
+  if (s.startsWith("deepseek.")) return "deepseek";
+  if (s.startsWith("openai.")) return "openai";
+  if (s.startsWith("qwen.")) return "qwen";
+  if (s.startsWith("twelvelabs.")) return null;
+  return null;
+}
+
+function isBoundaryAfterPrefix(idLower: string, keyLen: number): boolean {
+  if (keyLen >= idLower.length) return true;
+  const c = idLower[keyLen];
+  return c === "." || c === ":" || c === "-" || c === "_" || c === "/";
+}
+
+function lookupBedrock(registry: VendorRegistry, modelName: string): DifyModelMetadataEntry | null {
+  const id = modelName.trim();
+  if (!id) return null;
+
+  const direct = lookupOpenRouterOrQwen(registry, id);
+  if (direct) return direct;
+
+  const idLower = id.toLowerCase();
+
+  let bestKey: string | null = null;
+  let bestLen = -1;
+  for (const k of Object.keys(registry)) {
+    const kl = k.toLowerCase();
+    if (idLower === kl) return registry[k];
+    if (idLower.startsWith(kl) && isBoundaryAfterPrefix(idLower, kl.length) && kl.length > bestLen) {
+      bestLen = kl.length;
+      bestKey = k;
+    }
+  }
+  if (bestKey) return registry[bestKey];
+
+  bestKey = null;
+  bestLen = -1;
+  for (const k of Object.keys(registry)) {
+    const kl = k.toLowerCase();
+    if (kl.startsWith(idLower) && isBoundaryAfterPrefix(kl, idLower.length) && kl.length > bestLen) {
+      bestLen = kl.length;
+      bestKey = k;
+    }
+  }
+  if (bestKey) return registry[bestKey];
+
+  const family = inferBedrockFamilyDifyKey(id);
+  if (!family) return null;
+  if (registry[family]) return registry[family];
+  for (const k of Object.keys(registry)) {
+    if (k.toLowerCase() === family.toLowerCase()) return registry[k];
+  }
+  return null;
+}
+
 function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | null {
   const registry = byVendor[vendor];
   if (!registry || Object.keys(registry).length === 0) return null;
@@ -135,7 +205,7 @@ function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | n
     return lookupQwen(registry, modelName);
   }
   if (vendor === "bedrock") {
-    return lookupOpenRouterOrQwen(registry, modelName);
+    return lookupBedrock(registry, modelName);
   }
   return lookupOpenRouterOrQwen(registry, modelName);
 }
