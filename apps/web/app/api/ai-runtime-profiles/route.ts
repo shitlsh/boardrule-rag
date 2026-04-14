@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 
-import {
-  migrateLegacyChatRagFromRuntimeProfiles,
-  seedIndexProfileFromGatewayIfEmpty,
-} from "@/lib/ai-gateway";
 import { ensureDefaultActiveChatProfileId, ensureDefaultActiveIndexProfileId } from "@/lib/ai-runtime-profiles";
 import { prisma } from "@/lib/prisma";
 import { assertStaffSession } from "@/lib/request-auth";
@@ -19,12 +15,6 @@ export async function GET() {
   const denied = await assertStaffSession();
   if (denied) return denied;
 
-  try {
-    await migrateLegacyChatRagFromRuntimeProfiles();
-  } catch {
-    /* non-fatal: list still useful */
-  }
-  await seedIndexProfileFromGatewayIfEmpty();
   await ensureDefaultActiveChatProfileId();
   await ensureDefaultActiveIndexProfileId();
 

@@ -59,15 +59,14 @@ export type RagOptionsStored = {
   useRerank?: boolean;
 };
 
+/** Persisted in `appSettings.aiGatewayJson`: credentials + global chat defaults only. */
 export type AiGatewayStored = {
   version: 1;
   credentials: AiCredentialStored[];
-  slotBindings: Record<SlotKey, SlotBinding | null | undefined>;
   chatOptions: {
     temperature: number;
     maxTokens: number;
   };
-  ragOptions?: RagOptionsStored;
 };
 
 export type AiCredentialPublic = {
@@ -87,9 +86,7 @@ export type AiCredentialPublic = {
 export type AiGatewayPublic = {
   version: 1;
   credentials: AiCredentialPublic[];
-  slotBindings: Record<SlotKey, SlotBinding | null>;
   chatOptions: { temperature: number; maxTokens: number };
-  ragOptions: RagOptionsStored;
 };
 
 export type EngineSlotFlashPro = {

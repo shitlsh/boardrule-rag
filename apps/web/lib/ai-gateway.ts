@@ -13,14 +13,12 @@ import type {
   ExtractionRuntimeOverrides,
   RagOptionsStored,
   SlotBinding,
-  SlotKey,
 } from "@/lib/ai-gateway-types";
 import type {
   ChatProfileConfigParsed,
   ExtractionProfileConfigParsed,
   IndexProfileConfigParsed,
 } from "@/lib/ai-runtime-profile-schema";
-import { indexProfileConfigSchema } from "@/lib/ai-runtime-profile-schema";
 import {
   getActiveChatProfileConfig,
   getActiveIndexProfileConfig,
@@ -33,39 +31,17 @@ import {
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
 
-/** Credential cleanup / validation: all keys we still store in JSON (non-embed always null). */
-const SLOTS: SlotKey[] = ["flash", "pro", "embed", "chat"];
+const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
 
-function stripNonEmbedGatewaySlots(
-  sb: AiGatewayStored["slotBindings"],
-): AiGatewayStored["slotBindings"] {
-  return {
-    flash: null,
-    pro: null,
-    embed: sb.embed ?? null,
-    chat: null,
-  };
-}
-
-function rawHasLegacyGatewaySlots(raw: string): boolean {
+/** Rewrite DB row once after removing legacy `slotBindings` / `ragOptions` from gateway JSON. */
+function shouldRewriteGatewayJsonToSlim(raw: string): boolean {
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
-    const sb = o.slotBindings as Record<string, unknown> | undefined;
-    if (!sb || typeof sb !== "object") return false;
-    for (const k of ["flash", "pro", "chat"] as const) {
-      const v = sb[k];
-      if (!v || typeof v !== "object") continue;
-      const c = (v as { credentialId?: unknown }).credentialId;
-      const m = (v as { model?: unknown }).model;
-      if (typeof c === "string" && c.trim() && typeof m === "string" && m.trim()) return true;
-    }
-    return false;
+    return o.slotBindings !== undefined || o.ragOptions !== undefined;
   } catch {
     return false;
   }
 }
-
-const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
 
 const MAX_HIDDEN_MODEL_IDS = 8000;
 
@@ -94,58 +70,11 @@ function normalizeCredentialFromStored(c: AiCredentialStored): AiCredentialStore
   return next;
 }
 
-function clearSlotsReferencingCredential(
-  stored: AiGatewayStored,
-  credentialId: string,
-): AiGatewayStored["slotBindings"] {
-  const slotBindings = { ...stored.slotBindings };
-  for (const s of SLOTS) {
-    const b = slotBindings[s];
-    if (b?.credentialId === credentialId) {
-      slotBindings[s] = null;
-    }
-  }
-  return slotBindings;
-}
-
-function normalizeRagOptions(raw: unknown): RagOptionsStored | undefined {
-  if (raw === undefined || raw === null || typeof raw !== "object") return undefined;
-  const r = raw as Record<string, unknown>;
-  const out: RagOptionsStored = {};
-  if (typeof r.rerankModel === "string" && r.rerankModel.trim()) {
-    out.rerankModel = r.rerankModel.trim();
-  }
-  if (typeof r.chunkSize === "number" && Number.isFinite(r.chunkSize) && r.chunkSize > 0) {
-    out.chunkSize = Math.trunc(r.chunkSize);
-  }
-  if (typeof r.chunkOverlap === "number" && Number.isFinite(r.chunkOverlap) && r.chunkOverlap >= 0) {
-    out.chunkOverlap = Math.trunc(r.chunkOverlap);
-  }
-  if (r.bm25TokenProfile === "cjk_char" || r.bm25TokenProfile === "latin_word") {
-    out.bm25TokenProfile = r.bm25TokenProfile;
-  }
-  if (typeof r.similarityTopK === "number" && Number.isFinite(r.similarityTopK) && r.similarityTopK > 0) {
-    out.similarityTopK = Math.trunc(r.similarityTopK);
-  }
-  if (typeof r.rerankTopN === "number" && Number.isFinite(r.rerankTopN) && r.rerankTopN > 0) {
-    out.rerankTopN = Math.trunc(r.rerankTopN);
-  }
-  if (r.retrievalMode === "hybrid" || r.retrievalMode === "vector_only") {
-    out.retrievalMode = r.retrievalMode;
-  }
-  if (typeof r.useRerank === "boolean") {
-    out.useRerank = r.useRerank;
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
 function emptyStored(): AiGatewayStored {
   return {
     version: 1,
     credentials: [],
-    slotBindings: { flash: null, pro: null, embed: null, chat: null },
     chatOptions: { ...DEFAULT_CHAT },
-    ragOptions: {},
   };
 }
 
@@ -180,13 +109,6 @@ function parseStored(raw: string): AiGatewayStored {
           return normalizeCredentialFromStored(merged);
         })
       : [];
-    const sb = (o.slotBindings || {}) as Record<string, unknown>;
-    const slotBindings: AiGatewayStored["slotBindings"] = {
-      flash: normalizeBinding(sb.flash),
-      pro: normalizeBinding(sb.pro),
-      embed: normalizeBinding(sb.embed),
-      chat: normalizeBinding(sb.chat),
-    };
     const co = o.chatOptions as { temperature?: unknown; maxTokens?: unknown } | undefined;
     const chatOptions = {
       temperature:
@@ -198,40 +120,15 @@ function parseStored(raw: string): AiGatewayStored {
           ? Math.trunc(co.maxTokens)
           : DEFAULT_CHAT.maxTokens,
     };
-    const ragRaw = (o as { ragOptions?: unknown }).ragOptions;
-    const ragOptions = normalizeRagOptions(ragRaw) ?? {};
     const merged: AiGatewayStored = {
       version: 1,
       credentials,
-      slotBindings: stripNonEmbedGatewaySlots(slotBindings),
       chatOptions,
-      ragOptions,
     };
     return merged;
   } catch {
     return emptyStored();
   }
-}
-
-function normalizeBinding(v: unknown): SlotBinding | null {
-  if (typeof v !== "object" || v === null) return null;
-  const b = v as Record<string, unknown>;
-  const credentialId = typeof b.credentialId === "string" ? b.credentialId.trim() : "";
-  const model = typeof b.model === "string" ? b.model.trim() : "";
-  if (!credentialId || !model) return null;
-  const out: SlotBinding = { credentialId, model };
-  if (typeof b.maxOutputTokens === "number" && Number.isFinite(b.maxOutputTokens)) {
-    const m = Math.trunc(b.maxOutputTokens);
-    if (m > 0) out.maxOutputTokens = m;
-  }
-  if (typeof b.temperature === "number" && Number.isFinite(b.temperature)) {
-    out.temperature = b.temperature;
-  }
-  if (typeof b.maxTokens === "number" && Number.isFinite(b.maxTokens)) {
-    const mt = Math.trunc(b.maxTokens);
-    if (mt > 0) out.maxTokens = mt;
-  }
-  return out;
 }
 
 export function aliasKey(alias: string): string {
@@ -271,14 +168,7 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
   return {
     version: 1,
     credentials,
-    slotBindings: {
-      flash: null,
-      pro: null,
-      embed: stored.slotBindings.embed ?? null,
-      chat: null,
-    },
     chatOptions: { ...stored.chatOptions },
-    ragOptions: { ...(stored.ragOptions ?? {}) },
   };
 }
 
@@ -286,9 +176,8 @@ export async function getAiGatewayStored(): Promise<AiGatewayStored> {
   const row = await prisma.appSettings.findUnique({ where: { id: "default" } });
   const raw = row?.aiGatewayJson;
   if (raw === undefined || raw === null || raw === "") return emptyStored();
-  const stripNeeded = rawHasLegacyGatewaySlots(raw);
   const stored = parseStored(raw);
-  if (stripNeeded) {
+  if (shouldRewriteGatewayJsonToSlim(String(raw))) {
     await getAppSettings();
     await prisma.appSettings.update({
       where: { id: "default" },
@@ -312,9 +201,7 @@ export type AiGatewayPatchBody = {
     /** When vendor is qwen. */
     dashscopeCompatibleBase?: string;
   }[];
-  slotBindings?: Partial<Record<SlotKey, SlotBinding | null>>;
   chatOptions?: Partial<{ temperature: number; maxTokens: number }>;
-  ragOptions?: Partial<RagOptionsStored> | null;
 };
 
 function validateCredentialsUniqueAliases(next: { alias: string }[]): void {
@@ -394,22 +281,6 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     credentials = next;
   }
 
-  const credIds = new Set(credentials.map((c) => c.id));
-  let slotBindings = { ...cur.slotBindings };
-  if (patch.slotBindings !== undefined) {
-    const p = patch.slotBindings;
-    if (p.flash !== undefined || p.pro !== undefined || p.chat !== undefined) {
-      throw new Error("网关已不再保存 Flash / Pro / Chat 槽，请使用「提取模型」与「聊天模型」模版");
-    }
-    if (p.embed !== undefined) {
-      slotBindings = { ...slotBindings, embed: p.embed };
-    }
-    const b = slotBindings.embed;
-    if (b && b.model.trim() && b.credentialId && !credIds.has(b.credentialId)) {
-      throw new Error("Embed 槽位引用的凭证不存在");
-    }
-  }
-
   const chatOptions = { ...cur.chatOptions };
   if (patch.chatOptions) {
     if (patch.chatOptions.temperature !== undefined) {
@@ -423,31 +294,11 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     }
   }
 
-  let ragOptions: RagOptionsStored | undefined = cur.ragOptions ?? {};
-  if (patch.ragOptions !== undefined) {
-    if (patch.ragOptions === null) {
-      ragOptions = {};
-    } else {
-      ragOptions = { ...ragOptions, ...patch.ragOptions };
-      if (patch.ragOptions.rerankModel === "") {
-        const { rerankModel: _r, ...rest } = ragOptions;
-        ragOptions = rest;
-      }
-    }
-  }
-
   const stored: AiGatewayStored = {
     version: 1,
     credentials,
-    slotBindings: stripNonEmbedGatewaySlots(slotBindings),
     chatOptions,
-    ragOptions,
   };
-
-  const emb = stored.slotBindings.embed;
-  if (emb?.credentialId && !credIds.has(emb.credentialId)) {
-    throw new Error("Embed 槽位仍引用已删除的凭证");
-  }
 
   await getAppSettings();
   await prisma.appSettings.update({
@@ -704,85 +555,6 @@ async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> 
   return toPublic(stored);
 }
 
-/**
- * One-time lazy migration: old CHAT profiles stored `ragOptions` in configJson.
- * Merges those into global gateway `ragOptions` and rewrites profiles to `{ chat }` only.
- */
-export async function migrateLegacyChatRagFromRuntimeProfiles(): Promise<void> {
-  const profiles = await prisma.aiRuntimeProfile.findMany({ where: { kind: "CHAT" } });
-  if (profiles.length === 0) return;
-
-  let stored = await getAiGatewayStored();
-  const profileUpdates: { id: string; configJson: string }[] = [];
-
-  for (const p of profiles) {
-    let data: unknown;
-    try {
-      data = JSON.parse(p.configJson || "{}");
-    } catch {
-      continue;
-    }
-    if (!data || typeof data !== "object") continue;
-    const o = data as Record<string, unknown>;
-    const legacyRag = normalizeRagOptions(o.ragOptions);
-    if (!legacyRag || Object.keys(legacyRag).length === 0) continue;
-
-    stored = {
-      ...stored,
-      ragOptions: { ...(stored.ragOptions ?? {}), ...legacyRag },
-    };
-    const chat = o.chat;
-    if (chat && typeof chat === "object") {
-      profileUpdates.push({
-        id: p.id,
-        configJson: JSON.stringify({ chat }),
-      });
-    }
-  }
-
-  if (profileUpdates.length === 0) return;
-
-  await getAppSettings();
-  await prisma.$transaction([
-    prisma.appSettings.update({
-      where: { id: "default" },
-      data: { aiGatewayJson: JSON.stringify(stored) },
-    }),
-    ...profileUpdates.map((u) =>
-      prisma.aiRuntimeProfile.update({
-        where: { id: u.id },
-        data: { configJson: u.configJson },
-      }),
-    ),
-  ]);
-}
-
-/** When no INDEX profile exists, copy embed + ragOptions from gateway JSON into a new INDEX profile (one-time). */
-export async function seedIndexProfileFromGatewayIfEmpty(): Promise<void> {
-  const n = await prisma.aiRuntimeProfile.count({ where: { kind: "INDEX" } });
-  if (n > 0) return;
-  const stored = await getAiGatewayStored();
-  const emb = stored.slotBindings.embed;
-  if (!emb?.credentialId || !emb.model?.trim()) return;
-  const rag = stored.ragOptions;
-  const hasRag = Boolean(rag && Object.keys(rag).length > 0);
-  const config = indexProfileConfigSchema.parse({
-    embed: { credentialId: emb.credentialId, model: emb.model.trim() },
-    ...(hasRag ? { ragOptions: rag } : {}),
-  });
-  const created = await prisma.aiRuntimeProfile.create({
-    data: {
-      name: "默认索引（自网关迁移）",
-      kind: "INDEX",
-      configJson: JSON.stringify(config),
-    },
-  });
-  await prisma.appSettings.update({
-    where: { id: "default" },
-    data: { activeIndexProfileId: created.id },
-  });
-}
-
 /** Add a new API credential (saved immediately). */
 export async function addCredential(params: {
   id: string;
@@ -924,12 +696,7 @@ export async function updateCredential(params: {
   const credentials = [...cur.credentials];
   credentials[idx] = normalizeCredentialFromStored(nextCred);
 
-  let slotBindings = cur.slotBindings;
-  if (params.enabled === false) {
-    slotBindings = clearSlotsReferencingCredential(cur, prev.id);
-  }
-
-  return persistStored({ ...cur, credentials, slotBindings });
+  return persistStored({ ...cur, credentials });
 }
 
 /** @deprecated Use updateCredential */
@@ -941,134 +708,12 @@ export async function updateGeminiCredential(params: {
   return updateCredential(params);
 }
 
-/** Remove credential; clears any slot that referenced it. */
+/** Remove credential. */
 export async function removeCredentialById(id: string): Promise<AiGatewayPublic> {
   const cur = await getAiGatewayStored();
   if (!cur.credentials.some((c) => c.id === id)) {
     throw new Error("凭证不存在");
   }
   const credentials = cur.credentials.filter((c) => c.id !== id);
-  const slotBindings = clearSlotsReferencingCredential(cur, id);
-  return persistStored({ ...cur, credentials, slotBindings });
-}
-
-export type SlotBindingSave =
-  | (Omit<SlotBinding, "maxOutputTokens"> & { maxOutputTokens?: number | null })
-  | null;
-
-/** Set the embed slot only (Flash/Pro/Chat live in runtime profiles, not gateway JSON). */
-export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): Promise<AiGatewayPublic> {
-  if (slot !== "embed") {
-    throw new Error("网关仅持久化 Embed 槽；对话在「聊天模型」、提取在「提取模型」中配置。");
-  }
-  const cur = await getAiGatewayStored();
-  const credIds = new Set(cur.credentials.map((c) => c.id));
-  let nextBinding: SlotBinding | null = null;
-  if (binding !== null) {
-    const cid = binding.credentialId.trim();
-    const model = binding.model.trim();
-    if (!cid || !model) throw new Error("请选择凭证并填写模型");
-    if (!credIds.has(cid)) throw new Error("凭证不存在");
-    const credRow = cur.credentials.find((c) => c.id === cid);
-    if (credRow?.enabled === false) {
-      throw new Error("凭证已停用，请先在模型管理中启用");
-    }
-    nextBinding = { credentialId: cid, model };
-  }
-  const slotBindings = stripNonEmbedGatewaySlots({
-    ...cur.slotBindings,
-    embed: nextBinding,
-  });
-  return persistStored({ ...cur, slotBindings });
-}
-
-/** PATCH body for RAG options: use `null` on a key to clear it (fall back to rule engine env). */
-export type RagOptionsPatch = {
-  rerankModel?: string | null;
-  chunkSize?: number | null;
-  chunkOverlap?: number | null;
-  bm25TokenProfile?: "cjk_char" | "latin_word" | null;
-  similarityTopK?: number | null;
-  rerankTopN?: number | null;
-  retrievalMode?: "hybrid" | "vector_only" | null;
-  useRerank?: boolean | null;
-};
-
-export async function patchGatewayRagOptions(patch: RagOptionsPatch): Promise<AiGatewayPublic> {
-  const cur = await getAiGatewayStored();
-  let ragOptions: RagOptionsStored = { ...(cur.ragOptions ?? {}) };
-
-  if ("rerankModel" in patch) {
-    if (patch.rerankModel === null || patch.rerankModel === "") {
-      const { rerankModel: _r, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (typeof patch.rerankModel === "string") {
-      ragOptions = { ...ragOptions, rerankModel: patch.rerankModel.trim() };
-    }
-  }
-  if ("chunkSize" in patch) {
-    if (patch.chunkSize === null) {
-      const { chunkSize: _c, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.chunkSize !== undefined && Number.isFinite(patch.chunkSize)) {
-      const n = Math.trunc(patch.chunkSize);
-      if (n < 1) throw new Error("chunkSize 无效");
-      ragOptions = { ...ragOptions, chunkSize: n };
-    }
-  }
-  if ("chunkOverlap" in patch) {
-    if (patch.chunkOverlap === null) {
-      const { chunkOverlap: _c, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.chunkOverlap !== undefined && Number.isFinite(patch.chunkOverlap)) {
-      const n = Math.trunc(patch.chunkOverlap);
-      if (n < 0) throw new Error("chunkOverlap 无效");
-      ragOptions = { ...ragOptions, chunkOverlap: n };
-    }
-  }
-  if ("bm25TokenProfile" in patch) {
-    if (patch.bm25TokenProfile === null) {
-      const { bm25TokenProfile: _b, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.bm25TokenProfile === "cjk_char" || patch.bm25TokenProfile === "latin_word") {
-      ragOptions = { ...ragOptions, bm25TokenProfile: patch.bm25TokenProfile };
-    }
-  }
-  if ("similarityTopK" in patch) {
-    if (patch.similarityTopK === null) {
-      const { similarityTopK: _s, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.similarityTopK !== undefined && Number.isFinite(patch.similarityTopK)) {
-      const n = Math.trunc(patch.similarityTopK);
-      if (n < 1) throw new Error("similarityTopK 无效");
-      ragOptions = { ...ragOptions, similarityTopK: n };
-    }
-  }
-  if ("rerankTopN" in patch) {
-    if (patch.rerankTopN === null) {
-      const { rerankTopN: _r, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.rerankTopN !== undefined && Number.isFinite(patch.rerankTopN)) {
-      const n = Math.trunc(patch.rerankTopN);
-      if (n < 1) throw new Error("rerankTopN 无效");
-      ragOptions = { ...ragOptions, rerankTopN: n };
-    }
-  }
-  if ("retrievalMode" in patch) {
-    if (patch.retrievalMode === null) {
-      const { retrievalMode: _r, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (patch.retrievalMode === "hybrid" || patch.retrievalMode === "vector_only") {
-      ragOptions = { ...ragOptions, retrievalMode: patch.retrievalMode };
-    }
-  }
-  if ("useRerank" in patch) {
-    if (patch.useRerank === null) {
-      const { useRerank: _u, ...rest } = ragOptions;
-      ragOptions = rest;
-    } else if (typeof patch.useRerank === "boolean") {
-      ragOptions = { ...ragOptions, useRerank: patch.useRerank };
-    }
-  }
-  return persistStored({ ...cur, ragOptions });
+  return persistStored({ ...cur, credentials });
 }

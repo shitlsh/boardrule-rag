@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDown, Database, Check } from 'lucide-react'
 import type { Game } from '@/lib/types'
-import type { AiGatewayPublic, RagOptionsStored } from '@/lib/ai-gateway-types'
+import type { RagOptionsStored } from '@/lib/ai-gateway-types'
 import { useExtractionTasks } from '@/hooks/use-game'
 
 interface IndexPanelProps {
@@ -146,13 +146,9 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
             applyRag(cfg.ragOptions ?? {})
             return
           } catch {
-            /* fall through */
+            /* keep field defaults */
           }
         }
-        const res = await fetch('/api/ai-gateway')
-        if (!res.ok || cancelled) return
-        const d = (await res.json()) as AiGatewayPublic
-        applyRag(d.ragOptions ?? {})
       } catch {
         /* keep field defaults */
       }

@@ -129,7 +129,7 @@ export async function startBuildIndex(params: {
   gameId: string;
   mergedMarkdown: string;
   sourceFile?: string;
-  /** Omitted keys fall back to rule engine env / AI Gateway ragOptions on the server. */
+  /** Omitted keys fall back to rule engine env / index profile defaults on the server. */
   similarityTopK?: number;
   rerankTopN?: number;
   chunkSize?: number;
