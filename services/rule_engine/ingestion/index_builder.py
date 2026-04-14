@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
+from llama_index.core import Document, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.bedrock import BedrockEmbedding
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
@@ -508,19 +508,22 @@ def _pgvector_physical_table_name(game_id: str) -> str:
     return f"data_{logical}"
 
 
-def configure_embedding_settings() -> None:
-    """Set global LlamaIndex embedding model from the Embed slot (Gemini, OpenRouter, Qwen, or Bedrock)."""
-    import os
+def build_embedding_model() -> GoogleGenAIEmbedding | OpenAIEmbedding | BedrockEmbedding:
+    """Construct and return a per-request embedding model from the Embed slot.
 
+    Returns a fresh model instance every call — **never** touches the global
+    ``llama_index.core.Settings`` singleton, making concurrent requests with
+    different providers safe.
+    """
     slot = get_slots().embed
     if slot.provider == "openrouter":
-        Settings.embed_model = OpenAIEmbedding(
+        embed_model: GoogleGenAIEmbedding | OpenAIEmbedding | BedrockEmbedding = OpenAIEmbedding(
             model=slot.model,
             api_key=slot.api_key,
             api_base=OPENROUTER_API_BASE,
         )
     elif slot.provider == "qwen":
-        Settings.embed_model = OpenAIEmbedding(
+        embed_model = OpenAIEmbedding(
             model=slot.model,
             api_key=slot.api_key,
             api_base=resolve_dashscope_api_base(slot.dashscope_compatible_base),
@@ -534,7 +537,7 @@ def configure_embedding_settings() -> None:
             aid = (slot.aws_access_key_id or "").strip()
             if not aid:
                 raise ValueError("Embed slot: Bedrock IAM requires awsAccessKeyId")
-            Settings.embed_model = BedrockEmbedding(
+            embed_model = BedrockEmbedding(
                 model_name=slot.model,
                 region_name=rn,
                 aws_access_key_id=aid,
@@ -542,30 +545,32 @@ def configure_embedding_settings() -> None:
                 aws_session_token=slot.aws_session_token,
             )
         else:
-            k = "AWS_BEARER_TOKEN_BEDROCK"
-            prev = os.environ.get(k)
-            os.environ[k] = slot.api_key
-            try:
-                Settings.embed_model = BedrockEmbedding(
-                    model_name=slot.model,
-                    region_name=rn,
-                )
-            finally:
-                if prev is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = prev
+            # api_key mode: pass bearer token directly as aws_secret_access_key so we
+            # never mutate the process-global os.environ (thread-safety).
+            embed_model = BedrockEmbedding(
+                model_name=slot.model,
+                region_name=rn,
+                aws_secret_access_key=slot.api_key,
+            )
     else:
-        Settings.embed_model = GoogleGenAIEmbedding(
+        embed_model = GoogleGenAIEmbedding(
             model_name=slot.model,
             api_key=slot.api_key,
             embed_batch_size=_gemini_embed_batch_size(),
         )
-    _attach_embedding_batch_diagnostics(
-        Settings.embed_model,
-        provider=slot.provider,
-        model=slot.model,
-    )
+    _attach_embedding_batch_diagnostics(embed_model, provider=slot.provider, model=slot.model)
+    return embed_model
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible alias so external callers that import the old name keep
+# working while we migrate them.  New code should call build_embedding_model().
+# ---------------------------------------------------------------------------
+def configure_embedding_settings() -> None:
+    """Deprecated: sets global Settings.embed_model. Use build_embedding_model() instead."""
+    from llama_index.core import Settings
+
+    Settings.embed_model = build_embedding_model()
 
 
 def _documents_from_inputs(
@@ -615,7 +620,7 @@ def build_and_persist_index(
         retrieval_mode,
         use_rerank,
     )
-    configure_embedding_settings()
+    embed_model = build_embedding_model()
     root = game_index_dir(game_id)
     root.mkdir(parents=True, exist_ok=True)
     vec_dir = root / _VECTOR_SUBDIR
@@ -693,12 +698,12 @@ def build_and_persist_index(
             embed_dim=embed_dim,
         )
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        index = VectorStoreIndex(nodes, storage_context=storage_context, show_progress=False)
+        index = VectorStoreIndex(nodes, storage_context=storage_context, embed_model=embed_model, show_progress=False)
         _ = index  # persisted in PG
         vector_backend = "pgvector"
         pg_table = table
     else:
-        index = VectorStoreIndex(nodes, show_progress=False)
+        index = VectorStoreIndex(nodes, embed_model=embed_model, show_progress=False)
         index.storage_context.persist(persist_dir=str(vec_dir))
         vector_backend = "disk"
         pg_table = None
@@ -766,9 +771,19 @@ def load_manifest(game_id: str) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_vector_index(game_id: str) -> VectorStoreIndex:
-    """Load dense index from disk SimpleVectorStore or PostgreSQL pgvector."""
-    configure_embedding_settings()
+def load_vector_index(
+    game_id: str,
+    *,
+    embed_model: GoogleGenAIEmbedding | OpenAIEmbedding | BedrockEmbedding | None = None,
+) -> VectorStoreIndex:
+    """Load dense index from disk SimpleVectorStore or PostgreSQL pgvector.
+
+    Pass ``embed_model`` (from :func:`build_embedding_model`) to avoid touching the global
+    ``Settings`` singleton.  When omitted the deprecated ``configure_embedding_settings()``
+    fallback is used for backward compatibility.
+    """
+    if embed_model is None:
+        configure_embedding_settings()
     manifest = load_manifest(game_id)
     if not manifest:
         raise FileNotFoundError(f"No index manifest for game_id={game_id}")
@@ -798,14 +813,14 @@ def load_vector_index(game_id: str) -> VectorStoreIndex:
             embed_dim=embed_dim,
             perform_setup=False,
         )
-        return VectorStoreIndex.from_vector_store(vector_store)
+        return VectorStoreIndex.from_vector_store(vector_store, embed_model=embed_model)
 
     root = game_index_dir(game_id)
     vec_dir = root / _VECTOR_SUBDIR
     if not vec_dir.is_dir():
         raise FileNotFoundError(f"No vector index at {vec_dir}")
     storage_context = StorageContext.from_defaults(persist_dir=str(vec_dir))
-    return load_index_from_storage(storage_context)
+    return load_index_from_storage(storage_context, embed_model=embed_model)
 
 
 def load_hybrid_reranked_nodes(
@@ -828,8 +843,8 @@ def load_hybrid_reranked_nodes(
     sk = cfg.similarity_top_k if similarity_top_k is None else max(1, min(200, int(similarity_top_k)))
     rrn = cfg.rerank_top_n if rerank_top_n is None else max(1, min(100, int(rerank_top_n)))
 
-    configure_embedding_settings()
-    index = load_vector_index(game_id)
+    embed_model = build_embedding_model()
+    index = load_vector_index(game_id, embed_model=embed_model)
     bundle = QueryBundle(query_str=query)
     vector_retriever = index.as_retriever(similarity_top_k=sk)
 

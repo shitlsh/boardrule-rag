@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import Field
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.prompts import PromptTemplate
@@ -21,7 +20,7 @@ from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import format_header_path_for_prompt
 from ingestion.index_builder import (
     _rerank_model_name,
-    configure_embedding_settings,
+    build_embedding_model,
     game_index_dir,
     load_manifest,
     load_vector_index,
@@ -208,11 +207,10 @@ def build_rulebook_query_engine(game_id: str, *, streaming: bool = False) -> Ret
         raise FileNotFoundError(f"No index manifest for game_id={game_id}")
     cfg = retrieval_config_from_manifest(manifest)
 
-    configure_embedding_settings()
+    embed_model = build_embedding_model()
     llm = get_chat_llm()
-    Settings.llm = llm
 
-    index = load_vector_index(game_id)
+    index = load_vector_index(game_id, embed_model=embed_model)
     vector_retriever = index.as_retriever(similarity_top_k=cfg.similarity_top_k)
     if cfg.retrieval_mode == "vector_only":
         retriever = vector_retriever
