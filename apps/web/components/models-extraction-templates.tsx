@@ -33,6 +33,7 @@ import {
   EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT,
   defaultVisionMaxMergePages,
 } from "@/lib/rule-engine-defaults";
+import { normalizeExtractionMermaidSource } from "@/lib/extraction-mermaid";
 
 type ProfileRow = {
   id: string;
@@ -115,11 +116,12 @@ export function ModelsExtractionTemplates() {
   }, [selected]);
 
   useEffect(() => {
-    mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+    mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
   }, []);
 
   useEffect(() => {
-    if (!mermaidSrc || !mermaidRef.current) return;
+    const raw = typeof mermaidSrc === "string" ? mermaidSrc.trim() : "";
+    if (!raw || !mermaidRef.current) return;
     const id = `mmd-${mermaidId.replace(/:/g, "")}`;
     mermaidRef.current.innerHTML = "";
     const wrapper = document.createElement("div");
@@ -128,7 +130,7 @@ export function ModelsExtractionTemplates() {
     pre.className = "mermaid";
     pre.id = id;
     // Must use textContent: LangGraph output contains `<p>...</p>` in node labels; innerHTML would parse those as DOM nodes and corrupt the diagram source.
-    pre.textContent = mermaidSrc;
+    pre.textContent = normalizeExtractionMermaidSource(raw);
     wrapper.appendChild(pre);
     mermaidRef.current.appendChild(wrapper);
     void mermaid.run({ nodes: [pre] }).catch((err) => {
@@ -412,16 +414,21 @@ export function ModelsExtractionTemplates() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mermaidLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" aria-hidden />
-            </div>
-          ) : (
+          <div className="relative min-h-[140px]">
+            {mermaidLoading ? (
+              <div
+                className="bg-muted/20 absolute inset-0 z-10 flex items-center justify-center rounded-md border border-border/40"
+                aria-busy
+                aria-label="加载流程图"
+              >
+                <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" aria-hidden />
+              </div>
+            ) : null}
             <div
               ref={mermaidRef}
-              className="bg-muted/30 overflow-x-auto rounded-md border border-border/60 p-4 text-sm"
+              className="bg-muted/30 overflow-x-auto rounded-md border border-border/60 p-4 text-sm min-h-[120px]"
             />
-          )}
+          </div>
         </CardContent>
       </Card>
 
