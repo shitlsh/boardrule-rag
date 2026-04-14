@@ -1,4 +1,4 @@
-"""Async extraction jobs: rasterize pages, POST /extract/pages, POST /extract, GET /extract/{job_id}."""
+"""Async extraction jobs: rasterize pages, POST /extract/pages, POST /extract, GET /games/{game_id}/extract/{job_id}."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.exception_format import format_exception_for_job
-from utils.paths import game_extract_json, game_page_job_json, game_pages_dir, job_index_json, page_assets_root
+from utils.paths import game_dir, game_extract_json, game_page_job_json, page_assets_root
 
 router = APIRouter(tags=["extract"])
 
@@ -173,8 +173,21 @@ def _build_page_rows(assets: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _write_extract_json(job_id: str, game_id: str, status: str, thread_id: str, error: str | None, result: dict[str, Any] | None, vision_cache: dict[str, Any] | None, ai_snapshot: dict[str, Any] | None) -> None:
-    """Persist extract job state to disk so it survives process restarts."""
+# ---------------------------------------------------------------------------
+# Disk persistence helpers
+# ---------------------------------------------------------------------------
+
+def _write_extract_json(
+    job_id: str,
+    game_id: str,
+    status: str,
+    thread_id: str,
+    error: str | None,
+    result: dict[str, Any] | None,
+    vision_cache: dict[str, Any] | None,
+    ai_snapshot: dict[str, Any] | None,
+) -> None:
+    """Persist extract-job state to ``{game_dir}/extract.json`` (survives process restarts)."""
     try:
         path = game_extract_json(game_id)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,46 +202,12 @@ def _write_extract_json(job_id: str, game_id: str, status: str, thread_id: str, 
             "ai_snapshot": ai_snapshot,
         }
         path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        # Keep global job_id → game_id index up to date (used by GET /extract/{job_id}).
-        _update_job_index(job_id, game_id)
     except Exception:  # noqa: BLE001
         logger.warning("extract job %s: failed to write extract.json (non-fatal)", job_id, exc_info=True)
 
 
-_job_index_lock = Lock()
-
-
-def _update_job_index(job_id: str, game_id: str) -> None:
-    """Atomically add/update {job_id: game_id} in job_index.json."""
-    try:
-        idx_path = job_index_json()
-        idx_path.parent.mkdir(parents=True, exist_ok=True)
-        with _job_index_lock:
-            try:
-                idx: dict[str, str] = json.loads(idx_path.read_text(encoding="utf-8")) if idx_path.is_file() else {}
-            except Exception:  # noqa: BLE001
-                idx = {}
-            idx[job_id] = game_id
-            idx_path.write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
-    except Exception:  # noqa: BLE001
-        logger.warning("extract: failed to update job_index.json (non-fatal)", exc_info=True)
-
-
-def _lookup_game_id(job_id: str) -> str | None:
-    """Look up game_id for a job_id from the on-disk index."""
-    try:
-        idx_path = job_index_json()
-        if not idx_path.is_file():
-            return None
-        with _job_index_lock:
-            idx = json.loads(idx_path.read_text(encoding="utf-8"))
-        return idx.get(job_id)
-    except Exception:  # noqa: BLE001
-        return None
-
-
 def _read_extract_json(game_id: str) -> dict[str, Any] | None:
-    """Load persisted extract job state from disk; returns None if absent or corrupt."""
+    """Load persisted extract-job state from disk; returns None if absent or corrupt."""
     try:
         path = game_extract_json(game_id)
         if not path.is_file():
@@ -238,6 +217,40 @@ def _read_extract_json(game_id: str) -> dict[str, Any] | None:
         logger.warning("extract: failed to read extract.json for game_id=%s (non-fatal)", game_id, exc_info=True)
         return None
 
+
+def _poll_response_from_disk(job_id: str, game_id: str) -> ExtractPollResponse | None:
+    """Try to build a poll response from on-disk extract.json; returns None on miss/mismatch."""
+    disk = _read_extract_json(game_id)
+    if not disk or disk.get("job_id") != job_id:
+        return None
+    res = disk.get("result") or {}
+    raw_status = disk.get("status", JobStatus.failed)
+    # Jobs that were in-flight when the process died are surfaced as failed.
+    if raw_status in (JobStatus.pending, JobStatus.processing, "pending", "processing"):
+        raw_status = JobStatus.failed
+        disk_error = "进程重启导致任务中断，请重新提交。"
+    else:
+        disk_error = disk.get("error")
+    return ExtractPollResponse(
+        job_id=job_id,
+        status=raw_status,
+        game_id=game_id,
+        error=disk_error,
+        merged_markdown=res.get("merged_markdown"),
+        structured_chapters=res.get("structured_chapters") or [],
+        quick_start=res.get("quick_start"),
+        suggested_questions=res.get("suggested_questions") or [],
+        errors=res.get("errors") or [],
+        last_checkpoint_id=res.get("last_checkpoint_id"),
+        complexity=res.get("complexity"),
+        extraction_profile=res.get("extraction_profile"),
+        toc=res.get("toc"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Background worker
+# ---------------------------------------------------------------------------
 
 def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]) -> None:
     logger.info("extract job %s: background worker started", job_id)
@@ -282,6 +295,10 @@ def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]
                     j.error = err_str
             _write_extract_json(job_id, initial.get("game_id", ""), JobStatus.failed, thread_id, err_str, None, None, None)
 
+
+# ---------------------------------------------------------------------------
+# Misc helpers
+# ---------------------------------------------------------------------------
 
 def _download_to_temp(url: str) -> Path:
     suffix = Path(url.split("?", maxsplit=1)[0]).suffix or ".pdf"
@@ -336,13 +353,18 @@ def _parse_max_side_form(raw: str | None) -> int | None:
     return n
 
 
-def _public_page_url(game_id: str, page_job_id: str, filename: str) -> str:
+def _public_page_url(game_id: str, filename: str) -> str:
+    """Public URL for a rasterized page image: ``/page-assets/{game_id}/{filename}``."""
     base = os.environ.get("RULE_ENGINE_PUBLIC_URL", "").strip().rstrip("/")
-    rel = f"/page-assets/{game_id}/pages/{page_job_id}/{filename}"
+    rel = f"/page-assets/{game_id}/{filename}"
     if base:
         return f"{base}{rel}"
     return rel
 
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 @router.post("/extract/pages", response_model=ExtractPagesResponse)
 async def prepare_rulebook_pages(
@@ -358,66 +380,48 @@ async def prepare_rulebook_pages(
     max_image_bytes: str | None = Form(None),
 ) -> ExtractPagesResponse:
     """
-    Rasterize a PDF or register ordered images as page PNGs. Returns a `job_id` for `POST /extract`
-    together with TOC / exclude page selections.
+    Rasterize a PDF or register ordered images as page PNGs. Returns a ``page_job_id`` for
+    ``POST /extract`` together with TOC / exclude page selections.
 
-    Optional form fields (defaults from env or built-ins) enforce size/page limits and raster options.
+    Images are stored flat in ``{PAGE_ASSETS_ROOT}/{game_id}/``.  Any existing images from a
+    previous upload for the same game are deleted first to reclaim disk space (1 set per game).
     """
     multi = files or []
     if not file and not file_url and len(multi) == 0:
         raise HTTPException(status_code=400, detail="Provide `file`, `file_url`, or multiple `files`")
 
-    dpi_val = _parse_int_form(
-        page_raster_dpi,
-        env_key="PAGE_RASTER_DPI",
-        default=150,
-        field="page_raster_dpi",
-    )
+    dpi_val = _parse_int_form(page_raster_dpi, env_key="PAGE_RASTER_DPI", default=150, field="page_raster_dpi")
     max_side_val = _parse_max_side_form(page_raster_max_side)
-    max_pages_val = _parse_int_form(
-        max_pages,
-        env_key="RULEBOOK_MAX_PAGES",
-        default=80,
-        field="max_pages",
-    )
-    max_multi_val = _parse_int_form(
-        max_multi_image_files,
-        env_key="RULEBOOK_MAX_MULTI_IMAGE_FILES",
-        default=60,
-        field="max_multi_image_files",
-    )
-    max_pdf_b = _parse_int_form(
-        max_pdf_bytes,
-        env_key="RULEBOOK_MAX_PDF_BYTES",
-        default=52428800,
-        field="max_pdf_bytes",
-    )
-    max_img_b = _parse_int_form(
-        max_image_bytes,
-        env_key="RULEBOOK_MAX_IMAGE_BYTES",
-        default=10485760,
-        field="max_image_bytes",
-    )
+    max_pages_val = _parse_int_form(max_pages, env_key="RULEBOOK_MAX_PAGES", default=80, field="max_pages")
+    max_multi_val = _parse_int_form(max_multi_image_files, env_key="RULEBOOK_MAX_MULTI_IMAGE_FILES", default=60, field="max_multi_image_files")
+    max_pdf_b = _parse_int_form(max_pdf_bytes, env_key="RULEBOOK_MAX_PDF_BYTES", default=52428800, field="max_pdf_bytes")
+    max_img_b = _parse_int_form(max_image_bytes, env_key="RULEBOOK_MAX_IMAGE_BYTES", default=10485760, field="max_image_bytes")
 
     jid = str(uuid.uuid4())
-    pages_dir = game_pages_dir(game_id)
-    pages_dir.mkdir(parents=True, exist_ok=True)
+    gdir = game_dir(game_id)
+    gdir.mkdir(parents=True, exist_ok=True)
 
-    # Clean up previous page-job directory for this game to reclaim disk space.
-    # Keep only the one we are about to create.
-    for old in pages_dir.iterdir():
-        if old.is_dir() and old.name != jid:
-            shutil.rmtree(old, ignore_errors=True)
-            logger.info("prepare_pages: removed old page_job dir %s for game_id=%s", old.name, game_id)
+    # Delete old PNGs (and page_job.json) from previous uploads for this game.
+    # extract.json is kept — its result remains readable after a new upload.
+    _KEEP = {"extract.json"}
+    for old in gdir.iterdir():
+        if old.name not in _KEEP:
+            if old.is_dir():
+                shutil.rmtree(old, ignore_errors=True)
+            else:
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+            logger.info("prepare_pages: removed old asset %s for game_id=%s", old.name, game_id)
 
-    out_dir = pages_dir / jid
+    out_dir = gdir  # images land directly in the game directory
 
     tmp_paths: list[Path] = []
     try:
         if len(multi) > 0:
             nonempty = [uf for uf in multi if uf.filename]
             if len(nonempty) > max_multi_val:
-                shutil.rmtree(out_dir, ignore_errors=True)
                 raise HTTPException(
                     status_code=400,
                     detail=f"一次最多上传 {max_multi_val} 张图片，当前 {len(nonempty)} 张",
@@ -426,7 +430,6 @@ async def prepare_rulebook_pages(
             for uf in nonempty:
                 raw_bytes = await uf.read()
                 if len(raw_bytes) > max_img_b:
-                    shutil.rmtree(out_dir, ignore_errors=True)
                     raise HTTPException(
                         status_code=400,
                         detail=f"图片 {uf.filename} 超过单张上限 {max_img_b} 字节",
@@ -438,7 +441,6 @@ async def prepare_rulebook_pages(
                 tmp_paths.append(pth)
                 paths.append(pth)
             if not paths:
-                shutil.rmtree(out_dir, ignore_errors=True)
                 raise HTTPException(status_code=400, detail="No usable files in `files`")
             assets, meta = await asyncio.to_thread(
                 partial(import_ordered_images_to_dir, paths, out_dir, max_side=max_side_val),
@@ -464,31 +466,19 @@ async def prepare_rulebook_pages(
             suf = local.suffix.lower()
             if suf == ".pdf":
                 if local.stat().st_size > max_pdf_b:
-                    shutil.rmtree(out_dir, ignore_errors=True)
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"PDF 超过单文件上限 {max_pdf_b} 字节",
-                    )
+                    raise HTTPException(status_code=400, detail=f"PDF 超过单文件上限 {max_pdf_b} 字节")
                 assets, meta = await asyncio.to_thread(
                     partial(rasterize_pdf_to_dir, local, out_dir, dpi=dpi_val, max_side=max_side_val),
                 )
             else:
                 if local.stat().st_size > max_img_b:
-                    shutil.rmtree(out_dir, ignore_errors=True)
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"图片超过单文件上限 {max_img_b} 字节",
-                    )
+                    raise HTTPException(status_code=400, detail=f"图片超过单文件上限 {max_img_b} 字节")
                 assets, meta = await asyncio.to_thread(
                     partial(import_ordered_images_to_dir, [local], out_dir, max_side=max_side_val),
                 )
 
         if len(assets) > max_pages_val:
-            shutil.rmtree(out_dir, ignore_errors=True)
-            raise HTTPException(
-                status_code=400,
-                detail=f"分页后共 {len(assets)} 页，超过上限 {max_pages_val} 页",
-            )
+            raise HTTPException(status_code=400, detail=f"分页后共 {len(assets)} 页，超过上限 {max_pages_val} 页")
 
         register_job(jid, src_name, assets, meta)
 
@@ -496,7 +486,6 @@ async def prepare_rulebook_pages(
         page_rows_for_disk = [{"page": int(a.page), "path": str(a.path)} for a in assets]
         try:
             pj_path = game_page_job_json(game_id)
-            pj_path.parent.mkdir(parents=True, exist_ok=True)
             pj_path.write_text(
                 json.dumps({"page_job_id": jid, "source_name": src_name, "page_rows": page_rows_for_disk, "meta": meta}, ensure_ascii=False),
                 encoding="utf-8",
@@ -504,17 +493,8 @@ async def prepare_rulebook_pages(
         except Exception:  # noqa: BLE001
             logger.warning("prepare_pages: failed to write page_job.json (non-fatal)", exc_info=True)
 
-        pages_out: list[PageInfo] = []
-        for a in assets:
-            name = a.path.name
-            pages_out.append(PageInfo(page=int(a.page), url=_public_page_url(game_id, jid, name)))
-
-        return ExtractPagesResponse(
-            job_id=jid,
-            game_id=game_id,
-            total_pages=len(assets),
-            pages=pages_out,
-        )
+        pages_out = [PageInfo(page=int(a.page), url=_public_page_url(game_id, a.path.name)) for a in assets]
+        return ExtractPagesResponse(job_id=jid, game_id=game_id, total_pages=len(assets), pages=pages_out)
     finally:
         for p in tmp_paths:
             if p.exists():
@@ -550,23 +530,20 @@ async def start_extract(
         with _jobs_lock:
             prev = _jobs.get(jid)
 
-        # Fall back to disk if the process restarted and lost the in-memory record.
-        disk_data: dict[str, Any] | None = None
-        if not prev or not prev.vision_cache:
-            disk_data = _read_extract_json(game_id)
-            if disk_data and disk_data.get("job_id") == jid and disk_data.get("vision_cache"):
-                logger.info("extract resume: restoring job %s from extract.json", jid)
-            else:
-                # Also try the page_job.json for the current game (may be a different extract attempt).
-                disk_data = None
+        # Resolve vision_cache: memory → extract.json → page_job.json (in that order).
+        vision_cache_src: dict[str, Any] | None = prev.vision_cache if prev else None
 
-        vision_cache_src = (prev.vision_cache if prev else None) or (disk_data.get("vision_cache") if disk_data else None)
         if not vision_cache_src:
-            # Last resort: reconstruct vision_cache from page_job.json on disk.
+            disk = _read_extract_json(game_id)
+            if disk and disk.get("job_id") == jid and disk.get("vision_cache"):
+                vision_cache_src = disk["vision_cache"]
+                logger.info("extract resume: restored vision_cache from extract.json for job %s", jid)
+
+        if not vision_cache_src:
             try:
-                pj_raw = game_page_job_json(game_id)
-                if pj_raw.is_file():
-                    pj = json.loads(pj_raw.read_text(encoding="utf-8"))
+                pj_path = game_page_job_json(game_id)
+                if pj_path.is_file():
+                    pj = json.loads(pj_path.read_text(encoding="utf-8"))
                     vision_cache_src = {
                         "page_rows": pj.get("page_rows", []),
                         "toc_page_indices": [],
@@ -581,8 +558,12 @@ async def start_extract(
                 logger.warning("extract resume: failed to read page_job.json", exc_info=True)
 
         if not vision_cache_src:
-            raise HTTPException(status_code=400, detail="Cannot resume: unknown job or missing vision cache (process may have restarted — re-upload the rulebook)")
-        gn = game_name if game_name is not None else ((prev.game_name if prev else None) or (disk_data.get("game_id", "") if disk_data else "") or "")
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot resume: vision cache not found (process may have restarted — re-upload the rulebook)",
+            )
+
+        gn = game_name if game_name is not None else ((prev.game_name if prev else None) or "")
         tc = terminology_context if terminology_context is not None else ((prev.terminology_context if prev else None) or "")
         vc = vision_cache_src
         initial = {
@@ -607,20 +588,19 @@ async def start_extract(
             list(initial["body_page_indices"]),
         )
         with _jobs_lock:
-            job = _jobs.get(jid)
-        if job:
+            existing = _jobs.get(jid)
+        if existing:
             with _jobs_lock:
-                job.status = JobStatus.pending
-                job.error = None
-                job.result = None
-                job.thread_id = thread_id
-                job.game_id = game_id
-                job.game_name = gn
-                job.terminology_context = tc
-                job.vision_cache = vc
-                job.ai_snapshot = snapshot
+                existing.status = JobStatus.pending
+                existing.error = None
+                existing.result = None
+                existing.thread_id = thread_id
+                existing.game_id = game_id
+                existing.game_name = gn
+                existing.terminology_context = tc
+                existing.vision_cache = vc
+                existing.ai_snapshot = snapshot
         else:
-            # Process restarted — recreate the in-memory record from what we recovered from disk.
             with _jobs_lock:
                 _jobs[jid] = ExtractJob(
                     status=JobStatus.pending,
@@ -632,6 +612,7 @@ async def start_extract(
                     ai_snapshot=snapshot,
                 )
         _write_extract_json(jid, game_id, JobStatus.pending, thread_id, None, None, vc, snapshot)
+
     else:
         if not page_job_id:
             raise HTTPException(
@@ -664,15 +645,8 @@ async def start_extract(
         _validate_rasterized_pages(page_rows, toc, body)
 
         logger.info(
-            "extract start: game_id=%s job_id=%s explicit_toc=%s toc_pages=%s total_pages=%s "
-            "body_pages=%s exclude_pages=%s",
-            game_id,
-            jid,
-            explicit_toc,
-            toc,
-            total_pages,
-            len(body),
-            len(exclude),
+            "extract start: game_id=%s job_id=%s explicit_toc=%s toc_pages=%s total_pages=%s body_pages=%s exclude_pages=%s",
+            game_id, jid, explicit_toc, toc, total_pages, len(body), len(exclude),
         )
 
         gn = game_name or ""
@@ -727,8 +701,9 @@ async def start_extract(
     return ExtractJobResponse(job_id=jid, status=JobStatus.pending, thread_id=thread_id, game_id=game_id)
 
 
-@router.get("/extract/{job_id}", response_model=ExtractPollResponse)
-async def get_extract_job(job_id: str) -> ExtractPollResponse:
+@router.get("/games/{game_id}/extract/{job_id}", response_model=ExtractPollResponse)
+async def get_extract_job(game_id: str, job_id: str) -> ExtractPollResponse:
+    """Poll extract job status. Uses game_id to locate on-disk state after process restarts."""
     with _jobs_lock:
         job = _jobs.get(job_id)
 
@@ -750,33 +725,9 @@ async def get_extract_job(job_id: str) -> ExtractPollResponse:
             toc=res.get("toc"),
         )
 
-    # Memory miss — process may have restarted. Try to recover from disk.
-    game_id = _lookup_game_id(job_id)
-    if game_id:
-        disk = _read_extract_json(game_id)
-        if disk and disk.get("job_id") == job_id:
-            res = disk.get("result") or {}
-            raw_status = disk.get("status", JobStatus.failed)
-            # A job that was pending/processing when the process died is now effectively failed.
-            if raw_status in (JobStatus.pending, JobStatus.processing, "pending", "processing"):
-                raw_status = JobStatus.failed
-                disk_error = "Process restarted while job was running — please re-submit."
-            else:
-                disk_error = disk.get("error")
-            return ExtractPollResponse(
-                job_id=job_id,
-                status=raw_status,
-                game_id=game_id,
-                error=disk_error,
-                merged_markdown=res.get("merged_markdown"),
-                structured_chapters=res.get("structured_chapters") or [],
-                quick_start=res.get("quick_start"),
-                suggested_questions=res.get("suggested_questions") or [],
-                errors=res.get("errors") or [],
-                last_checkpoint_id=res.get("last_checkpoint_id"),
-                complexity=res.get("complexity"),
-                extraction_profile=res.get("extraction_profile"),
-                toc=res.get("toc"),
-            )
+    # Memory miss — process may have restarted; fall back to disk.
+    disk_response = _poll_response_from_disk(job_id, game_id)
+    if disk_response:
+        return disk_response
 
     raise HTTPException(status_code=404, detail="Job not found")

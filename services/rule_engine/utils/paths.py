@@ -13,31 +13,26 @@ def service_root() -> Path:
 
 
 def page_assets_root() -> Path:
-    """Root directory for all page-asset data, organised as ``{game_id}/pages/{page_job_id}/``."""
+    """Root directory for all page-asset data, organised as ``{game_id}/``."""
     raw = os.environ.get("PAGE_ASSETS_ROOT")
     if raw:
         return Path(raw).expanduser().resolve()
     return _SERVICE_ROOT / "data" / "pages"
 
 
-def game_pages_dir(game_id: str) -> Path:
-    """``{page_assets_root}/{game_id}/pages/`` — parent of per-job image directories."""
-    return page_assets_root() / game_id / "pages"
+def game_dir(game_id: str) -> Path:
+    """``{page_assets_root}/{game_id}/`` — flat dir: PNGs + page_job.json + extract.json."""
+    return page_assets_root() / game_id
 
 
 def game_page_job_json(game_id: str) -> Path:
-    """``{page_assets_root}/{game_id}/pages/page_job.json`` — latest page-job metadata."""
-    return game_pages_dir(game_id) / "page_job.json"
+    """``{game_dir}/page_job.json`` — latest page-job metadata (page_rows, page_job_id, source_name)."""
+    return game_dir(game_id) / "page_job.json"
 
 
 def game_extract_json(game_id: str) -> Path:
-    """``{page_assets_root}/{game_id}/extract.json`` — latest extract-job metadata + result."""
-    return page_assets_root() / game_id / "extract.json"
-
-
-def job_index_json() -> Path:
-    """``{page_assets_root}/job_index.json`` — flat map of {extract_job_id: game_id} for O(1) lookup."""
-    return page_assets_root() / "job_index.json"
+    """``{game_dir}/extract.json`` — latest extract-job state + result."""
+    return game_dir(game_id) / "extract.json"
 
 
 def prompts_dir() -> Path:
