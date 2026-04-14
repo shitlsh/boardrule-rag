@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitBranch, Loader2, Plus, Save, Sparkles, Trash2 } from "lucide-react";
-import mermaid from "mermaid";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -33,8 +32,6 @@ import {
   EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT,
   defaultVisionMaxMergePages,
 } from "@/lib/rule-engine-defaults";
-import { normalizeExtractionMermaidSource } from "@/lib/extraction-mermaid";
-
 type ProfileRow = {
   id: string;
   name: string;
@@ -52,14 +49,13 @@ function parseExtraction(raw: string): ExtractionProfileConfigParsed {
 }
 
 export function ModelsExtractionTemplates() {
-  const mermaidRef = useRef<HTMLDivElement>(null);
-  const mermaidId = useId();
   const [gateway, setGateway] = useState<AiGatewayPublic | null>(null);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mermaidSrc, setMermaidSrc] = useState<string | null>(null);
-  const [mermaidLoading, setMermaidLoading] = useState(false);
+  /** `null` = not loaded; `""` = load/render failed; otherwise inline SVG from server */
+  const [extractionFlowSvg, setExtractionFlowSvg] = useState<string | null>(null);
+  const [extractionFlowLoading, setExtractionFlowLoading] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -115,50 +111,29 @@ export function ModelsExtractionTemplates() {
     }
   }, [selected]);
 
-  useEffect(() => {
-    mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
-  }, []);
-
-  useEffect(() => {
-    const raw = typeof mermaidSrc === "string" ? mermaidSrc.trim() : "";
-    if (!raw || !mermaidRef.current) return;
-    const id = `mmd-${mermaidId.replace(/:/g, "")}`;
-    const text = normalizeExtractionMermaidSource(raw);
-    mermaidRef.current.innerHTML = "";
-    const wrapper = document.createElement("div");
-    wrapper.className = "flex w-full justify-center overflow-x-auto";
-    mermaidRef.current.appendChild(wrapper);
-    // `mermaid.run()` reads `element.innerHTML`, which HTML-escapes `<` in labels (e.g. LangGraph's `[<p>…</p>]`).
-    // Pass the definition string directly via `render()`.
-    void mermaid
-      .render(id, text, wrapper)
-      .then(({ svg, bindFunctions }) => {
-        wrapper.innerHTML = svg;
-        bindFunctions?.(wrapper);
-      })
-      .catch((err) => {
-        console.error("Mermaid render failed:", err);
-        toast.error("Mermaid 渲染失败");
-      });
-  }, [mermaidSrc, mermaidId]);
-
-  const fetchMermaid = useCallback(async () => {
-    setMermaidLoading(true);
+  const fetchExtractionFlowSvg = useCallback(async () => {
+    setExtractionFlowLoading(true);
     try {
-      const res = await fetch("/api/rule-engine/extraction-mermaid");
-      const j = (await res.json()) as { mermaid?: string; message?: string };
-      if (!res.ok) throw new Error(j.message || "获取流程图失败");
-      setMermaidSrc(j.mermaid ?? "");
+      const res = await fetch("/api/rule-engine/extraction-mermaid-svg", { cache: "no-store" });
+      const ct = res.headers.get("content-type") ?? "";
+      if (res.ok && ct.includes("svg")) {
+        setExtractionFlowSvg(await res.text());
+        return;
+      }
+      const j = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(j.message || `获取流程图失败 (${res.status})`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "获取流程图失败");
+      setExtractionFlowSvg("");
     } finally {
-      setMermaidLoading(false);
+      setExtractionFlowLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (mermaidSrc === null && !mermaidLoading) void fetchMermaid();
-  }, [mermaidSrc, mermaidLoading, fetchMermaid]);
+    if (extractionFlowSvg !== null || extractionFlowLoading) return;
+    void fetchExtractionFlowSvg();
+  }, [extractionFlowSvg, extractionFlowLoading, fetchExtractionFlowSvg]);
 
   const fetchModels = useCallback(async (credentialId: string, slot: "flash" | "pro") => {
     if (!credentialId) return;
@@ -418,7 +393,7 @@ export function ModelsExtractionTemplates() {
         </CardHeader>
         <CardContent>
           <div className="relative min-h-[140px]">
-            {mermaidLoading ? (
+            {extractionFlowLoading ? (
               <div
                 className="bg-muted/20 absolute inset-0 z-10 flex items-center justify-center rounded-md border border-border/40"
                 aria-busy
@@ -427,10 +402,19 @@ export function ModelsExtractionTemplates() {
                 <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" aria-hidden />
               </div>
             ) : null}
-            <div
-              ref={mermaidRef}
-              className="bg-muted/30 overflow-x-auto rounded-md border border-border/60 p-4 text-sm min-h-[120px]"
-            />
+            <div className="bg-muted/30 overflow-x-auto rounded-md border border-border/60 p-4 text-sm min-h-[120px] [&_svg]:max-w-none">
+              {extractionFlowSvg === null ? null : extractionFlowSvg === "" ? (
+                <p className="text-muted-foreground text-center text-sm">无法显示流程图（请确认规则引擎可访问且已登录员工账号）</p>
+              ) : (
+                <div
+                  className="flex w-full justify-center"
+                  role="img"
+                  aria-label="提取管线流程图"
+                  // eslint-disable-next-line react/no-danger -- SVG is generated by our staff-only API (mermaid → SVG on server)
+                  dangerouslySetInnerHTML={{ __html: extractionFlowSvg }}
+                />
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
