@@ -5,10 +5,12 @@ SSE streaming: ``POST /chat/stream`` emits JSON lines documented in ``apps/web/l
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
@@ -179,25 +181,68 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
 
 
 @router.post("/chat/stream")
-def chat_stream(
+async def chat_stream(
     body: ChatRequest,
     _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
 ) -> StreamingResponse:
-    """SSE chat: request body matches ``ChatRequest``; response ``text/event-stream``."""
+    """SSE chat: request body matches ``ChatRequest``; response ``text/event-stream``.
 
-    def gen() -> Iterator[bytes]:
-        with boardrule_ai_runtime(_ai):
-            chat_slot = get_slots().chat
-            logger.info(
-                "chat stream llm provider=%s model=%s index_dir=%s",
-                chat_slot.provider,
-                chat_slot.model,
-                game_index_dir(body.game_id),
-            )
-            yield from _chat_stream_impl(body)
+    Starlette wraps **sync** iterators in ``iterate_in_threadpool``, which can run each
+    ``next()`` on a **different** worker thread. ``boardrule_ai_runtime`` uses a
+    ``contextvars.Token`` that must be reset on the **same** thread that called ``set``,
+    so we run the entire sync generator in **one** dedicated thread and bridge chunks with
+    an asyncio queue (async iterable — no per-chunk thread hopping).
+    """
+
+    async def agen() -> AsyncIterator[bytes]:
+        loop = asyncio.get_running_loop()
+        q: asyncio.Queue[bytes | None] = asyncio.Queue()
+        sync_err: list[BaseException] = []
+        chunks_sent = 0
+
+        def worker() -> None:
+            try:
+                with boardrule_ai_runtime(_ai):
+                    chat_slot = get_slots().chat
+                    logger.info(
+                        "chat stream llm provider=%s model=%s index_dir=%s",
+                        chat_slot.provider,
+                        chat_slot.model,
+                        game_index_dir(body.game_id),
+                    )
+                    for chunk in _chat_stream_impl(body):
+                        fut = asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
+                        fut.result()
+            except BaseException as e:
+                sync_err.append(e)
+            finally:
+                try:
+                    fut_done = asyncio.run_coroutine_threadsafe(q.put(None), loop)
+                    fut_done.result()
+                except Exception:
+                    logger.exception("chat stream: failed to send end sentinel to queue")
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        try:
+            while True:
+                item = await q.get()
+                if item is None:
+                    break
+                chunks_sent += 1
+                yield item
+            if sync_err:
+                if chunks_sent == 0:
+                    raise sync_err[0]
+                logger.exception(
+                    "chat stream worker failed after %d chunk(s); response may be incomplete",
+                    chunks_sent,
+                )
+        finally:
+            t.join(timeout=600)
 
     return StreamingResponse(
-        gen(),
+        agen(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
