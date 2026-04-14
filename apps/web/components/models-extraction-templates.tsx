@@ -122,12 +122,17 @@ export function ModelsExtractionTemplates() {
     if (!mermaidSrc || !mermaidRef.current) return;
     const id = `mmd-${mermaidId.replace(/:/g, "")}`;
     mermaidRef.current.innerHTML = "";
-    mermaidRef.current.removeAttribute("data-processed");
-    const el = document.createElement("div");
-    el.className = "flex justify-center";
-    el.innerHTML = `<pre class="mermaid" id="${id}">${mermaidSrc}</pre>`;
-    mermaidRef.current.appendChild(el);
-    mermaid.run({ querySelector: `#${id}` }).catch(() => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "flex w-full justify-center overflow-x-auto";
+    const pre = document.createElement("pre");
+    pre.className = "mermaid";
+    pre.id = id;
+    // Must use textContent: LangGraph output contains `<p>...</p>` in node labels; innerHTML would parse those as DOM nodes and corrupt the diagram source.
+    pre.textContent = mermaidSrc;
+    wrapper.appendChild(pre);
+    mermaidRef.current.appendChild(wrapper);
+    void mermaid.run({ nodes: [pre] }).catch((err) => {
+      console.error("Mermaid render failed:", err);
       toast.error("Mermaid 渲染失败");
     });
   }, [mermaidSrc, mermaidId]);
