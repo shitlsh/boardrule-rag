@@ -123,20 +123,23 @@ export function ModelsExtractionTemplates() {
     const raw = typeof mermaidSrc === "string" ? mermaidSrc.trim() : "";
     if (!raw || !mermaidRef.current) return;
     const id = `mmd-${mermaidId.replace(/:/g, "")}`;
+    const text = normalizeExtractionMermaidSource(raw);
     mermaidRef.current.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "flex w-full justify-center overflow-x-auto";
-    const pre = document.createElement("pre");
-    pre.className = "mermaid";
-    pre.id = id;
-    // Must use textContent: LangGraph output contains `<p>...</p>` in node labels; innerHTML would parse those as DOM nodes and corrupt the diagram source.
-    pre.textContent = normalizeExtractionMermaidSource(raw);
-    wrapper.appendChild(pre);
     mermaidRef.current.appendChild(wrapper);
-    void mermaid.run({ nodes: [pre] }).catch((err) => {
-      console.error("Mermaid render failed:", err);
-      toast.error("Mermaid 渲染失败");
-    });
+    // `mermaid.run()` reads `element.innerHTML`, which HTML-escapes `<` in labels (e.g. LangGraph's `[<p>…</p>]`).
+    // Pass the definition string directly via `render()`.
+    void mermaid
+      .render(id, text, wrapper)
+      .then(({ svg, bindFunctions }) => {
+        wrapper.innerHTML = svg;
+        bindFunctions?.(wrapper);
+      })
+      .catch((err) => {
+        console.error("Mermaid render failed:", err);
+        toast.error("Mermaid 渲染失败");
+      });
   }, [mermaidSrc, mermaidId]);
 
   const fetchMermaid = useCallback(async () => {
