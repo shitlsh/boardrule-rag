@@ -111,14 +111,47 @@ export async function gameHasActiveIndexBuild(gameId: string): Promise<boolean> 
   return Boolean(row);
 }
 
+/** Step warnings for the artifact currently shown on the game (from the matching EXTRACTION `Task`, not `Game`). */
+async function extractionWarningsForCurrentArtifact(game: PrismaGame): Promise<string[] | undefined> {
+  const fromProgress = (progressJson: string | null | undefined): string[] | undefined => {
+    const w = parseProgressJson(progressJson ?? null)?.warnings?.filter((s) => s && s.trim());
+    return w?.length ? w : undefined;
+  };
+
+  if (game.extractionJobId) {
+    const row = await prisma.task.findFirst({
+      where: {
+        gameId: game.id,
+        type: "EXTRACTION",
+        jobId: game.extractionJobId,
+      },
+      select: { progressJson: true },
+    });
+    return fromProgress(row?.progressJson ?? null);
+  }
+
+  const row = await prisma.task.findFirst({
+    where: { gameId: game.id, type: "EXTRACTION", status: "COMPLETED" },
+    orderBy: { updatedAt: "desc" },
+    select: { progressJson: true },
+  });
+  return fromProgress(row?.progressJson ?? null);
+}
+
 export function prismaGameToDto(
   game: PrismaGame,
-  extras?: { rulesMarkdown?: string; quickStart?: string; suggestedQuestions?: string[] },
+  extras?: {
+    rulesMarkdown?: string;
+    quickStart?: string;
+    suggestedQuestions?: string[];
+    extractionWarnings?: string[];
+  },
   opts?: GameDtoOpts,
 ): Game {
   const hasPersistedIndex = Boolean(game.indexId || game.vectorStoreId);
   const indexBuilding = opts?.indexBuilding === true;
   const isIndexed = hasPersistedIndex && !indexBuilding;
+  const extractionWarnings = extras?.extractionWarnings;
   return {
     id: game.id,
     name: game.name,
@@ -135,6 +168,7 @@ export function prismaGameToDto(
     rulesMarkdown: extras?.rulesMarkdown,
     quickStart: extras?.quickStart,
     suggestedQuestions: extras?.suggestedQuestions,
+    ...(extractionWarnings?.length ? { extractionWarnings } : {}),
     indexProfileId: game.indexProfileId ?? null,
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString(),
@@ -142,11 +176,12 @@ export function prismaGameToDto(
 }
 
 export async function prismaGameToDetailDto(game: PrismaGame): Promise<Game> {
-  const [md, quickRaw, questionsRaw, indexBuilding] = await Promise.all([
+  const [md, quickRaw, questionsRaw, indexBuilding, extractionWarnings] = await Promise.all([
     readRulesMarkdownFromDisk(game),
     readStorageText(game.quickStartGuidePath),
     readStorageText(game.startQuestionsPath),
     gameHasActiveIndexBuild(game.id),
+    extractionWarningsForCurrentArtifact(game),
   ]);
   const suggestedQuestions = questionsRaw ? parseSuggestedQuestions(questionsRaw) : undefined;
   return prismaGameToDto(
@@ -155,6 +190,7 @@ export async function prismaGameToDetailDto(game: PrismaGame): Promise<Game> {
       rulesMarkdown: md,
       quickStart: quickRaw ?? undefined,
       suggestedQuestions,
+      extractionWarnings,
     },
     { indexBuilding },
   );
@@ -164,12 +200,14 @@ export function prismaTaskToExtractionTask(t: PrismaTask): ExtractionTask {
   const p = parseProgressJson(t.progressJson);
   const label =
     t.type === "EXTRACTION" ? "规则提取" : t.type === "INDEX_BUILD" ? "建立索引" : t.type;
+  const warnings = p?.warnings?.filter((s) => s && s.trim());
   return {
     id: t.id,
     type: label,
     status: mapTaskStatus(t.status),
     progress: p?.detail,
     error: t.errorMsg ?? undefined,
+    ...(warnings?.length ? { warnings } : {}),
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
   };

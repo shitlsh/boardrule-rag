@@ -11,7 +11,7 @@ from utils.page_markers import (
     text_contains_need_more_context,
 )
 from utils.prompt_context import render_prompt
-from utils.retry import retry
+from utils.retry import EXTRACTION_LLM_RETRY_ATTEMPTS, EXTRACTION_MERGE_SPLIT_RETRY_ATTEMPTS, retry
 
 
 def _finalize_merged_markdown(raw: str) -> str:
@@ -105,8 +105,8 @@ def run(state: ExtractionState) -> dict:
                     out_warnings=llm_warns,
                 )
 
-            part_a = retry(_merge_a, attempts=2)
-            part_b = retry(_merge_b, attempts=2)
+            part_a = retry(_merge_a, attempts=EXTRACTION_MERGE_SPLIT_RETRY_ATTEMPTS)
+            part_b = retry(_merge_b, attempts=EXTRACTION_MERGE_SPLIT_RETRY_ATTEMPTS)
             body = part_a + "\n\n" + part_b
         except Exception as e:  # noqa: BLE001
             md = _finalize_merged_markdown(joined[:200_000])
@@ -134,7 +134,7 @@ def run(state: ExtractionState) -> dict:
                 out_warnings=llm_warns,
             )
 
-        merged_md = _finalize_merged_markdown(retry(_final, attempts=3))
+        merged_md = _finalize_merged_markdown(retry(_final, attempts=EXTRACTION_LLM_RETRY_ATTEMPTS))
     except Exception as e:  # noqa: BLE001
         md = _finalize_merged_markdown(body[:200_000])
         cont = page_continuity_warnings(md)

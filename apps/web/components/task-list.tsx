@@ -50,7 +50,7 @@ export function TaskList({ tasks, isLoading }: TaskListProps) {
           <TableHead>任务类型</TableHead>
           <TableHead>状态</TableHead>
           <TableHead>进度</TableHead>
-          <TableHead>错误信息</TableHead>
+          <TableHead>错误 / 警告</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -63,8 +63,16 @@ export function TaskList({ tasks, isLoading }: TaskListProps) {
             <TableCell className="text-muted-foreground">
               {task.progress || '-'}
             </TableCell>
-            <TableCell className="text-destructive max-w-xs truncate">
-              {task.error || '-'}
+            <TableCell className="max-w-md">
+              {task.error ? (
+                <span className="text-destructive">{task.error}</span>
+              ) : task.warnings?.length ? (
+                <span className="text-amber-700 dark:text-amber-400 text-sm whitespace-pre-wrap break-words">
+                  {task.warnings.join('\n')}
+                </span>
+              ) : (
+                '-'
+              )}
             </TableCell>
           </TableRow>
         ))}

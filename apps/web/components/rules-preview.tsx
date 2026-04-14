@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, BookOpen, HelpCircle, FileCode2, Eye, Sparkles } from "lucide-react";
+import { ChevronDown, BookOpen, HelpCircle, FileCode2, Eye, Sparkles, TriangleAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { Game } from "@/lib/types";
 
 interface RulesPreviewProps {
@@ -24,6 +25,13 @@ export function RulesPreview({ game }: RulesPreviewProps) {
   }
 
   const md = game.rulesMarkdown;
+  const extractionWarnings = game.extractionWarnings ?? [];
+  const hasQuick = Boolean(game.quickStart?.trim());
+  const hasQuestions = Boolean(game.suggestedQuestions && game.suggestedQuestions.length > 0);
+  const showStepWarningsBanner =
+    extractionWarnings.length > 0 && (!hasQuick || !hasQuestions);
+  const showQuickstartSection = hasQuick || (extractionWarnings.length > 0 && !hasQuick);
+  const showQuestionsSection = hasQuestions || (extractionWarnings.length > 0 && !hasQuestions);
 
   return (
     <div className="space-y-4">
@@ -81,7 +89,27 @@ export function RulesPreview({ game }: RulesPreviewProps) {
         </Card>
       </Collapsible>
 
-      {game.quickStart ? (
+      {showStepWarningsBanner ? (
+        <Alert className="border-amber-500/40 bg-amber-500/5 text-foreground">
+          <TriangleAlert className="text-amber-600 dark:text-amber-400" />
+          <AlertTitle>提取步骤警告</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2 text-muted-foreground">
+              合并规则可能已成功，但下列步骤未产出内容或仅返回空结果。常见于 API 限流、模型未按 JSON
+              格式输出等。请查看「任务状态」中的详情或重试提取。
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              {extractionWarnings.map((w, i) => (
+                <li key={i} className="break-words">
+                  {w}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {showQuickstartSection ? (
         <Collapsible open={quickStartOpen} onOpenChange={setQuickStartOpen}>
           <Card>
             <CollapsibleTrigger asChild>
@@ -99,16 +127,22 @@ export function RulesPreview({ game }: RulesPreviewProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="pt-0">
-                <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border bg-muted/20 p-4">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{game.quickStart}</ReactMarkdown>
-                </div>
+                {hasQuick ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border bg-muted/20 p-4">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{game.quickStart!}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                    本期未生成快速入门正文。若上方有「提取步骤警告」，其中通常包含具体原因（例如限流或解析失败）。
+                  </p>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>
         </Collapsible>
       ) : null}
 
-      {game.suggestedQuestions && game.suggestedQuestions.length > 0 ? (
+      {showQuestionsSection ? (
         <Collapsible open={questionsOpen} onOpenChange={setQuestionsOpen}>
           <Card>
             <CollapsibleTrigger asChild>
@@ -126,16 +160,22 @@ export function RulesPreview({ game }: RulesPreviewProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="pt-0">
-                <ul className="space-y-2">
-                  {game.suggestedQuestions.map((question, index) => (
-                    <li
-                      key={index}
-                      className="text-sm text-muted-foreground py-2 px-3 rounded-md bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      {question}
-                    </li>
-                  ))}
-                </ul>
+                {hasQuestions ? (
+                  <ul className="space-y-2">
+                    {game.suggestedQuestions!.map((question, index) => (
+                      <li
+                        key={index}
+                        className="text-sm text-muted-foreground py-2 px-3 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        {question}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                    本期未生成建议问题列表。若上方有「提取步骤警告」，请根据提示排查（例如更换模型或稍后重试）。
+                  </p>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>

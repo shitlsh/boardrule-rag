@@ -19,6 +19,8 @@ export interface Game {
   rulesMarkdown?: string
   quickStart?: string
   suggestedQuestions?: string[]
+  /** Non-fatal rule-engine warnings from the last extraction (e.g. quickstart step failed). */
+  extractionWarnings?: string[]
   /** Per-game INDEX template override; null/undefined = use site default. */
   indexProfileId?: string | null
   createdAt: string
@@ -37,6 +39,8 @@ export interface ExtractionTask {
   status: TaskStatus
   progress?: string
   error?: string
+  /** Partial extraction warnings (rule engine `errors`) when task completed with issues. */
+  warnings?: string[]
   createdAt: string
   updatedAt: string
 }

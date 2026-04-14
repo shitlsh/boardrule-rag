@@ -6,7 +6,7 @@ from graphs.state import ExtractionState
 from utils.llm_generate import FLASH_QUICKSTART, LlmCallMeta, flash_max_output_tokens_for_call, generate_flash
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
-from utils.retry import retry
+from utils.retry import EXTRACTION_LLM_RETRY_ATTEMPTS, retry
 
 
 def run(state: ExtractionState) -> dict:
@@ -31,7 +31,7 @@ def run(state: ExtractionState) -> dict:
                 out_warnings=llm_warns,
             )
 
-        raw = retry(_call, attempts=3)
+        raw = retry(_call, attempts=EXTRACTION_LLM_RETRY_ATTEMPTS)
         data = parse_json_object(raw)
         qs = data.get("suggested_questions") or []
         if not isinstance(qs, list):
@@ -45,4 +45,9 @@ def run(state: ExtractionState) -> dict:
             "errors": (state.get("errors") or []) + llm_warns + [f"quickstart_and_questions: {e}"],
         }
     base_errs = list(state.get("errors") or [])
-    return {"quick_start": quick, "suggested_questions": qs, "errors": base_errs + llm_warns}
+    out_errs = base_errs + llm_warns
+    if not quick.strip() and len(qs) == 0:
+        out_errs = out_errs + [
+            "quickstart_and_questions: model returned JSON with empty quick_start and suggested_questions"
+        ]
+    return {"quick_start": quick, "suggested_questions": qs, "errors": out_errs}

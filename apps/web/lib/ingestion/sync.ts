@@ -35,16 +35,31 @@ function mapEngineToGameExtractionStatus(s: ExtractJobStatus): string {
   }
 }
 
-function progressFromEngine(status: ExtractJobStatus, pollError: string | null): string {
+/** Progress JSON for extract poll; optional `warnings` mirrors rule-engine `errors` (partial failures). */
+function progressFromExtractPoll(
+  status: ExtractJobStatus,
+  pollError: string | null,
+  engineWarnings?: string[] | null,
+): string {
+  const warnings = (engineWarnings ?? []).filter((s) => s && s.trim());
   const detail =
     status === "failed" && pollError
       ? pollError
       : status === "completed"
-        ? "合并与导出完成"
+        ? warnings.length > 0
+          ? `合并与导出完成（${warnings.length} 条步骤警告）`
+          : "合并与导出完成"
         : status === "processing"
           ? "规则抽取进行中"
           : "排队或等待规则引擎";
-  return JSON.stringify({ stage: status, detail });
+  const payload: { stage: ExtractJobStatus; detail: string; warnings?: string[] } = {
+    stage: status,
+    detail,
+  };
+  if (warnings.length > 0) {
+    payload.warnings = warnings;
+  }
+  return JSON.stringify(payload);
 }
 
 function progressFromIndexEngine(status: ExtractJobStatus, pollError: string | null): string {
@@ -119,7 +134,13 @@ export async function syncTaskFromRuleEngine(taskId: string) {
 
   const taskStatus = mapEngineToTaskStatus(poll.status);
   const gameExtractionStatus = mapEngineToGameExtractionStatus(poll.status);
-  const progressJson = progressFromEngine(poll.status, poll.error);
+  const engineWarnings =
+    poll.status === "completed" ? (poll.errors ?? []).filter((s) => s && s.trim()) : [];
+  const progressJson = progressFromExtractPoll(
+    poll.status,
+    poll.error,
+    engineWarnings.length > 0 ? engineWarnings : null,
+  );
 
   if (poll.status === "completed" && !poll.merged_markdown) {
     await prisma.game.update({

@@ -19,7 +19,7 @@ from utils.llm_generate import (
 from ingestion.node_builders import sanitize_invisible_unicode_for_rules_markdown
 from utils.page_markers import text_contains_need_more_context
 from utils.prompt_context import render_prompt
-from utils.retry import retry
+from utils.retry import EXTRACTION_LLM_RETRY_ATTEMPTS, retry
 
 _LOG = logging.getLogger("boardrule.chapter_extract")
 
@@ -119,7 +119,7 @@ def run(state: ExtractionState) -> dict:
                 len(labeled),
             )
             try:
-                out = retry(_call, attempts=3)
+                out = retry(_call, attempts=EXTRACTION_LLM_RETRY_ATTEMPTS)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"chapter_extract vision batch {i + 1}: {e}")
                 _LOG.warning(
@@ -177,7 +177,7 @@ def run(state: ExtractionState) -> dict:
                     len(labeled),
                 )
                 try:
-                    out = retry(_call_merged, attempts=3)
+                    out = retry(_call_merged, attempts=EXTRACTION_LLM_RETRY_ATTEMPTS)
                 except Exception as e:  # noqa: BLE001
                     errs.append(f"chapter_extract merged vision (from batch {i + 1}): {e}")
                     break

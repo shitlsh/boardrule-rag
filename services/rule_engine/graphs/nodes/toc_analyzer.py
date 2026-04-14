@@ -8,7 +8,7 @@ from graphs.state import ExtractionState
 from utils.llm_generate import FLASH_TOC, LlmCallMeta, build_labeled_image_parts, generate_flash_vision
 from utils.json_extract import parse_json_object
 from utils.prompt_context import render_prompt
-from utils.retry import retry
+from utils.retry import EXTRACTION_LLM_RETRY_ATTEMPTS, retry
 
 _LOG = logging.getLogger("boardrule.toc_analyzer")
 
@@ -64,7 +64,7 @@ def run(state: ExtractionState) -> dict:
                     out_warnings=llm_warns,
                 )
 
-            raw = retry(_call, attempts=3)
+            raw = retry(_call, attempts=EXTRACTION_LLM_RETRY_ATTEMPTS)
             toc = parse_json_object(raw)
         except Exception as e:  # noqa: BLE001
             err = f"toc_analyzer vision: {e}"

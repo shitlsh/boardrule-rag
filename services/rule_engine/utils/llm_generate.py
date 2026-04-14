@@ -31,6 +31,7 @@ from utils.ai_gateway import (
 from utils.dashscope_client import resolve_dashscope_api_base
 from utils.bedrock_converse import converse_messages, parts_to_bedrock_content
 from utils.openrouter_client import chat_completion_with_meta
+from utils.retry import is_likely_rate_limit, sleep_before_retry_rate_limit
 
 # Preset names (use at call sites to avoid magic strings)
 FLASH_TOC = "flash_toc"
@@ -46,6 +47,7 @@ _DEFAULT_SLOT_MAX_OUTPUT = 32768
 _ENV_PRO_DEFAULT = "BOARDRULE_PRO_MAX_OUTPUT_TOKENS_DEFAULT"
 _ENV_FLASH_DEFAULT = "BOARDRULE_FLASH_MAX_OUTPUT_TOKENS_DEFAULT"
 _ENV_MAX_CONTINUATION = "BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS"
+_GEMINI_RATE_LIMIT_ATTEMPTS = 5
 
 CONTINUE_MSG = (
     "【续写】上文为你的部分输出（末尾可能不完整）。"
@@ -267,17 +269,24 @@ def _gemini_generate_with_meta(
     empty_error: str,
 ) -> tuple[str, Any]:
     client = _genai_client(api_key)
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=gen_config,
-    )
-    if not response.text:
-        raise RuntimeError(empty_error)
-    fr = None
-    if response.candidates:
-        fr = response.candidates[0].finish_reason
-    return response.text, fr
+    for attempt in range(_GEMINI_RATE_LIMIT_ATTEMPTS):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=gen_config,
+            )
+            if not response.text:
+                raise RuntimeError(empty_error)
+            fr = None
+            if response.candidates:
+                fr = response.candidates[0].finish_reason
+            return response.text, fr
+        except Exception as e:
+            if attempt < _GEMINI_RATE_LIMIT_ATTEMPTS - 1 and is_likely_rate_limit(e):
+                sleep_before_retry_rate_limit(attempt, e)
+                continue
+            raise
 
 
 def _mixed_parts_to_user_content(parts: list[Any]) -> types.Content:
