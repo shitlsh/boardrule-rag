@@ -155,19 +155,30 @@ export function ModelsExtractionTemplates() {
     }
   }, []);
 
-  const extractionBindingsKey = JSON.stringify(extractionCfg.slotBindings);
+  /** Only credential IDs affect `/api/ai/models`; do not key off full `slotBindings` (would refetch on every maxOutputTokens / model edit). */
+  const slotCredentialIdsKey = useMemo(() => {
+    const sb = extractionCfg.slotBindings;
+    return [
+      sb.flashToc?.credentialId?.trim() ?? "",
+      sb.flashQuickstart?.credentialId?.trim() ?? "",
+      sb.proExtract?.credentialId?.trim() ?? "",
+      sb.proMerge?.credentialId?.trim() ?? "",
+    ].join("\x1f");
+  }, [
+    extractionCfg.slotBindings.flashToc?.credentialId,
+    extractionCfg.slotBindings.flashQuickstart?.credentialId,
+    extractionCfg.slotBindings.proExtract?.credentialId,
+    extractionCfg.slotBindings.proMerge?.credentialId,
+  ]);
+
   useEffect(() => {
     if (!gateway || !selected || selected.kind !== "EXTRACTION") return;
-    const sb = extractionCfg.slotBindings;
-    for (const key of ["flashToc", "flashQuickstart"] as const) {
-      const id = sb[key]?.credentialId?.trim();
-      if (id) void fetchModels(id, "flash");
-    }
-    for (const key of ["proExtract", "proMerge"] as const) {
-      const id = sb[key]?.credentialId?.trim();
-      if (id) void fetchModels(id, "pro");
-    }
-  }, [gateway, selected?.id, selected?.kind, extractionBindingsKey, fetchModels]);
+    const [ft, fq, pe, pm] = slotCredentialIdsKey.split("\x1f");
+    const flashIds = new Set([ft, fq].filter(Boolean));
+    const proIds = new Set([pe, pm].filter(Boolean));
+    for (const id of flashIds) void fetchModels(id, "flash");
+    for (const id of proIds) void fetchModels(id, "pro");
+  }, [gateway, selected?.id, selected?.kind, slotCredentialIdsKey, fetchModels]);
 
   const createProfile = async () => {
     try {
@@ -263,7 +274,6 @@ export function ModelsExtractionTemplates() {
                     credentialId: v,
                     model: binding?.model ?? "",
                   });
-                  void fetchModels(v, slot);
                 }
               }}
             >
