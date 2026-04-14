@@ -6,32 +6,24 @@
 
 ## rule_engine（后端服务）
 
-### 一、内存 Job Store —— 重启即丢失（当前设计下无实际修复价值）
+### 一、内存 Job Store 持久化 ——【已完成】
 
-**文件**：`api/routers/extract.py:59–60`
+**文件**：`api/routers/extract.py`、`utils/paths.py`（commit `d63d53f`）
 
-**现状**：所有抽取任务（`ExtractJob`）存储在进程级 `_jobs: dict` 中，重启后全部丢失。
+**已实现**：
 
-**重要结论：持久化 job store 对当前架构没有实际价值。** 原因如下：
+- **磁盘目录结构**：`{PAGE_ASSETS_ROOT}/{game_id}/`，图片、`page_job.json`、`extract.json` 平铺在同一目录
+- **`utils/paths.py`** 新增 `game_dir()`、`game_page_job_json()`、`game_extract_json()` helper
+- **`extract.json`**：job 完成/失败时写入，进程重启后 `GET /games/{game_id}/extract/{job_id}` 可从磁盘恢复结果
+- **`page_job.json`**：页面光栅化完成后写入，resume 时若内存和 extract.json 均无 vision_cache，可从此文件重建
+- **重启后仍 in-flight 的 job** 在轮询时被标记为 `failed`（提示用户重新提交），不再永久挂起
+- **图片清理**：`POST /extract/pages` 重新上传时删除旧图片和旧 `page_job.json`，只保留 `extract.json`
 
-重启后任务必然失败，且无任何恢复机制——仅持久化 job 状态是不够的，要实现真正的断点续跑，需要同时持久化三件事：
+**破坏性变更（前端需要更新）**：
+- 轮询 URL：`GET /extract/{job_id}` → `GET /games/{game_id}/extract/{job_id}`
+- 图片公开 URL：`/page-assets/{page_job_id}/{filename}` → `/page-assets/{game_id}/{filename}`
 
-1. **任务输入**：页面图片路径（存 `/tmp`，重启后可能清空）+ ai_snapshot（内存）
-2. **LangGraph checkpoint**：`run_extraction` 内部虽然有 `thread_id` 可以续跑，但 checkpoint 存储也需要配置持久化后端
-3. **任务结果**：`result` 字段（当前只写内存）
-
-三者缺一不可。单独持久化结果只能让前端拿到历史完成的 job，对进行中的 job 重启后仍然 404（或变成永久 processing 状态）——实际上还不如现在直接 404 清晰（至少前端知道失败了）。
-
-**当前行为**：
-- 进程存活期间：正常，重启后轮询 → 404，前端无法区分"还在跑"和"进程死了"
-- 内存泄漏：completed job 的 result（含完整 markdown）永不释放，但 HF Space 长时间无请求会重启，自然清空，实际影响有限
-
-**真正要做这件事的前提条件**：
-- 图片文件改用持久卷（`/data/page_assets/`）而非 `/tmp`
-- LangGraph checkpoint 配置持久化后端（如 SQLite on `/data`）
-- 前端的轮询逻辑改为支持"进程重启后重新提交"的 UX 流程
-
-**结论**：这是一个需要完整设计的功能，不是一个 bug 修复。当前阶段搁置，接受"重启 = 任务失败，重新提交"的行为。
+**前提条件提示**：若 `PAGE_ASSETS_ROOT` 未指向 HF 持久卷，图片重启后仍会丢失（但 extract 结果 JSON 可读）；LangGraph checkpoint 已持久化到 Supabase（PostgresSaver），不受影响。
 
 ---
 
@@ -228,6 +220,9 @@ with httpx.stream("GET", url, ...) as r, open(p, "wb") as f:
 | 第三阶段 | `api/routers/extract.py` 裸 `assert` 替换为 `if … raise` |
 | 第三阶段 | `api/main.py` header 解析失败改为 `WARNING` 日志 |
 | 第三阶段 | `utils/prompt_context.py` Jinja2 `Environment` 改为模块级单例 |
+| 第四阶段 | `utils/paths.py` 新增 `game_dir()`、`game_page_job_json()`、`game_extract_json()` helper |
+| 第四阶段 | `api/routers/extract.py` job 完成/失败时写 `extract.json`，轮询端点改为 `GET /games/{game_id}/extract/{job_id}` |
+| 第四阶段 | 图片公开 URL 改为 `/page-assets/{game_id}/{filename}`，上传时清理旧图片 |
 
 ## 搁置（有原因）
 
