@@ -102,11 +102,16 @@
           <view class="bubble-wrapper">
             <view
               class="bubble"
-              :class="msg.role === 'user' ? 'bubble--user' : 'bubble--assistant'"
+              :class="bubbleModifierClass(msg)"
             >
               <text v-if="msg.role === 'user'" class="bubble__text">{{ msg.content }}</text>
               <!-- #ifdef MP-WEIXIN -->
               <view v-else-if="!msg.content.trim()" class="bubble__streaming-placeholder">
+                <view class="typing-dots typing-dots--phase" aria-hidden="true">
+                  <view class="typing-dots__dot" />
+                  <view class="typing-dots__dot" />
+                  <view class="typing-dots__dot" />
+                </view>
                 <text class="bubble__phase-text">{{ streamPhaseLabel || '请稍候…' }}</text>
               </view>
               <towxml
@@ -118,6 +123,11 @@
               <!-- #endif -->
               <!-- #ifdef H5 -->
               <view v-else-if="!msg.content.trim()" class="bubble__streaming-placeholder">
+                <view class="typing-dots typing-dots--phase" aria-hidden="true">
+                  <view class="typing-dots__dot" />
+                  <view class="typing-dots__dot" />
+                  <view class="typing-dots__dot" />
+                </view>
                 <text class="bubble__phase-text">{{ streamPhaseLabel || '请稍候…' }}</text>
               </view>
               <view
@@ -422,6 +432,18 @@ const inputText = ref('')
 /** Stage text for empty assistant bubble during SSE */
 const streamPhaseLabel = ref('')
 const streamingAssistantId = ref<string | null>(null)
+
+/** Assistant bubble: subtle glow while tokens are streaming in. */
+function bubbleModifierClass(msg: { role: string; id: string; content: string }) {
+  if (msg.role === 'user') return 'bubble--user'
+  if (
+    streamingAssistantId.value === msg.id &&
+    msg.content.trim().length > 0
+  ) {
+    return 'bubble--assistant bubble--stream-active'
+  }
+  return 'bubble--assistant'
+}
 
 let streamFlushTimer: ReturnType<typeof setTimeout> | null = null
 let streamAccum = ''
@@ -796,13 +818,54 @@ function confirmClear() {
 }
 
 .bubble__streaming-placeholder {
-  min-height: 36rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  min-height: 40rpx;
 }
 
 .bubble__phase-text {
+  flex: 1;
+  min-width: 0;
   font-size: 26rpx;
-  color: #a8a29e;
+  color: #78716c;
   line-height: 1.55;
+  animation: phase-text-breathe 2.4s ease-in-out infinite;
+}
+
+.typing-dots--phase {
+  flex-shrink: 0;
+
+  .typing-dots__dot {
+    width: 11rpx;
+    height: 11rpx;
+    background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%);
+  }
+}
+
+.bubble--stream-active {
+  animation: bubble-stream-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes phase-text-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes bubble-stream-glow {
+  0%,
+  100% {
+    box-shadow: $br-shadow-card;
+  }
+  50% {
+    box-shadow: 0 4rpx 22rpx rgba(180, 83, 9, 0.14);
+  }
 }
 
 .typing-dots {
@@ -837,6 +900,15 @@ function confirmClear() {
   .typing-dots__dot {
     animation: none;
     opacity: 0.7;
+  }
+
+  .bubble__phase-text {
+    animation: none;
+    opacity: 0.92;
+  }
+
+  .bubble--stream-active {
+    animation: none;
   }
 }
 
