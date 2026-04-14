@@ -65,6 +65,23 @@ function hasEmbedOut(m: BedrockModelSummary): boolean {
   return (m.outputModalities ?? []).some((x) => x === "EMBEDDING");
 }
 
+/**
+ * `ListFoundationModels` returns per-context variants (e.g. `amazon.nova-pro-v1:0:300k`).
+ * `Converse` uses the base model ID (`amazon.nova-pro-v1:0`); suffixed IDs often return
+ * `ResourceNotFoundException: Model not found`.
+ */
+export function canonicalBedrockConverseModelId(modelId: string): string {
+  let t = modelId.trim();
+  for (let i = 0; i < 4; i++) {
+    const m = t.match(
+      /^(.+):(\d+):(\d+k|mm|8k|20k|28k|48k|200k|256k|1000k|512|128k)$/i,
+    );
+    if (!m) break;
+    t = `${m[1]}:${m[2]}`;
+  }
+  return t;
+}
+
 function parseOne(m: BedrockModelSummary): GeminiModelOption | null {
   const id = typeof m.modelId === "string" ? m.modelId.trim() : "";
   if (!id) return null;
@@ -92,13 +109,64 @@ function parseOne(m: BedrockModelSummary): GeminiModelOption | null {
   };
 }
 
-function normalizeSummaries(rows: BedrockModelSummary[]): GeminiModelOption[] {
-  const out: GeminiModelOption[] = [];
-  for (const m of rows) {
-    const p = parseOne(m);
-    if (p) out.push(p);
+function finalizeBedrockRow(
+  base: GeminiModelOption,
+  canonical: string,
+  variants: string[],
+  modelNameRaw: string,
+): GeminiModelOption {
+  const baseName = (modelNameRaw ?? "").trim() || canonical;
+  let displayName: string;
+  if (variants.length > 1) {
+    displayName = `${baseName} (${canonical})`;
+  } else if (variants[0] !== canonical) {
+    displayName = `${baseName} — ${canonical}`;
+  } else {
+    displayName = base.displayName;
   }
-  return out;
+  let description = base.description;
+  if (variants.length > 1) {
+    description = `${description} · Converse 使用 ${canonical}（已合并 ${variants.length} 个列表 ID）`;
+  } else if (variants[0] !== canonical) {
+    description = `${description} · 列表 ID ${variants[0]} → Converse 使用 ${canonical}`;
+  }
+  return {
+    ...base,
+    name: canonical,
+    displayName,
+    description,
+  };
+}
+
+function normalizeSummaries(rows: BedrockModelSummary[]): GeminiModelOption[] {
+  const groups = new Map<
+    string,
+    { base: GeminiModelOption; variants: string[]; modelName: string }
+  >();
+  for (const m of rows) {
+    const rawId = typeof m.modelId === "string" ? m.modelId.trim() : "";
+    if (!rawId) continue;
+    const canonical = canonicalBedrockConverseModelId(rawId);
+    const p = parseOne(m);
+    if (!p) continue;
+    const modelName = (m.modelName ?? "").trim();
+    const g = groups.get(canonical);
+    if (!g) {
+      groups.set(canonical, { base: p, variants: [rawId], modelName });
+    } else {
+      g.variants.push(rawId);
+      g.base.capabilities.generateContent =
+        g.base.capabilities.generateContent || p.capabilities.generateContent;
+      g.base.capabilities.embedContent = g.base.capabilities.embedContent || p.capabilities.embedContent;
+      g.base.visionHint = g.base.visionHint || p.visionHint;
+      if (!g.modelName && modelName) g.modelName = modelName;
+    }
+  }
+  const out: GeminiModelOption[] = [];
+  for (const [canonical, { base, variants, modelName }] of groups.entries()) {
+    out.push(finalizeBedrockRow(base, canonical, variants, modelName));
+  }
+  return out.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.name.localeCompare(b.name));
 }
 
 export type BedrockListAuth =

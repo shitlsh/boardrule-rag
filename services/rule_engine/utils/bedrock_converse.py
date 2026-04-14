@@ -10,6 +10,7 @@ import boto3
 from botocore.config import Config
 
 from utils.ai_gateway import ChatSlot, FlashProSlot, get_extraction_runtime
+from utils.bedrock_model_id import canonical_bedrock_converse_model_id
 
 # Slots that carry Bedrock fields for Runtime ``converse`` (same shape in JSON).
 BedrockLike = FlashProSlot | ChatSlot
@@ -101,8 +102,9 @@ def converse_messages(
 ) -> tuple[str, bool]:
     """Multi-turn Converse; returns (assistant text, truncated)."""
     region, mode = _require_bedrock_slot(slot)
+    mid = canonical_bedrock_converse_model_id(slot.model)
     body = {
-        "modelId": slot.model,
+        "modelId": mid,
         "messages": messages,
         "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
     }
