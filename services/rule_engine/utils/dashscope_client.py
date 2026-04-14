@@ -76,8 +76,12 @@ def chat_completion_with_meta(
     messages: list[dict[str, Any]],
     temperature: float,
     max_tokens: int,
-) -> tuple[str, str | None]:
-    """Returns (text, finish_reason). ``finish_reason`` is ``\"length\"`` when output may be truncated."""
+) -> tuple[str, bool]:
+    """Returns ``(text, is_truncated)``.
+
+    ``is_truncated`` is ``True`` when ``finish_reason == "length"``, indicating the
+    model hit the output token limit and a continuation call may be needed.
+    """
     base = resolve_dashscope_api_base(api_base)
     url = f"{base}/chat/completions"
     payload: dict[str, Any] = {
@@ -97,9 +101,8 @@ def chat_completion_with_meta(
     msg = ch0.get("message") or {}
     text = _message_content_to_text(msg)
     fr = ch0.get("finish_reason")
-    if isinstance(fr, str):
-        return text, fr
-    return text, str(fr) if fr is not None else None
+    truncated = isinstance(fr, str) and fr.lower() == "length"
+    return text, truncated
 
 
 def chat_completion(
@@ -149,7 +152,7 @@ def chat_completion_text_with_meta(
     user_text: str,
     temperature: float,
     max_tokens: int,
-) -> tuple[str, str | None]:
+) -> tuple[str, bool]:
     return chat_completion_with_meta(
         api_key=api_key,
         api_base=api_base,
@@ -215,7 +218,7 @@ def chat_completion_from_parts_with_meta(
     parts: list[Any],
     temperature: float,
     max_tokens: int,
-) -> tuple[str, str | None]:
+) -> tuple[str, bool]:
     messages = parts_to_dashscope_messages(parts)
     return chat_completion_with_meta(
         api_key=api_key,
