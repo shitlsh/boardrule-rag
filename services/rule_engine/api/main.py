@@ -124,7 +124,11 @@ async def boardrule_ai_header_middleware(request: Request, call_next):
         try:
             request.state.boardrule_ai = parse_boardrule_ai_header(raw)
             request.state.boardrule_ai_invalid = False
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "x-boardrule-ai-config header parse failed (request will be rejected downstream): %s",
+                exc,
+            )
             request.state.boardrule_ai = None
             request.state.boardrule_ai_invalid = True
     else:

@@ -109,6 +109,7 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
         len(body.message),
     )
     t0 = time.perf_counter()
+    t_build_begin = t0  # initialised here so except clauses can always reference it
     try:
         yield _sse_bytes({"type": "phase", "id": "prepare"})
         t_build_begin = time.perf_counter()

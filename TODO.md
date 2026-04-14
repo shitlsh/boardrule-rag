@@ -11,6 +11,7 @@ priority. Items marked **DONE** have already been addressed.
 
 - **`api/routers/chat.py:113–118`** — `t_build_begin` may be referenced before
   assignment in certain exception paths (uninitialized variable bug).
+  **DONE**: initialized to `t0` before the `try` block.
 - **`graphs/nodes/chapter_extract.py:101–112`** — Lambda inside a loop captures
   loop variables `i` and `parts` by reference. Currently safe because the loop
   finishes before lambdas are called, but fragile; use default-argument binding
@@ -31,6 +32,7 @@ priority. Items marked **DONE** have already been addressed.
   mechanism.
 - **`api/routers/extract.py:377`** — Bare `assert` is stripped by Python `-O`
   (optimized bytecode). Replace with an explicit `if … raise` guard.
+  **DONE**: replaced with `if file is None: raise RuntimeError(...)`.
 - **`api/routers/extract.py:222–226`** — `r.content` loads the entire PDF into
   memory at once. Use `r.iter_content()` / stream to a temp file for large PDFs.
 - **`api/routers/extract.py:488–500`** — Two separate lock acquisitions on the
@@ -38,9 +40,11 @@ priority. Items marked **DONE** have already been addressed.
   into a single critical section.
 - **`api/main.py:127–129`** — Header parsing failure is silently swallowed with
   no log entry. Log at `WARNING` so ops can detect misconfigured clients.
+  **DONE**: added `logger.warning(...)` with the exception message.
 - **`utils/prompt_context.py:43–44`** — A fresh Jinja2 `Environment` is
   constructed on every `render_prompt()` call, discarding the template cache.
   Build the `Environment` once at module level (or use `functools.lru_cache`).
+  **DONE**: `_JINJA_ENV` module-level singleton; `_env()` helper removed.
 - **Three in-memory job stores** (`_jobs` dicts) — all job state is lost on
   process restart and no TTL eviction exists. For production use, persist to
   Redis/DB and add an expiry policy.
@@ -115,3 +119,17 @@ priority. Items marked **DONE** have already been addressed.
   `load_vector_index()`, `build_and_persist_index()`, and
   `load_hybrid_reranked_nodes()` now accept an explicit `embed_model` argument;
   `build_rulebook_query_engine()` no longer writes `Settings.llm`.
+- **DONE** `api/routers/chat.py` — `t_build_begin` initialized before `try` block.
+- **DONE** `api/routers/extract.py` — Bare `assert file is not None` replaced
+  with `if file is None: raise RuntimeError(...)`.
+- **DONE** `api/main.py` — Header parse failure now logs at `WARNING`.
+- **DONE** `utils/prompt_context.py` — Module-level `_JINJA_ENV` singleton;
+  per-call `Environment()` construction eliminated.
+
+## Investigated, not fixable / deferred
+
+- **`ingestion/rulebook_query.py` Bedrock `api_key` mode** — The `os.environ`
+  mutation for `AWS_BEARER_TOKEN_BEDROCK` is intentional: `BedrockConverse`
+  (LlamaIndex) does not expose a constructor parameter for Bearer-token auth;
+  boto3 reads the env var during session creation. The save/restore try/finally
+  pattern is the only supported approach without patching the library.

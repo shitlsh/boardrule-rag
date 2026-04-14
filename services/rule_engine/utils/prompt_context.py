@@ -14,6 +14,11 @@ _DEFAULT_TERM = (
     "首次出现时可附原文括号，例如「工人放置（Worker Placement）」。）"
 )
 
+# Module-level singleton: constructing a fresh Environment on every render call
+# discards the template cache.  StrictUndefined + autoescape=False matches the
+# old per-call behaviour exactly.
+_JINJA_ENV = Environment(undefined=StrictUndefined, autoescape=False)
+
 
 def game_display_name(state: ExtractionState) -> str:
     g = (state.get("game_name") or state.get("game_id") or "本游戏").strip()
@@ -40,17 +45,13 @@ def _base_context(state: ExtractionState) -> dict[str, Any]:
     }
 
 
-def _env() -> Environment:
-    return Environment(undefined=StrictUndefined, autoescape=False)
-
-
 def render_string(template_str: str, state: ExtractionState | None = None, **extra: Any) -> str:
     """Render an inline template string (used for small fragments)."""
     ctx: dict[str, Any] = {}
     if state is not None:
         ctx.update(_base_context(state))
     ctx.update(extra)
-    return _env().from_string(template_str).render(**ctx)
+    return _JINJA_ENV.from_string(template_str).render(**ctx)
 
 
 def render_prompt(template_name: str, state: ExtractionState | None = None, **extra: Any) -> str:

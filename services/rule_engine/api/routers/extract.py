@@ -374,7 +374,8 @@ async def prepare_rulebook_pages(
                 src_name = file_url
                 local = tmp_path
             else:
-                assert file is not None
+                if file is None:
+                    raise RuntimeError("file upload is required when file_url is not provided")
                 suffix = Path(file.filename or "rules.pdf").suffix or ".pdf"
                 fd, raw = tempfile.mkstemp(suffix=suffix)
                 os.close(fd)
