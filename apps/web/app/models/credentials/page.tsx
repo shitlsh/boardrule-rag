@@ -56,7 +56,7 @@ export default function ModelsCredentialsPage() {
   return (
     <div className="space-y-4">
       <p className="text-muted-foreground text-sm">
-        添加 Gemini / OpenRouter / 百炼（Qwen）等 API 凭证后，可在「提取模型」「聊天模型」「索引配置」中选择对应凭证与模型。
+        通过「添加凭证」弹窗录入 Gemini、OpenRouter、百炼（Qwen）或 Amazon Bedrock 等密钥后，可在「提取模型」「聊天模型」「索引配置」中选择对应凭证与模型。
       </p>
       <ModelCredentialsPanel data={data} onUpdated={onUpdated} />
     </div>

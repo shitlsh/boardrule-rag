@@ -9,6 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -66,6 +75,7 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   const [bedrockAccessKeyId, setBedrockAccessKeyId] = useState("");
   const [bedrockSecretAccessKey, setBedrockSecretAccessKey] = useState("");
   const [bedrockSessionToken, setBedrockSessionToken] = useState("");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingEnabledId, setTogglingEnabledId] = useState<string | null>(null);
@@ -153,6 +163,7 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
       setBedrockAccessKeyId("");
       setBedrockSecretAccessKey("");
       setBedrockSessionToken("");
+      setAddDialogOpen(false);
       toast.success("凭证已保存");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "添加失败");
@@ -216,181 +227,223 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">API 凭证</CardTitle>
         <CardDescription>
-          选择供应商并填写密钥。别名全局唯一（不区分大小写）。凭证可在下方槽位中复用；与具体模型 ID 分开配置，可随时增删。
+          选择供应商并填写密钥。别名全局唯一（不区分大小写）。凭证可在下方槽位中复用；与具体模型 ID 分开配置，可随时增删。添加凭证请在弹窗中完成，便于排布 Bedrock 等多字段。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
-          <p className="text-sm font-medium mb-3">添加新凭证</p>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
-            <Field className="min-w-0 flex-1 sm:max-w-[13rem] lg:max-w-[15rem]">
-              <FieldLabel>供应商</FieldLabel>
-              <Select value={vendor} onValueChange={(v) => setVendor(v as AiVendor)}>
-                <SelectTrigger
-                  className="w-full min-w-0 max-w-full"
-                  title={`${VENDOR_TRIGGER_LABEL[vendor]} — ${VENDOR_LABEL[vendor]}`}
-                >
-                  <SelectValue>{VENDOR_TRIGGER_LABEL[vendor]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent className="max-w-[min(100vw-2rem,22rem)]">
-                  <SelectItem
-                    value="gemini"
-                    textValue="Gemini Google Gemini AI Studio Vertex"
-                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
-                  >
-                    <span className="flex flex-col gap-1 text-left leading-snug">
-                      <span className="font-medium">Gemini</span>
-                      <span className="text-muted-foreground text-xs">
-                        Google AI Studio / Vertex 等渠道的密钥
-                      </span>
-                    </span>
-                  </SelectItem>
-                  <SelectItem
-                    value="openrouter"
-                    textValue="OpenRouter"
-                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
-                  >
-                    <span className="flex flex-col gap-1 text-left leading-snug">
-                      <span className="font-medium">OpenRouter</span>
-                      <span className="text-muted-foreground text-xs">openrouter.ai 控制台中的 API Key</span>
-                    </span>
-                  </SelectItem>
-                  <SelectItem
-                    value="qwen"
-                    textValue="Qwen DashScope Bailian Alibaba"
-                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
-                  >
-                    <span className="flex flex-col gap-1 text-left leading-snug">
-                      <span className="font-medium">Qwen（百炼）</span>
-                      <span className="text-muted-foreground text-xs">
-                        阿里云大模型服务平台百炼 / DashScope 的 API Key（OpenAI 兼容接口）
-                      </span>
-                    </span>
-                  </SelectItem>
-                  <SelectItem
-                    value="bedrock"
-                    textValue="Amazon Bedrock AWS"
-                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
-                  >
-                    <span className="flex flex-col gap-1 text-left leading-snug">
-                      <span className="font-medium">Amazon Bedrock</span>
-                      <span className="text-muted-foreground text-xs">
-                        IAM（AK/SK）或 Bedrock API Key；需与区域一致
-                      </span>
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            {vendor === "qwen" ? (
-              <div className="min-w-0 flex-[2] lg:max-w-md">
-                <QwenEndpointPicker value={qwenBase} onChange={setQwenBase} disabled={adding} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
+          <p className="text-sm text-muted-foreground min-w-0">
+            点击打开弹窗填写 API Key 或 IAM 信息；表单为纵向布局，避免窄屏下字段挤在一行。
+          </p>
+          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" className="shrink-0 w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                <span className="ml-2">添加凭证</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent
+              showCloseButton
+              className="flex max-h-[min(90dvh,720px)] w-[calc(100%-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+            >
+              <DialogHeader className="shrink-0 space-y-2 border-b border-border px-6 py-4 text-left">
+                <DialogTitle>添加 API 凭证</DialogTitle>
+                <DialogDescription>
+                  选择供应商并填写密钥。Bedrock 请选择区域与认证方式；IAM 模式下 Session Token 仅用于临时凭证。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="min-h-0 max-h-[min(55dvh,26rem)] flex-1 overflow-y-auto overflow-x-hidden px-6 [scrollbar-gutter:stable]">
+                <div className="space-y-4 py-4">
+                  <Field className="min-w-0">
+                    <FieldLabel>供应商</FieldLabel>
+                    <Select value={vendor} onValueChange={(v) => setVendor(v as AiVendor)}>
+                      <SelectTrigger
+                        className="w-full min-w-0"
+                        title={`${VENDOR_TRIGGER_LABEL[vendor]} — ${VENDOR_LABEL[vendor]}`}
+                      >
+                        <SelectValue>{VENDOR_TRIGGER_LABEL[vendor]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="max-w-[min(100vw-2rem,22rem)]">
+                        <SelectItem
+                          value="gemini"
+                          textValue="Gemini Google Gemini AI Studio Vertex"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">Gemini</span>
+                            <span className="text-muted-foreground text-xs">
+                              Google AI Studio / Vertex 等渠道的密钥
+                            </span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem
+                          value="openrouter"
+                          textValue="OpenRouter"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">OpenRouter</span>
+                            <span className="text-muted-foreground text-xs">
+                              openrouter.ai 控制台中的 API Key
+                            </span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem
+                          value="qwen"
+                          textValue="Qwen DashScope Bailian Alibaba"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">Qwen（百炼）</span>
+                            <span className="text-muted-foreground text-xs">
+                              阿里云大模型服务平台百炼 / DashScope 的 API Key（OpenAI 兼容接口）
+                            </span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem
+                          value="bedrock"
+                          textValue="Amazon Bedrock AWS"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">Amazon Bedrock</span>
+                            <span className="text-muted-foreground text-xs">
+                              IAM（AK/SK）或 Bedrock API Key；需与区域一致
+                            </span>
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {vendor === "qwen" ? (
+                    <div className="min-w-0">
+                      <QwenEndpointPicker value={qwenBase} onChange={setQwenBase} disabled={adding} />
+                    </div>
+                  ) : null}
+                  {vendor === "bedrock" ? (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <Field className="min-w-0">
+                        <FieldLabel>区域</FieldLabel>
+                        <Input
+                          placeholder="us-east-1"
+                          value={bedrockRegion}
+                          onChange={(e) => setBedrockRegion(e.target.value)}
+                          autoComplete="off"
+                          className="w-full min-w-0 font-mono text-sm"
+                        />
+                      </Field>
+                      <Field className="min-w-0">
+                        <FieldLabel>认证方式</FieldLabel>
+                        <Select
+                          value={bedrockAuthMode}
+                          onValueChange={(v) => setBedrockAuthMode(v as BedrockAuthMode)}
+                        >
+                          <SelectTrigger className="w-full min-w-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="api_key">Bedrock API Key</SelectItem>
+                            <SelectItem value="iam">IAM（AK/SK）</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                  ) : null}
+                  <Field className="min-w-0">
+                    <FieldLabel>别名</FieldLabel>
+                    <Input
+                      placeholder="例如 prod、personal"
+                      value={alias}
+                      onChange={(e) => setAlias(e.target.value)}
+                      autoComplete="off"
+                      className="w-full min-w-0"
+                    />
+                  </Field>
+                  {vendor === "bedrock" && bedrockAuthMode === "iam" ? (
+                    <div className="space-y-4">
+                      <Field className="min-w-0">
+                        <FieldLabel>Access Key ID</FieldLabel>
+                        <Input
+                          type="password"
+                          placeholder="AKIA…"
+                          value={bedrockAccessKeyId}
+                          onChange={(e) => setBedrockAccessKeyId(e.target.value)}
+                          autoComplete="off"
+                          className="w-full min-w-0 font-mono text-sm"
+                        />
+                      </Field>
+                      <Field className="min-w-0">
+                        <FieldLabel>Secret Access Key</FieldLabel>
+                        <Input
+                          type="password"
+                          placeholder="Secret"
+                          value={bedrockSecretAccessKey}
+                          onChange={(e) => setBedrockSecretAccessKey(e.target.value)}
+                          autoComplete="new-password"
+                          className="w-full min-w-0 font-mono text-sm"
+                        />
+                      </Field>
+                      <Field className="min-w-0">
+                        <FieldLabel>Session Token（可选）</FieldLabel>
+                        <Input
+                          type="password"
+                          placeholder="临时凭证时填写"
+                          value={bedrockSessionToken}
+                          onChange={(e) => setBedrockSessionToken(e.target.value)}
+                          autoComplete="off"
+                          className="w-full min-w-0 font-mono text-sm"
+                        />
+                      </Field>
+                    </div>
+                  ) : (
+                    <Field className="min-w-0">
+                      <FieldLabel>{vendor === "bedrock" ? "Bedrock API Key" : "API Key"}</FieldLabel>
+                      <Input
+                        type="password"
+                        placeholder={
+                          vendor === "bedrock"
+                            ? "Bedrock 控制台生成的 API Key"
+                            : vendor === "openrouter"
+                              ? "粘贴 OpenRouter 控制台中的 API Key"
+                              : vendor === "qwen"
+                                ? "粘贴阿里云百炼（DashScope）API Key"
+                                : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                        }
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full min-w-0"
+                      />
+                    </Field>
+                  )}
+                </div>
               </div>
-            ) : null}
-            {vendor === "bedrock" ? (
-              <>
-                <Field className="min-w-0 flex-1 sm:max-w-[11rem]">
-                  <FieldLabel>区域</FieldLabel>
-                  <Input
-                    placeholder="us-east-1"
-                    value={bedrockRegion}
-                    onChange={(e) => setBedrockRegion(e.target.value)}
-                    autoComplete="off"
-                  />
-                </Field>
-                <Field className="min-w-0 flex-1 sm:max-w-[12rem]">
-                  <FieldLabel>认证</FieldLabel>
-                  <Select
-                    value={bedrockAuthMode}
-                    onValueChange={(v) => setBedrockAuthMode(v as BedrockAuthMode)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="api_key">Bedrock API Key</SelectItem>
-                      <SelectItem value="iam">IAM（AK/SK）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </>
-            ) : null}
-            <Field className="min-w-0 flex-1 lg:max-w-xs">
-              <FieldLabel>别名</FieldLabel>
-              <Input
-                placeholder="例如 prod、personal"
-                value={alias}
-                onChange={(e) => setAlias(e.target.value)}
-                autoComplete="off"
-              />
-            </Field>
-            {vendor === "bedrock" && bedrockAuthMode === "iam" ? (
-              <>
-                <Field className="min-w-0 flex-[2] lg:max-w-xs">
-                  <FieldLabel>Access Key ID</FieldLabel>
-                  <Input
-                    type="password"
-                    placeholder="AKIA…"
-                    value={bedrockAccessKeyId}
-                    onChange={(e) => setBedrockAccessKeyId(e.target.value)}
-                    autoComplete="off"
-                  />
-                </Field>
-                <Field className="min-w-0 flex-[2] lg:max-w-xs">
-                  <FieldLabel>Secret Access Key</FieldLabel>
-                  <Input
-                    type="password"
-                    placeholder="Secret"
-                    value={bedrockSecretAccessKey}
-                    onChange={(e) => setBedrockSecretAccessKey(e.target.value)}
-                    autoComplete="new-password"
-                  />
-                </Field>
-                <Field className="min-w-0 flex-[2] lg:max-w-md">
-                  <FieldLabel>Session Token（可选）</FieldLabel>
-                  <Input
-                    type="password"
-                    placeholder="临时凭证时填写"
-                    value={bedrockSessionToken}
-                    onChange={(e) => setBedrockSessionToken(e.target.value)}
-                    autoComplete="off"
-                  />
-                </Field>
-              </>
-            ) : (
-              <Field className="min-w-0 flex-[2]">
-                <FieldLabel>{vendor === "bedrock" ? "Bedrock API Key" : "API Key"}</FieldLabel>
-                <Input
-                  type="password"
-                  placeholder={
-                    vendor === "bedrock"
-                      ? "Bedrock 控制台生成的 API Key"
-                      : vendor === "openrouter"
-                        ? "粘贴 OpenRouter 控制台中的 API Key"
-                        : vendor === "qwen"
-                          ? "粘贴阿里云百炼（DashScope）API Key"
-                          : "粘贴 Google AI Studio 或兼容渠道的密钥"
-                  }
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </Field>
-            )}
-            <Button type="button" className="shrink-0 lg:min-w-[9rem]" onClick={add} disabled={adding}>
-              {adding ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="ml-2">保存中…</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  <span className="ml-2">添加并保存</span>
-                </>
-              )}
-            </Button>
-          </div>
+              <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border px-6 py-4 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setAddDialogOpen(false)}
+                  disabled={adding}
+                >
+                  取消
+                </Button>
+                <Button type="button" className="w-full sm:w-auto min-w-[10rem]" onClick={add} disabled={adding}>
+                  {adding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">保存中…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" />
+                      <span className="ml-2">添加并保存</span>
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {data.credentials.length === 0 ? (
