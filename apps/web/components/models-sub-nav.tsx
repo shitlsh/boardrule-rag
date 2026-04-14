@@ -7,9 +7,10 @@ import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
+  { href: "/models/credentials", label: "凭证管理" },
   { href: "/models/extraction", label: "提取模型" },
   { href: "/models/chat", label: "聊天模型" },
-  { href: "/models/index", label: "索引模型" },
+  { href: "/models/index", label: "索引配置" },
 ] as const;
 
 export function ModelsSubNav() {
@@ -24,7 +25,7 @@ export function ModelsSubNav() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">模型管理</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl text-pretty">
-            在子页面中分别配置提取（Flash / Pro）、对话（Chat）与索引（Embed）所用模型；API 凭证在「提取模型」页添加。检索与分块等默认见「索引模型」。
+            凭证、提取管线模版、对话模版与索引（嵌入 + 检索）分栏管理；凭证在「凭证管理」添加。
           </p>
         </div>
       </div>

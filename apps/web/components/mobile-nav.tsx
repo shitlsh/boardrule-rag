@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sheet'
 import { UserMenu } from '@/components/user-menu'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu, Sparkles, Users, Layers } from 'lucide-react'
+import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Menu, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -32,11 +32,6 @@ const navItems = [
     title: '模型管理',
     href: '/models',
     icon: Sparkles,
-  },
-  {
-    title: 'AI 运行时',
-    href: '/settings/ai-runtime',
-    icon: Layers,
   },
 ]
 

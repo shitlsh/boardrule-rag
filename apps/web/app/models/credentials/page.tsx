@@ -2,13 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ModelRagOptionsPanel } from "@/components/model-rag-options-panel";
-import { ModelSlotsPanel } from "@/components/model-slots-panel";
+import { ModelCredentialsPanel } from "@/components/model-credentials-panel";
 import { Spinner } from "@/components/ui/spinner";
-import { MODEL_SLOTS_INDEX } from "@/lib/model-slot-groups";
 import type { AiGatewayPublic } from "@/lib/ai-gateway-types";
 
-export default function ModelsIndexPage() {
+export default function ModelsCredentialsPage() {
   const [data, setData] = useState<AiGatewayPublic | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,16 +54,11 @@ export default function ModelsIndexPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <p className="text-muted-foreground text-sm">
-        嵌入（Embed）用于向量与建索引；下方 RAG 选项为全局默认（与「聊天模型」页对话模版配合使用）。凭证在「
-        <a href="/models/credentials" className="text-primary underline underline-offset-2">
-          凭证管理
-        </a>
-        」页维护。
+        添加 Gemini / OpenRouter / 百炼（Qwen）等 API 凭证后，可在「提取模型」「聊天模型」「索引配置」中选择对应凭证与模型。
       </p>
-      <ModelSlotsPanel data={data} onUpdated={onUpdated} allowedSlots={MODEL_SLOTS_INDEX} />
-      <ModelRagOptionsPanel data={data} onUpdated={onUpdated} />
+      <ModelCredentialsPanel data={data} onUpdated={onUpdated} />
     </div>
   );
 }

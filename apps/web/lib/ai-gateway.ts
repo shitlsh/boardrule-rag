@@ -16,7 +16,7 @@ import type {
   SlotKey,
 } from "@/lib/ai-gateway-types";
 import type { ChatProfileConfigParsed, ExtractionProfileConfigParsed } from "@/lib/ai-runtime-profile-schema";
-import { getActiveChatProfileConfig } from "@/lib/ai-runtime-profiles";
+import { getActiveChatProfileConfig, getFirstExtractionProfileConfig } from "@/lib/ai-runtime-profiles";
 import { isAiVendor } from "@/lib/ai-gateway-types";
 import {
   assertValidDashscopeCompatibleBase,
@@ -582,16 +582,6 @@ function engineChatFromBinding(
   };
 }
 
-function mergeRagOptions(
-  base: RagOptionsStored | undefined,
-  override: RagOptionsStored | undefined,
-): RagOptionsStored | undefined {
-  const o = override && Object.keys(override).length > 0 ? override : undefined;
-  const b = base && Object.keys(base).length > 0 ? base : undefined;
-  if (!o) return b;
-  return { ...(b ?? {}), ...o };
-}
-
 function hasRagOptionsContent(ro: RagOptionsStored | undefined): boolean {
   if (!ro) return false;
   return (
@@ -606,36 +596,91 @@ function hasRagOptionsContent(ro: RagOptionsStored | undefined): boolean {
   );
 }
 
-/** Chat + index: global credentials; chat slot and RAG defaults may come from an active CHAT profile. */
-export function buildEngineAiPayloadForChatAndIndex(
-  stored: AiGatewayStored,
-  chatProfile: ChatProfileConfigParsed | null,
-): EngineAiPayloadV2 {
-  const base = buildEngineAiPayload(stored);
-  if (!chatProfile) return base;
-  const chatEngine = engineChatFromBinding(stored, chatProfile.chat, {
-    temperature: stored.chatOptions.temperature,
-    maxTokens: stored.chatOptions.maxTokens,
-  });
-  const ragMerged = mergeRagOptions(stored.ragOptions, chatProfile.ragOptions);
-  const hasRag = hasRagOptionsContent(ragMerged);
+function engineEmbedSlot(stored: AiGatewayStored): EngineAiPayloadV2["slots"]["embed"] {
+  const e = resolveSlot(stored, "embed");
   return {
-    version: 2,
-    slots: { ...base.slots, chat: chatEngine },
-    ...(hasRag && ragMerged ? { ragOptions: ragMerged } : {}),
+    provider: e.vendor,
+    apiKey: e.apiKey,
+    model: e.model,
+    ...(e.vendor === "qwen" ? { dashscopeCompatibleBase: e.dashscopeCompatibleBase } : {}),
   };
 }
 
-/** Extraction: optional fine slots + extractionRuntime (v3); null profile keeps v2 behavior. */
+/** Chat slot: active CHAT profile wins; else legacy `slotBindings.chat` (for migration). */
+function buildChatSlotForPayload(
+  stored: AiGatewayStored,
+  chatProfile: ChatProfileConfigParsed | null,
+): EngineAiPayloadV2["slots"]["chat"] {
+  if (chatProfile) {
+    return engineChatFromBinding(stored, chatProfile.chat, {
+      temperature: stored.chatOptions.temperature,
+      maxTokens: stored.chatOptions.maxTokens,
+    });
+  }
+  const chat = resolveSlot(stored, "chat");
+  const chatB = stored.slotBindings.chat;
+  const temperature = chatB?.temperature ?? stored.chatOptions.temperature;
+  const maxTokens = chatB?.maxTokens ?? stored.chatOptions.maxTokens;
+  return {
+    provider: chat.vendor,
+    apiKey: chat.apiKey,
+    model: chat.model,
+    temperature,
+    maxTokens,
+    ...(chat.vendor === "qwen" ? { dashscopeCompatibleBase: chat.dashscopeCompatibleBase } : {}),
+  };
+}
+
+/**
+ * Chat + index: RAG defaults from global gateway only (`stored.ragOptions`, edited on 索引配置页).
+ * Coarse flash/pro come from the latest EXTRACTION profile (same rules as extract path).
+ */
+export async function buildEngineAiPayloadForChatAndIndex(
+  stored: AiGatewayStored,
+  chatProfile: ChatProfileConfigParsed | null,
+): Promise<EngineAiPayloadV3> {
+  const ext = await getFirstExtractionProfileConfig();
+  if (!ext) {
+    throw new Error(
+      "请先在「模型管理 → 提取模型」创建并保存至少一套提取模版（用于 Flash / Pro 基线）。",
+    );
+  }
+  return buildEngineAiPayloadFromExtractionProfile(stored, ext, chatProfile);
+}
+
+/**
+ * Extract pipeline: v3 payload from this EXTRACTION profile only (no global V2 flash/pro).
+ * `chatProfile` is usually the active global chat template (same header as default route).
+ */
 export function buildEngineAiPayloadFromExtractionProfile(
   stored: AiGatewayStored,
-  profile: ExtractionProfileConfigParsed | null,
-): EngineAiPayloadV2 | EngineAiPayloadV3 {
-  const base = buildEngineAiPayload(stored);
-  if (!profile) return base;
-
+  profile: ExtractionProfileConfigParsed,
+  chatProfile: ChatProfileConfigParsed | null,
+): EngineAiPayloadV3 {
   const sb = profile.slotBindings;
-  const slotsV3: EngineAiPayloadV3["slots"] = { ...base.slots };
+  const flashBinding = sb.flashToc ?? sb.flashQuickstart;
+  const proBinding = sb.proExtract ?? sb.proMerge;
+  if (!flashBinding?.credentialId || !String(flashBinding.model ?? "").trim()) {
+    throw new Error("提取模版需至少配置 TOC Flash 或 Quickstart Flash 之一");
+  }
+  if (!proBinding?.credentialId || !String(proBinding.model ?? "").trim()) {
+    throw new Error("提取模版需至少配置 Extract Pro 或 Merge Pro 之一");
+  }
+
+  const slotsV3: EngineAiPayloadV3["slots"] = {
+    flash: engineFlashProFromBinding(
+      stored,
+      flashBinding,
+      "提取模版 Flash 基线（优先 TOC，否则 Quickstart）",
+    ),
+    pro: engineFlashProFromBinding(
+      stored,
+      proBinding,
+      "提取模版 Pro 基线（优先章节提取，否则合并）",
+    ),
+    embed: engineEmbedSlot(stored),
+    chat: buildChatSlotForPayload(stored, chatProfile),
+  };
 
   if (sb.flashToc) {
     slotsV3.flashToc = engineFlashProFromBinding(stored, sb.flashToc, "提取模版 Flash（目录）");
@@ -662,7 +707,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
   };
   const hasRuntime = Object.keys(extractionRuntime).length > 0;
 
-  const ro = base.ragOptions;
+  const ro = stored.ragOptions;
   const hasRag = hasRagOptionsContent(ro);
 
   return {
@@ -673,7 +718,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
   };
 }
 
-export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV2> {
+export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV3> {
   const stored = await getAiGatewayStored();
   const chat = await getActiveChatProfileConfig();
   return buildEngineAiPayloadForChatAndIndex(stored, chat);
@@ -716,6 +761,59 @@ async function persistStored(stored: AiGatewayStored): Promise<AiGatewayPublic> 
     data: { aiGatewayJson: JSON.stringify(stored) },
   });
   return toPublic(stored);
+}
+
+/**
+ * One-time lazy migration: old CHAT profiles stored `ragOptions` in configJson.
+ * Merges those into global gateway `ragOptions` and rewrites profiles to `{ chat }` only.
+ */
+export async function migrateLegacyChatRagFromRuntimeProfiles(): Promise<void> {
+  const profiles = await prisma.aiRuntimeProfile.findMany({ where: { kind: "CHAT" } });
+  if (profiles.length === 0) return;
+
+  let stored = await getAiGatewayStored();
+  const profileUpdates: { id: string; configJson: string }[] = [];
+
+  for (const p of profiles) {
+    let data: unknown;
+    try {
+      data = JSON.parse(p.configJson || "{}");
+    } catch {
+      continue;
+    }
+    if (!data || typeof data !== "object") continue;
+    const o = data as Record<string, unknown>;
+    const legacyRag = normalizeRagOptions(o.ragOptions);
+    if (!legacyRag || Object.keys(legacyRag).length === 0) continue;
+
+    stored = {
+      ...stored,
+      ragOptions: { ...(stored.ragOptions ?? {}), ...legacyRag },
+    };
+    const chat = o.chat;
+    if (chat && typeof chat === "object") {
+      profileUpdates.push({
+        id: p.id,
+        configJson: JSON.stringify({ chat }),
+      });
+    }
+  }
+
+  if (profileUpdates.length === 0) return;
+
+  await getAppSettings();
+  await prisma.$transaction([
+    prisma.appSettings.update({
+      where: { id: "default" },
+      data: { aiGatewayJson: JSON.stringify(stored) },
+    }),
+    ...profileUpdates.map((u) =>
+      prisma.aiRuntimeProfile.update({
+        where: { id: u.id },
+        data: { configJson: u.configJson },
+      }),
+    ),
+  ]);
 }
 
 /** Add a new API credential (saved immediately). */

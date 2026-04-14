@@ -8,9 +8,9 @@ import { getActiveChatProfileConfig, getExtractionProfileConfigById } from "@/li
 export const BOARDRULE_AI_CONFIG_HEADER = "X-Boardrule-Ai-Config";
 
 export type RuleEngineAiHeaderOptions = {
-  /** When `"extraction"`, builds v2/v3 payload for `POST /extract` (optional `extractionProfileId`). */
+  /** When `"extraction"`, builds v3 payload for `POST /extract` (requires `extractionProfileId`). */
   mode?: "default" | "extraction";
-  /** EXTRACTION profile id from DB; omit or empty = legacy single-slot v2 payload. */
+  /** EXTRACTION profile id from DB (required when `mode === "extraction"`). */
   extractionProfileId?: string | null;
 };
 
@@ -23,17 +23,21 @@ export async function getEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Prom
   const mode = opts?.mode ?? "default";
   if (mode === "extraction") {
     const id = opts?.extractionProfileId?.trim() ?? "";
-    const profile = id ? await getExtractionProfileConfigById(id) : null;
-    if (id && !profile) {
+    if (!id) {
+      throw new Error("缺少 extractionProfileId（请在游戏页选择提取模版）");
+    }
+    const profile = await getExtractionProfileConfigById(id);
+    if (!profile) {
       throw new Error("提取配置模版不存在或内容无效");
     }
-    const payload = buildEngineAiPayloadFromExtractionProfile(stored, profile);
+    const chat = await getActiveChatProfileConfig();
+    const payload = buildEngineAiPayloadFromExtractionProfile(stored, profile, chat);
     return {
       [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),
     };
   }
   const chat = await getActiveChatProfileConfig();
-  const payload = buildEngineAiPayloadForChatAndIndex(stored, chat);
+  const payload = await buildEngineAiPayloadForChatAndIndex(stored, chat);
   return {
     [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),
   };

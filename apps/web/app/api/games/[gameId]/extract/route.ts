@@ -54,17 +54,18 @@ export async function POST(req: Request, { params }: RouteParams) {
       ? body.terminologyContext.trim()
       : undefined;
 
-  const extractionProfileId =
-    typeof body.extractionProfileId === "string" && body.extractionProfileId.trim()
-      ? body.extractionProfileId.trim()
-      : undefined;
-
-  let extractionProfileConfig = null;
-  if (extractionProfileId) {
-    extractionProfileConfig = await getExtractionProfileConfigById(extractionProfileId);
-    if (!extractionProfileConfig) {
-      return NextResponse.json({ message: "提取配置模版不存在或无效" }, { status: 404 });
-    }
+  const extractionProfileIdRaw =
+    typeof body.extractionProfileId === "string" ? body.extractionProfileId.trim() : "";
+  if (!extractionProfileIdRaw) {
+    return NextResponse.json(
+      { message: "必须选择提取模版（模型管理 → 提取模型）" },
+      { status: 400 },
+    );
+  }
+  const extractionProfileId = extractionProfileIdRaw;
+  const extractionProfileConfig = await getExtractionProfileConfigById(extractionProfileId);
+  if (!extractionProfileConfig) {
+    return NextResponse.json({ message: "提取配置模版不存在或无效" }, { status: 404 });
   }
 
   const forceFullPipeline =

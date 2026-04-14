@@ -61,7 +61,15 @@ export const extractionProfileConfigSchema = z
   })
   .strict();
 
+/** Chat templates: conversation slot only; RAG lives in global gateway `ragOptions` (索引配置页). */
 export const chatProfileConfigSchema = z
+  .object({
+    chat: slotBindingSchema,
+  })
+  .strict();
+
+/** Legacy persisted shape (pre-merge); used only to accept old DB rows when parsing. */
+const legacyChatProfileWithRagSchema = z
   .object({
     chat: slotBindingSchema,
     ragOptions: ragOptionsStoredSchema.optional(),
@@ -88,6 +96,10 @@ export function parseChatProfileConfigJson(raw: string): ChatProfileConfigParsed
     data = JSON.parse(raw || "{}");
   } catch {
     throw new Error("配置 JSON 无效");
+  }
+  const legacy = legacyChatProfileWithRagSchema.safeParse(data);
+  if (legacy.success) {
+    return { chat: legacy.data.chat };
   }
   return chatProfileConfigSchema.parse(data);
 }

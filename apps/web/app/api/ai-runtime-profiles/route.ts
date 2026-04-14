@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { migrateLegacyChatRagFromRuntimeProfiles } from "@/lib/ai-gateway";
 import { prisma } from "@/lib/prisma";
 import { assertStaffSession } from "@/lib/request-auth";
 import {
@@ -12,6 +13,12 @@ export const runtime = "nodejs";
 export async function GET() {
   const denied = await assertStaffSession();
   if (denied) return denied;
+
+  try {
+    await migrateLegacyChatRagFromRuntimeProfiles();
+  } catch {
+    /* non-fatal: list still useful */
+  }
 
   const [profiles, settings] = await Promise.all([
     prisma.aiRuntimeProfile.findMany({

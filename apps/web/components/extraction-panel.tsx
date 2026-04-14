@@ -95,20 +95,25 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           .filter((p) => p.kind === "EXTRACTION")
           .map((p) => ({ id: p.id, name: p.name }));
         setExtractionProfiles(list);
+        if (list.length === 0) {
+          setExtractionProfileId("");
+          return;
+        }
+        try {
+          const v = localStorage.getItem(`boardrule.extractionProfileId.${game.id}`);
+          if (v && list.some((p) => p.id === v)) {
+            setExtractionProfileId(v);
+            return;
+          }
+        } catch {
+          /* ignore */
+        }
+        setExtractionProfileId(list[0]!.id);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(`boardrule.extractionProfileId.${game.id}`);
-      if (v) setExtractionProfileId(v);
-    } catch {
-      /* ignore */
-    }
   }, [game.id]);
 
   const toggleGstoneExcluded = (index: number) => {
@@ -328,7 +333,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
           excludePages: excludePages || undefined,
           terminologyContext: terminologyContext.trim() || undefined,
           forceFullPipeline: forceFullPipeline || undefined,
-          extractionProfileId: extractionProfileId.trim() || undefined,
+          extractionProfileId: extractionProfileId.trim(),
         }),
       });
       if (!res.ok) {
@@ -345,9 +350,7 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
         throw new Error(error.message || "启动提取失败");
       }
       try {
-        if (extractionProfileId.trim()) {
-          localStorage.setItem(`boardrule.extractionProfileId.${game.id}`, extractionProfileId.trim());
-        }
+        localStorage.setItem(`boardrule.extractionProfileId.${game.id}`, extractionProfileId.trim());
       } catch {
         /* ignore */
       }
@@ -564,17 +567,23 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
               />
             </Field>
             <Field>
-              <FieldLabel>提取配置模版（可选）</FieldLabel>
+              <FieldLabel>提取配置模版</FieldLabel>
               <Select
-                value={extractionProfileId || "__default__"}
-                onValueChange={(v) => setExtractionProfileId(v === "__default__" ? "" : v)}
-                disabled={isExtracting || isProcessing}
+                value={extractionProfileId}
+                onValueChange={(v) => {
+                  setExtractionProfileId(v);
+                  try {
+                    localStorage.setItem(`boardrule.extractionProfileId.${game.id}`, v);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                disabled={isExtracting || isProcessing || extractionProfiles.length === 0}
               >
                 <SelectTrigger id="extractionProfileId">
-                  <SelectValue placeholder="默认（与模型管理单槽兼容）" />
+                  <SelectValue placeholder="选择 EXTRACTION 模版" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__default__">默认（与模型管理 Flash/Pro 单槽兼容）</SelectItem>
                   {extractionProfiles.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -583,8 +592,21 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
                 </SelectContent>
               </Select>
               <FieldDescription>
-                在「设置 → AI 运行时」中维护；未选择时使用与全局模型槽位一致的 v2 载荷。
+                在「模型管理 →{' '}
+                <a href="/models/extraction" className="text-primary underline underline-offset-2">
+                  提取模型
+                </a>
+                」中创建；必须选择一套模版才能启动提取。
               </FieldDescription>
+              {extractionProfiles.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  暂无 EXTRACTION 模版，请先到「
+                  <a href="/models/extraction" className="text-primary underline underline-offset-2">
+                    提取模型
+                  </a>
+                  」页新建。
+                </p>
+              ) : null}
             </Field>
             <div className="flex w-full min-w-0 items-start gap-3">
               <Checkbox
@@ -604,7 +626,16 @@ export function ExtractionPanel({ game, onUpdate }: ExtractionPanelProps) {
               </div>
             </div>
           </FieldGroup>
-          <Button onClick={handleStartExtraction} disabled={!hasPagination || isExtracting || isProcessing}>
+          <Button
+            onClick={handleStartExtraction}
+            disabled={
+              !hasPagination ||
+              isExtracting ||
+              isProcessing ||
+              extractionProfiles.length === 0 ||
+              !extractionProfileId.trim()
+            }
+          >
             {isExtracting || isProcessing ? (
               <>
                 <Spinner className="mr-2" />

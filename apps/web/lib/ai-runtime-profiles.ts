@@ -35,6 +35,22 @@ export async function getExtractionProfileConfigById(
   }
 }
 
+/** Latest updated EXTRACTION profile — used to derive coarse flash/pro for chat/index headers when global V2 slots are gone. */
+export async function getFirstExtractionProfileConfig(): Promise<ExtractionProfileConfigParsed | null> {
+  const rows = await prisma.aiRuntimeProfile.findMany({
+    where: { kind: "EXTRACTION" },
+    orderBy: { updatedAt: "desc" },
+    take: 1,
+  });
+  const p = rows[0];
+  if (!p) return null;
+  try {
+    return parseExtractionProfileConfigJson(p.configJson);
+  } catch {
+    return null;
+  }
+}
+
 export async function listAiRuntimeProfiles() {
   return prisma.aiRuntimeProfile.findMany({
     orderBy: [{ kind: "asc" }, { updatedAt: "desc" }],

@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Sparkles, Users, Layers } from 'lucide-react'
+import { Gamepad2, List, MessageCircle, Settings, Moon, Sun, Sparkles, Users } from 'lucide-react'
 
 const navItems = [
   {
@@ -24,11 +24,6 @@ const navItems = [
     title: '模型管理',
     href: '/models',
     icon: Sparkles,
-  },
-  {
-    title: 'AI 运行时',
-    href: '/settings/ai-runtime',
-    icon: Layers,
   },
 ]
 

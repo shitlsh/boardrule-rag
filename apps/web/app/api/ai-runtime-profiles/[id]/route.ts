@@ -101,7 +101,7 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   });
   if (settings?.activeChatProfileId === id) {
     return NextResponse.json(
-      { message: "该模版正作为全局聊天生效模版，请先在 AI 运行时页切换后再删除" },
+      { message: "该模版正作为全局聊天生效模版，请先在「聊天模型」页切换后再删除" },
       { status: 409 },
     );
   }
