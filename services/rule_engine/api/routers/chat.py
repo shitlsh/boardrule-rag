@@ -111,19 +111,37 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
     t0 = time.perf_counter()
     try:
         yield _sse_bytes({"type": "phase", "id": "prepare"})
+        t_build_begin = time.perf_counter()
         query_engine = build_rulebook_query_engine(body.game_id, streaming=True)
+        setup_ms = (time.perf_counter() - t_build_begin) * 1000.0
     except FileNotFoundError as e:
+        setup_ms = (time.perf_counter() - t_build_begin) * 1000.0
+        logger.warning(
+            "chat stream setup failed game_id=%s setup_ms=%.1f err=%s",
+            body.game_id,
+            setup_ms,
+            e,
+        )
         yield _sse_bytes({"type": "error", "message": str(e)})
         return
     except RuntimeError as e:
+        setup_ms = (time.perf_counter() - t_build_begin) * 1000.0
+        logger.warning(
+            "chat stream setup failed game_id=%s setup_ms=%.1f err=%s",
+            body.game_id,
+            setup_ms,
+            e,
+        )
         yield _sse_bytes({"type": "error", "message": str(e)})
         return
 
     llm = get_chat_llm()
 
     try:
+        condense_ms = 0.0
         if body.messages:
             yield _sse_bytes({"type": "phase", "id": "clarify"})
+            t_condense_begin = time.perf_counter()
             history: list[ChatMessage] = []
             for m in body.messages:
                 role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
@@ -138,16 +156,33 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
                 chat_engine.chat_history,
                 body.message,
             )
+            condense_ms = (time.perf_counter() - t_condense_begin) * 1000.0
         else:
             condensed_question = body.message
 
         yield _sse_bytes({"type": "phase", "id": "search"})
+        t_retrieve_begin = time.perf_counter()
         nodes = query_engine.retrieve(QueryBundle(condensed_question))
+        retrieve_ms = (time.perf_counter() - t_retrieve_begin) * 1000.0
+
         yield _sse_bytes({"type": "phase", "id": "organize"})
         yield _sse_bytes({"type": "phase", "id": "answer"})
 
+        t_synth_begin = time.perf_counter()
         synth = query_engine.synthesize(QueryBundle(condensed_question), nodes)
+        synth_prep_ms = (time.perf_counter() - t_synth_begin) * 1000.0
         if not isinstance(synth, LlamaStreamingResponse) or synth.response_gen is None:
+            total_ms = (time.perf_counter() - t0) * 1000.0
+            logger.warning(
+                "chat stream no streaming synthesis game_id=%s total_ms=%.1f "
+                "setup_ms=%.1f condense_ms=%.1f retrieve_ms=%.1f synth_prep_ms=%.1f",
+                body.game_id,
+                total_ms,
+                setup_ms,
+                condense_ms,
+                retrieve_ms,
+                synth_prep_ms,
+            )
             yield _sse_bytes(
                 {
                     "type": "error",
@@ -156,11 +191,18 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
             )
             return
 
+        t_stream_begin = time.perf_counter()
+        delta_chunks = 0
+        delta_chars = 0
         for chunk in synth.response_gen:
             piece = chunk if isinstance(chunk, str) else str(chunk)
             if piece:
+                delta_chunks += 1
+                delta_chars += len(piece)
                 yield _sse_bytes({"type": "delta", "text": piece})
+        stream_ms = (time.perf_counter() - t_stream_begin) * 1000.0
 
+        t_post_begin = time.perf_counter()
         refs = _serialize_sources(nodes)
         yield _sse_bytes(
             {
@@ -169,15 +211,32 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
             },
         )
         yield _sse_bytes({"type": "done"})
+        post_ms = (time.perf_counter() - t_post_begin) * 1000.0
+
         total_ms = (time.perf_counter() - t0) * 1000.0
         logger.info(
-            "chat stream ok game_id=%s total_ms=%.1f sources=%d",
+            "chat stream ok game_id=%s total_ms=%.1f setup_ms=%.1f condense_ms=%.1f "
+            "retrieve_ms=%.1f synth_prep_ms=%.1f stream_ms=%.1f post_ms=%.1f "
+            "sources=%d delta_chunks=%d delta_chars=%d",
             body.game_id,
             total_ms,
+            setup_ms,
+            condense_ms,
+            retrieve_ms,
+            synth_prep_ms,
+            stream_ms,
+            post_ms,
             len(nodes),
+            delta_chunks,
+            delta_chars,
         )
     except Exception:
-        logger.exception("chat stream failed game_id=%s", body.game_id)
+        total_ms = (time.perf_counter() - t0) * 1000.0
+        logger.exception(
+            "chat stream failed game_id=%s total_ms=%.1f (partial timings may omit later stages)",
+            body.game_id,
+            total_ms,
+        )
         yield _sse_bytes({"type": "error", "message": "Chat stream failed"})
 
 
