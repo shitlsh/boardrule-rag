@@ -30,11 +30,24 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   if (!existing) {
     return NextResponse.json({ message: "游戏不存在" }, { status: 404 });
   }
-  let body: { name?: string; coverUrl?: string | null; pageMetadataEnabled?: boolean };
+  let body: {
+    name?: string;
+    coverUrl?: string | null;
+    pageMetadataEnabled?: boolean;
+    indexProfileId?: string | null;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
+  }
+  if (body.indexProfileId !== undefined && body.indexProfileId !== null && body.indexProfileId.trim()) {
+    const prof = await prisma.aiRuntimeProfile.findUnique({
+      where: { id: body.indexProfileId.trim() },
+    });
+    if (!prof || prof.kind !== "INDEX") {
+      return NextResponse.json({ message: "索引模版不存在或类型不是 INDEX" }, { status: 400 });
+    }
   }
   const game = await prisma.game.update({
     where: { id: gameId },
@@ -43,6 +56,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       ...(body.coverUrl !== undefined ? { coverUrl: body.coverUrl } : {}),
       ...(body.pageMetadataEnabled !== undefined
         ? { pageMetadataEnabled: Boolean(body.pageMetadataEnabled) }
+        : {}),
+      ...(body.indexProfileId !== undefined
+        ? {
+            indexProfileId:
+              body.indexProfileId === null || body.indexProfileId === ""
+                ? null
+                : body.indexProfileId.trim(),
+          }
         : {}),
     },
   });

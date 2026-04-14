@@ -15,8 +15,17 @@ import type {
   SlotBinding,
   SlotKey,
 } from "@/lib/ai-gateway-types";
-import type { ChatProfileConfigParsed, ExtractionProfileConfigParsed } from "@/lib/ai-runtime-profile-schema";
-import { getActiveChatProfileConfig, getFirstExtractionProfileConfig } from "@/lib/ai-runtime-profiles";
+import type {
+  ChatProfileConfigParsed,
+  ExtractionProfileConfigParsed,
+  IndexProfileConfigParsed,
+} from "@/lib/ai-runtime-profile-schema";
+import { indexProfileConfigSchema } from "@/lib/ai-runtime-profile-schema";
+import {
+  getActiveChatProfileConfig,
+  getActiveIndexProfileConfig,
+  getFirstExtractionProfileConfig,
+} from "@/lib/ai-runtime-profiles";
 import { isAiVendor } from "@/lib/ai-gateway-types";
 import {
   assertValidDashscopeCompatibleBase,
@@ -477,22 +486,6 @@ export function resolveSlotBinding(
   return { apiKey, model: binding.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
 }
 
-function resolveSlot(
-  stored: AiGatewayStored,
-  slot: SlotKey,
-): {
-  apiKey: string;
-  model: string;
-  vendor: AiVendor;
-  dashscopeCompatibleBase?: string;
-} {
-  const b = stored.slotBindings[slot];
-  if (!b?.credentialId || !b.model?.trim()) {
-    throw new Error(`AI 槽位未配置: ${slot}`);
-  }
-  return resolveSlotBinding(stored, b, `槽位 ${slot}`);
-}
-
 function engineFlashProFromBinding(
   stored: AiGatewayStored,
   binding: SlotBinding,
@@ -544,13 +537,17 @@ function hasRagOptionsContent(ro: RagOptionsStored | undefined): boolean {
   );
 }
 
-function engineEmbedSlot(stored: AiGatewayStored): EngineAiPayloadV2["slots"]["embed"] {
-  const e = resolveSlot(stored, "embed");
+function engineEmbedFromBinding(
+  stored: AiGatewayStored,
+  binding: SlotBinding,
+  labelForError: string,
+): EngineAiPayloadV2["slots"]["embed"] {
+  const r = resolveSlotBinding(stored, binding, labelForError);
   return {
-    provider: e.vendor,
-    apiKey: e.apiKey,
-    model: e.model,
-    ...(e.vendor === "qwen" ? { dashscopeCompatibleBase: e.dashscopeCompatibleBase } : {}),
+    provider: r.vendor,
+    apiKey: r.apiKey,
+    model: r.model,
+    ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
   };
 }
 
@@ -566,12 +563,12 @@ function buildChatSlotForPayload(
 }
 
 /**
- * Chat + index: RAG defaults from global gateway only (`stored.ragOptions`, edited on 索引配置页).
- * Coarse flash/pro come from the latest EXTRACTION profile (same rules as extract path).
+ * Chat + index: embed + ragOptions from INDEX profile; flash/pro from latest EXTRACTION profile.
  */
 export async function buildEngineAiPayloadForChatAndIndex(
   stored: AiGatewayStored,
   chatProfile: ChatProfileConfigParsed,
+  indexProfile: IndexProfileConfigParsed,
 ): Promise<EngineAiPayloadV3> {
   const ext = await getFirstExtractionProfileConfig();
   if (!ext) {
@@ -579,7 +576,7 @@ export async function buildEngineAiPayloadForChatAndIndex(
       "请先在「模型管理 → 提取模型」创建并保存至少一套提取模版（用于 Flash / Pro 基线）。",
     );
   }
-  return buildEngineAiPayloadFromExtractionProfile(stored, ext, chatProfile);
+  return buildEngineAiPayloadFromExtractionProfile(stored, ext, chatProfile, indexProfile);
 }
 
 /**
@@ -590,6 +587,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
   stored: AiGatewayStored,
   profile: ExtractionProfileConfigParsed,
   chatProfile: ChatProfileConfigParsed,
+  indexProfile: IndexProfileConfigParsed,
 ): EngineAiPayloadV3 {
   const sb = profile.slotBindings;
   const flashBinding = sb.flashToc ?? sb.flashQuickstart;
@@ -612,7 +610,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
       proBinding,
       "提取模版 Pro 基线（优先章节提取，否则合并）",
     ),
-    embed: engineEmbedSlot(stored),
+    embed: engineEmbedFromBinding(stored, indexProfile.embed, "索引模版 Embed"),
     chat: buildChatSlotForPayload(stored, chatProfile),
   };
 
@@ -641,7 +639,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
   };
   const hasRuntime = Object.keys(extractionRuntime).length > 0;
 
-  const ro = stored.ragOptions;
+  const ro = indexProfile.ragOptions;
   const hasRag = hasRagOptionsContent(ro);
 
   return {
@@ -660,7 +658,11 @@ export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV3> {
       "请先在「模型管理 → 聊天模型」创建并选择全局生效的聊天模版（不再使用网关内 Chat 槽）。",
     );
   }
-  return buildEngineAiPayloadForChatAndIndex(stored, chat);
+  const indexProfile = await getActiveIndexProfileConfig();
+  if (!indexProfile) {
+    throw new Error("请先在「模型管理 → 索引配置」创建并选择索引模版（Embed + 检索参数）。");
+  }
+  return buildEngineAiPayloadForChatAndIndex(stored, chat, indexProfile);
 }
 
 export function getCredentialApiKey(stored: AiGatewayStored, credentialId: string): string {
@@ -753,6 +755,32 @@ export async function migrateLegacyChatRagFromRuntimeProfiles(): Promise<void> {
       }),
     ),
   ]);
+}
+
+/** When no INDEX profile exists, copy embed + ragOptions from gateway JSON into a new INDEX profile (one-time). */
+export async function seedIndexProfileFromGatewayIfEmpty(): Promise<void> {
+  const n = await prisma.aiRuntimeProfile.count({ where: { kind: "INDEX" } });
+  if (n > 0) return;
+  const stored = await getAiGatewayStored();
+  const emb = stored.slotBindings.embed;
+  if (!emb?.credentialId || !emb.model?.trim()) return;
+  const rag = stored.ragOptions;
+  const hasRag = Boolean(rag && Object.keys(rag).length > 0);
+  const config = indexProfileConfigSchema.parse({
+    embed: { credentialId: emb.credentialId, model: emb.model.trim() },
+    ...(hasRag ? { ragOptions: rag } : {}),
+  });
+  const created = await prisma.aiRuntimeProfile.create({
+    data: {
+      name: "默认索引（自网关迁移）",
+      kind: "INDEX",
+      configJson: JSON.stringify(config),
+    },
+  });
+  await prisma.appSettings.update({
+    where: { id: "default" },
+    data: { activeIndexProfileId: created.id },
+  });
 }
 
 /** Add a new API credential (saved immediately). */

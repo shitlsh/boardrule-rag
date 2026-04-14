@@ -12,12 +12,19 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDown, Database, Check } from 'lucide-react'
 import type { Game } from '@/lib/types'
-import type { AiGatewayPublic } from '@/lib/ai-gateway-types'
+import type { AiGatewayPublic, RagOptionsStored } from '@/lib/ai-gateway-types'
 import { useExtractionTasks } from '@/hooks/use-game'
 
 interface IndexPanelProps {
@@ -28,6 +35,7 @@ interface IndexPanelProps {
 export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advOpen, setAdvOpen] = useState(false)
+  const [indexProfileOptions, setIndexProfileOptions] = useState<{ id: string; name: string }[]>([])
   const [similarityTopK, setSimilarityTopK] = useState('8')
   const [rerankTopN, setRerankTopN] = useState('5')
   const [chunkSize, setChunkSize] = useState('1024')
@@ -48,9 +56,21 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
     !indexTaskActive
 
   useEffect(() => {
+    fetch('/api/ai-runtime-profiles')
+      .then((r) => r.json())
+      .then(
+        (pack: { profiles: { id: string; name: string; kind: string }[] }) => {
+          setIndexProfileOptions(
+            pack.profiles.filter((p) => p.kind === 'INDEX').map((p) => ({ id: p.id, name: p.name })),
+          )
+        },
+      )
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
-    const applyGateway = (d: AiGatewayPublic) => {
-      const ro = d.ragOptions ?? {}
+    const applyRag = (ro: RagOptionsStored) => {
       if (ro.similarityTopK != null) setSimilarityTopK(String(ro.similarityTopK))
       if (ro.rerankTopN != null) setRerankTopN(String(ro.rerankTopN))
       if (ro.chunkSize != null) setChunkSize(String(ro.chunkSize))
@@ -88,15 +108,24 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
                 setUseRerank(m.use_rerank)
               }
               if (typeof m.chunk_size !== 'number' || typeof m.chunk_overlap !== 'number') {
-                const res = await fetch('/api/ai-gateway')
-                if (!cancelled && res.ok) {
-                  const d = (await res.json()) as AiGatewayPublic
-                  const ro = d.ragOptions ?? {}
-                  if (typeof m.chunk_size !== 'number' && ro.chunkSize != null) {
-                    setChunkSize(String(ro.chunkSize))
-                  }
-                  if (typeof m.chunk_overlap !== 'number' && ro.chunkOverlap != null) {
-                    setChunkOverlap(String(ro.chunkOverlap))
+                const pack = (await fetch('/api/ai-runtime-profiles').then((r) => r.json())) as {
+                  profiles: { id: string; kind: string; configJson: string }[]
+                  activeIndexProfileId: string | null
+                }
+                const pid = game.indexProfileId ?? pack.activeIndexProfileId
+                const prof = pack.profiles.find((p) => p.id === pid && p.kind === 'INDEX')
+                if (prof && !cancelled) {
+                  try {
+                    const cfg = JSON.parse(prof.configJson || '{}') as { ragOptions?: RagOptionsStored }
+                    const ro = cfg.ragOptions ?? {}
+                    if (typeof m.chunk_size !== 'number' && ro.chunkSize != null) {
+                      setChunkSize(String(ro.chunkSize))
+                    }
+                    if (typeof m.chunk_overlap !== 'number' && ro.chunkOverlap != null) {
+                      setChunkOverlap(String(ro.chunkOverlap))
+                    }
+                  } catch {
+                    /* ignore */
                   }
                 }
               }
@@ -104,9 +133,26 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
             }
           }
         }
+        const pack = (await fetch('/api/ai-runtime-profiles').then((r) => r.json())) as {
+          profiles: { id: string; kind: string; configJson: string }[]
+          activeIndexProfileId: string | null
+        }
+        if (cancelled) return
+        const pid = game.indexProfileId ?? pack.activeIndexProfileId
+        const prof = pack.profiles.find((p) => p.id === pid && p.kind === 'INDEX')
+        if (prof) {
+          try {
+            const cfg = JSON.parse(prof.configJson || '{}') as { ragOptions?: RagOptionsStored }
+            applyRag(cfg.ragOptions ?? {})
+            return
+          } catch {
+            /* fall through */
+          }
+        }
         const res = await fetch('/api/ai-gateway')
         if (!res.ok || cancelled) return
-        applyGateway((await res.json()) as AiGatewayPublic)
+        const d = (await res.json()) as AiGatewayPublic
+        applyRag(d.ragOptions ?? {})
       } catch {
         /* keep field defaults */
       }
@@ -114,7 +160,30 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
     return () => {
       cancelled = true
     }
-  }, [game.id, game.isIndexed])
+  }, [game.id, game.isIndexed, game.indexProfileId])
+
+  const patchGameIndexProfile = useCallback(
+    async (value: string) => {
+      const indexProfileId = value === '__default__' ? null : value
+      try {
+        const res = await fetch(`/api/games/${game.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ indexProfileId }),
+        })
+        const j = (await res.json()) as { message?: string }
+        if (!res.ok) {
+          toast.error(j.message || '保存失败')
+          return
+        }
+        toast.success('已更新本游戏索引模版')
+        onUpdate()
+      } catch {
+        toast.error('保存失败')
+      }
+    },
+    [game.id, onUpdate],
+  )
 
   const handleBuildIndex = useCallback(async () => {
     setIsSubmitting(true)
@@ -172,14 +241,36 @@ export function IndexPanel({ game, onUpdate }: IndexPanelProps) {
           向量索引
         </CardTitle>
         <CardDescription>
-          建立向量索引以启用规则问答。展开「索引选项」可分别设置<strong className="font-medium text-foreground">切片</strong>、
+          建立向量索引以启用规则问答。可先选择本游戏使用的<strong className="font-medium text-foreground">索引模版</strong>
+          （未选则跟全站默认）。展开「索引选项」可分别设置<strong className="font-medium text-foreground">切片</strong>、
           <strong className="font-medium text-foreground">召回</strong>
           与<strong className="font-medium text-foreground">精排</strong>
           。已建立索引时，下列选项会与规则引擎磁盘上的 <span className="font-mono">manifest.json</span>{' '}
-          同步显示（含切片大小；旧索引未存时从网关补全）。全局默认见「模型管理 → 检索与索引」。
+          同步显示（含切片大小；旧索引未存时从当前解析的索引模版补全）。模版在「模型管理 → 索引配置」维护。
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {indexProfileOptions.length > 0 ? (
+          <div className="mb-4 max-w-md space-y-2">
+            <Label>本游戏索引模版</Label>
+            <Select
+              value={game.indexProfileId ?? '__default__'}
+              onValueChange={(v) => void patchGameIndexProfile(v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择模版" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">跟随全站默认</SelectItem>
+                {indexProfileOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <Collapsible open={advOpen} onOpenChange={setAdvOpen} className="mb-4">
           <CollapsibleTrigger asChild>
             <button

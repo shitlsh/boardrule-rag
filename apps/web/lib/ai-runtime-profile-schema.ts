@@ -61,10 +61,18 @@ export const extractionProfileConfigSchema = z
   })
   .strict();
 
-/** Chat templates: conversation slot only; RAG lives in global gateway `ragOptions` (索引配置页). */
+/** Chat templates: conversation slot only. */
 export const chatProfileConfigSchema = z
   .object({
     chat: slotBindingSchema,
+  })
+  .strict();
+
+/** INDEX templates: vector embed + optional RAG / chunk defaults for indexing and per-game retrieval. */
+export const indexProfileConfigSchema = z
+  .object({
+    embed: slotBindingSchema,
+    ragOptions: ragOptionsStoredSchema.optional(),
   })
   .strict();
 
@@ -78,6 +86,7 @@ const legacyChatProfileWithRagSchema = z
 
 export type ExtractionProfileConfigParsed = z.infer<typeof extractionProfileConfigSchema>;
 export type ChatProfileConfigParsed = z.infer<typeof chatProfileConfigSchema>;
+export type IndexProfileConfigParsed = z.infer<typeof indexProfileConfigSchema>;
 export type ExtractionRuntimeOverridesParsed = z.infer<typeof extractionRuntimeOverridesSchema>;
 
 export function parseExtractionProfileConfigJson(raw: string): ExtractionProfileConfigParsed {
@@ -117,6 +126,24 @@ export function safeParseExtractionProfileConfigJson(
 export function safeParseChatProfileConfigJson(raw: string): ChatProfileConfigParsed | null {
   try {
     return parseChatProfileConfigJson(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function parseIndexProfileConfigJson(raw: string): IndexProfileConfigParsed {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw || "{}");
+  } catch {
+    throw new Error("配置 JSON 无效");
+  }
+  return indexProfileConfigSchema.parse(data);
+}
+
+export function safeParseIndexProfileConfigJson(raw: string): IndexProfileConfigParsed | null {
+  try {
+    return parseIndexProfileConfigJson(raw);
   } catch {
     return null;
   }

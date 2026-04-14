@@ -5,6 +5,7 @@ import { assertStaffSession } from "@/lib/request-auth";
 import {
   chatProfileConfigSchema,
   extractionProfileConfigSchema,
+  indexProfileConfigSchema,
 } from "@/lib/ai-runtime-profile-schema";
 
 export const runtime = "nodejs";
@@ -71,8 +72,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     try {
       if (prev.kind === "EXTRACTION") {
         extractionProfileConfigSchema.parse(body.configJson);
-      } else {
+      } else if (prev.kind === "CHAT") {
         chatProfileConfigSchema.parse(body.configJson);
+      } else {
+        indexProfileConfigSchema.parse(body.configJson);
       }
       data.configJson = JSON.stringify(body.configJson);
     } catch (e) {
@@ -97,11 +100,24 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
 
   const settings = await prisma.appSettings.findUnique({
     where: { id: "default" },
-    select: { activeChatProfileId: true },
+    select: { activeChatProfileId: true, activeIndexProfileId: true },
   });
   if (settings?.activeChatProfileId === id) {
     return NextResponse.json(
       { message: "该模版正作为全局聊天生效模版，请先在「聊天模型」页切换后再删除" },
+      { status: 409 },
+    );
+  }
+  if (settings?.activeIndexProfileId === id) {
+    return NextResponse.json(
+      { message: "该模版正作为全站默认索引模版，请先在「索引配置」页切换后再删除" },
+      { status: 409 },
+    );
+  }
+  const gamesUsing = await prisma.game.count({ where: { indexProfileId: id } });
+  if (gamesUsing > 0) {
+    return NextResponse.json(
+      { message: "有游戏仍引用该索引模版，请先在各游戏详情中取消或更换后再删除" },
       { status: 409 },
     );
   }

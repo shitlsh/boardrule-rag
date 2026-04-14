@@ -5,7 +5,7 @@ import { assertStaffSession } from "@/lib/request-auth";
 import { readStorageText } from "@/lib/storage";
 import { startBuildIndex } from "@/lib/ingestion";
 import { getEngineAiHeaders } from "@/lib/engine-ai";
-import { getAiGatewayStored } from "@/lib/ai-gateway";
+import { resolveIndexProfileConfigForEngine } from "@/lib/ai-runtime-profiles";
 
 export const runtime = "nodejs";
 /** Submit-only: engine runs build in background; long work is not bound to this request. */
@@ -65,12 +65,12 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   try {
-    await getEngineAiHeaders();
+    await getEngineAiHeaders({ gameId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
       {
-        message: `AI 配置不完整，无法建索引：${msg}。请在「/models」中配置凭证并为 Flash / Pro / Embed / Chat 槽位选择模型后保存。`,
+        message: `AI 配置不完整，无法建索引：${msg}。请在「模型管理」中配置凭证、提取/聊天/索引模版。`,
       },
       { status: 400 },
     );
@@ -93,8 +93,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     /* empty or invalid body */
   }
 
-  const gw = await getAiGatewayStored();
-  const ro = gw.ragOptions ?? {};
+  const indexCfg = await resolveIndexProfileConfigForEngine(gameId);
+  const ro = indexCfg?.ragOptions ?? {};
   const similarityTopK = asInt(body.similarityTopK) ?? ro.similarityTopK;
   const rerankTopN = asInt(body.rerankTopN) ?? ro.rerankTopN;
   const chunkSize = asInt(body.chunkSize) ?? ro.chunkSize;

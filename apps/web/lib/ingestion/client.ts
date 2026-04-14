@@ -84,6 +84,7 @@ export async function startExtractionWithPagePlan(params: {
   const ai = await ruleEngineAiHeaders({
     mode: "extraction",
     extractionProfileId: params.extractionProfileId,
+    gameId: params.gameId,
   });
   const res = await fetch(`${base}/extract`, {
     method: "POST",
@@ -137,7 +138,7 @@ export async function startBuildIndex(params: {
   useRerank?: boolean;
 }): Promise<BuildIndexStartResponse> {
   const base = getRuleEngineBaseUrl();
-  const ai = await ruleEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders({ gameId: params.gameId });
   const payload: Record<string, unknown> = {
     game_id: params.gameId,
     merged_markdown: params.mergedMarkdown,
@@ -226,7 +227,7 @@ export async function chatRules(params: {
   messages?: { role: "user" | "assistant"; content: string }[];
 }): Promise<ChatResponse> {
   const base = getRuleEngineBaseUrl();
-  const ai = await ruleEngineAiHeaders();
+  const ai = await ruleEngineAiHeaders({ gameId: params.gameId });
   let res: Response;
   try {
     res = await fetch(`${base}/chat`, {

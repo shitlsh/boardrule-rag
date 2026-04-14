@@ -30,6 +30,9 @@ model Game {
   pagePreviewJson     String?
   pageMetadataEnabled Boolean  @default(true)
   lastCheckpointId    String?
+  /// Optional INDEX profile override; null = use site default (`AppSettings.activeIndexProfileId`).
+  indexProfileId      String?
+  indexProfile        AiRuntimeProfile? @relation("GameIndexProfile", fields: [indexProfileId], references: [id], onDelete: SetNull)
 
   tasks Task[]
 
@@ -56,10 +59,11 @@ model Task {
   @@schema("app")
 }
 
-/// EXTRACTION = rulebook pipeline slot overrides + runtime; CHAT = chat slot + RAG defaults for synthesis / indexing.
+/// EXTRACTION = extract pipeline; CHAT = chat slot; INDEX = embed + RAG defaults for indexing / per-game retrieval.
 enum AiRuntimeProfileKind {
   EXTRACTION
   CHAT
+  INDEX
 
   @@schema("app")
 }
@@ -75,7 +79,9 @@ model AiRuntimeProfile {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
-  appSettingsActiveAsChat AppSettings? @relation("ActiveChatProfile")
+  appSettingsActiveAsChat  AppSettings? @relation("ActiveChatProfile")
+  appSettingsActiveAsIndex AppSettings? @relation("ActiveIndexProfile")
+  gamesUsingAsIndex        Game[]       @relation("GameIndexProfile")
 
   @@schema("app")
 }
@@ -99,9 +105,12 @@ model AppSettings {
   dailyChatLimit     Int    @default(20)
   /// C-end 全站每 UTC 日对话总次数上限（所有 IP 合计）。0 = 不限制。默认 1000 防止用量失控。
   dailyChatLimitGlobal Int @default(1000)
-  /// Optional CHAT profile: when set, chat + default RAG options for synthesis/indexing come from that template (credentials still global).
+  /// Optional CHAT profile: when set, chat synthesis uses that template (credentials still global).
   activeChatProfileId String?                @unique
   activeChatProfile   AiRuntimeProfile? @relation("ActiveChatProfile", fields: [activeChatProfileId], references: [id], onDelete: SetNull)
+  /// Default INDEX profile for embed + RAG when a game has no `Game.indexProfileId`.
+  activeIndexProfileId String?                @unique
+  activeIndexProfile   AiRuntimeProfile? @relation("ActiveIndexProfile", fields: [activeIndexProfileId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

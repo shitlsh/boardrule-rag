@@ -3,7 +3,11 @@ import {
   buildEngineAiPayloadFromExtractionProfile,
   getAiGatewayStored,
 } from "@/lib/ai-gateway";
-import { getActiveChatProfileConfig, getExtractionProfileConfigById } from "@/lib/ai-runtime-profiles";
+import {
+  getActiveChatProfileConfig,
+  getExtractionProfileConfigById,
+  resolveIndexProfileConfigForEngine,
+} from "@/lib/ai-runtime-profiles";
 
 export const BOARDRULE_AI_CONFIG_HEADER = "X-Boardrule-Ai-Config";
 
@@ -12,6 +16,11 @@ export type RuleEngineAiHeaderOptions = {
   mode?: "default" | "extraction";
   /** EXTRACTION profile id from DB (required when `mode === "extraction"`). */
   extractionProfileId?: string | null;
+  /**
+   * When set, INDEX template (embed + ragOptions) resolves from `Game.indexProfileId` or site default.
+   * Omit for extraction-only headers (uses site default INDEX template).
+   */
+  gameId?: string | null;
 };
 
 /**
@@ -26,6 +35,12 @@ export async function getEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Prom
       "请先在「模型管理 → 聊天模型」创建并选择全局生效的聊天模版（不再使用网关内 Chat 槽）。",
     );
   }
+  const indexForPayload = await resolveIndexProfileConfigForEngine(opts?.gameId ?? null);
+  if (!indexForPayload) {
+    throw new Error(
+      "请先在「模型管理 → 索引配置」创建索引模版（Embed + 检索参数），并设置全站默认。",
+    );
+  }
   const mode = opts?.mode ?? "default";
   if (mode === "extraction") {
     const id = opts?.extractionProfileId?.trim() ?? "";
@@ -36,12 +51,12 @@ export async function getEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Prom
     if (!profile) {
       throw new Error("提取配置模版不存在或内容无效");
     }
-    const payload = buildEngineAiPayloadFromExtractionProfile(stored, profile, chat);
+    const payload = buildEngineAiPayloadFromExtractionProfile(stored, profile, chat, indexForPayload);
     return {
       [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),
     };
   }
-  const payload = await buildEngineAiPayloadForChatAndIndex(stored, chat);
+  const payload = await buildEngineAiPayloadForChatAndIndex(stored, chat, indexForPayload);
   return {
     [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),
   };

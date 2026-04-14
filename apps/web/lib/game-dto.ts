@@ -135,6 +135,7 @@ export function prismaGameToDto(
     rulesMarkdown: extras?.rulesMarkdown,
     quickStart: extras?.quickStart,
     suggestedQuestions: extras?.suggestedQuestions,
+    indexProfileId: game.indexProfileId ?? null,
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString(),
   };

@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const { gameId } = await params;
   try {
     const base = getRuleEngineBaseUrl();
-    const ai = await ruleEngineAiHeaders();
+    const ai = await ruleEngineAiHeaders({ gameId });
     const res = await fetch(`${base}/index/${encodeURIComponent(gameId)}/manifest`, {
       method: "GET",
       headers: ai,

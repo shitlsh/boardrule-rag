@@ -32,7 +32,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   try {
     const base = getRuleEngineBaseUrl();
-    const ai = await ruleEngineAiHeaders();
+    const ai = await ruleEngineAiHeaders({ gameId });
     const res = await fetch(
       `${base}/index/${encodeURIComponent(gameId)}/smoke-retrieve?${sp.toString()}`,
       {

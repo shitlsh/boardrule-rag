@@ -19,6 +19,8 @@ export interface Game {
   rulesMarkdown?: string
   quickStart?: string
   suggestedQuestions?: string[]
+  /** Per-game INDEX template override; null/undefined = use site default. */
+  indexProfileId?: string | null
   createdAt: string
   updatedAt: string
 }

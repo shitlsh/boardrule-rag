@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { migrateLegacyChatRagFromRuntimeProfiles } from "@/lib/ai-gateway";
-import { ensureDefaultActiveChatProfileId } from "@/lib/ai-runtime-profiles";
+import {
+  migrateLegacyChatRagFromRuntimeProfiles,
+  seedIndexProfileFromGatewayIfEmpty,
+} from "@/lib/ai-gateway";
+import { ensureDefaultActiveChatProfileId, ensureDefaultActiveIndexProfileId } from "@/lib/ai-runtime-profiles";
 import { prisma } from "@/lib/prisma";
 import { assertStaffSession } from "@/lib/request-auth";
 import {
   chatProfileConfigSchema,
   extractionProfileConfigSchema,
+  indexProfileConfigSchema,
 } from "@/lib/ai-runtime-profile-schema";
 
 export const runtime = "nodejs";
@@ -20,7 +24,9 @@ export async function GET() {
   } catch {
     /* non-fatal: list still useful */
   }
+  await seedIndexProfileFromGatewayIfEmpty();
   await ensureDefaultActiveChatProfileId();
+  await ensureDefaultActiveIndexProfileId();
 
   const [profiles, settings] = await Promise.all([
     prisma.aiRuntimeProfile.findMany({
@@ -28,20 +34,21 @@ export async function GET() {
     }),
     prisma.appSettings.findUnique({
       where: { id: "default" },
-      select: { activeChatProfileId: true },
+      select: { activeChatProfileId: true, activeIndexProfileId: true },
     }),
   ]);
 
   return NextResponse.json({
     profiles,
     activeChatProfileId: settings?.activeChatProfileId ?? null,
+    activeIndexProfileId: settings?.activeIndexProfileId ?? null,
   });
 }
 
 type PostBody = {
   name?: string;
   description?: string;
-  kind?: "EXTRACTION" | "CHAT";
+  kind?: "EXTRACTION" | "CHAT" | "INDEX";
   configJson?: unknown;
 };
 
@@ -60,8 +67,8 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ message: "名称不能为空" }, { status: 400 });
   }
-  if (body.kind !== "EXTRACTION" && body.kind !== "CHAT") {
-    return NextResponse.json({ message: "kind 须为 EXTRACTION 或 CHAT" }, { status: 400 });
+  if (body.kind !== "EXTRACTION" && body.kind !== "CHAT" && body.kind !== "INDEX") {
+    return NextResponse.json({ message: "kind 须为 EXTRACTION、CHAT 或 INDEX" }, { status: 400 });
   }
 
   let configStr: string;
@@ -69,8 +76,10 @@ export async function POST(req: Request) {
     try {
       if (body.kind === "EXTRACTION") {
         extractionProfileConfigSchema.parse(body.configJson);
-      } else {
+      } else if (body.kind === "CHAT") {
         chatProfileConfigSchema.parse(body.configJson);
+      } else {
+        indexProfileConfigSchema.parse(body.configJson);
       }
       configStr = JSON.stringify(body.configJson);
     } catch (e) {
@@ -78,25 +87,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: msg }, { status: 400 });
     }
   } else {
-    configStr =
-      body.kind === "EXTRACTION"
-        ? JSON.stringify({
-            slotBindings: {},
-          })
-        : JSON.stringify({
-            chat: { credentialId: "__invalid__", model: "" },
-          });
-    try {
-      if (body.kind === "EXTRACTION") {
+    if (body.kind === "EXTRACTION") {
+      configStr = JSON.stringify({ slotBindings: {} });
+      try {
         extractionProfileConfigSchema.parse(JSON.parse(configStr));
-      } else {
-        return NextResponse.json(
-          { message: "CHAT 模版创建时必须提供有效的 configJson（含 chat 槽位）" },
-          { status: 400 },
-        );
+      } catch {
+        return NextResponse.json({ message: "默认配置无效" }, { status: 400 });
       }
-    } catch {
-      return NextResponse.json({ message: "默认配置无效" }, { status: 400 });
+    } else if (body.kind === "CHAT") {
+      return NextResponse.json(
+        { message: "CHAT 模版创建时必须提供有效的 configJson（含 chat 槽位）" },
+        { status: 400 },
+      );
+    } else {
+      return NextResponse.json(
+        { message: "INDEX 模版创建时必须提供有效的 configJson（含 embed 与可选 ragOptions）" },
+        { status: 400 },
+      );
     }
   }
 
