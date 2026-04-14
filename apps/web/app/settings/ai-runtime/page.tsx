@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { GitBranch, Layers, Loader2, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import mermaid from "mermaid";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GeminiModelPicker } from "@/components/gemini-model-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiGatewayPublic, RagOptionsStored, SlotBinding } from "@/lib/ai-gateway-types";
@@ -30,6 +31,8 @@ import {
   chatProfileConfigSchema,
   extractionProfileConfigSchema,
 } from "@/lib/ai-runtime-profile-schema";
+
+type RuntimeKindTab = "EXTRACTION" | "CHAT" | "INDEX";
 
 type ProfileRow = {
   id: string;
@@ -65,7 +68,7 @@ export default function AiRuntimeSettingsPage() {
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [activeChatProfileId, setActiveChatProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [kindTab, setKindTab] = useState<"EXTRACTION" | "CHAT">("EXTRACTION");
+  const [kindTab, setKindTab] = useState<RuntimeKindTab>("EXTRACTION");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mermaidSrc, setMermaidSrc] = useState<string | null>(null);
   const [mermaidLoading, setMermaidLoading] = useState(false);
@@ -112,6 +115,19 @@ export default function AiRuntimeSettingsPage() {
       c = true;
     };
   }, [loadAll]);
+
+  const profileList = useMemo(() => {
+    if (kindTab === "EXTRACTION") {
+      return profiles.filter((p) => p.kind === "EXTRACTION");
+    }
+    return profiles.filter((p) => p.kind === "CHAT");
+  }, [kindTab, profiles]);
+
+  useEffect(() => {
+    if (selectedId && !profileList.some((p) => p.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [kindTab, profiles, selectedId, profileList]);
 
   useEffect(() => {
     if (!selected) return;
@@ -166,7 +182,7 @@ export default function AiRuntimeSettingsPage() {
     }
   }, [kindTab, mermaidSrc, mermaidLoading, fetchMermaid]);
 
-  const fetchModels = async (credentialId: string, slot: "flash" | "pro" | "chat") => {
+  const fetchModels = useCallback(async (credentialId: string, slot: "flash" | "pro" | "chat") => {
     if (!credentialId) return;
     const k = `${credentialId}:${slot}`;
     setLoadingModels((m) => ({ ...m, [k]: true }));
@@ -184,9 +200,30 @@ export default function AiRuntimeSettingsPage() {
     } finally {
       setLoadingModels((m) => ({ ...m, [k]: false }));
     }
-  };
+  }, []);
 
-  const createProfile = async (kind: "EXTRACTION" | "CHAT") => {
+  useEffect(() => {
+    if (!gateway || !selected || selected.kind !== "CHAT") return;
+    const cid = chatCfg.chat?.credentialId?.trim();
+    if (!cid) return;
+    void fetchModels(cid, "chat");
+  }, [gateway, selected?.id, selected?.kind, chatCfg.chat?.credentialId, fetchModels]);
+
+  const extractionBindingsKey = JSON.stringify(extractionCfg.slotBindings);
+  useEffect(() => {
+    if (!gateway || !selected || selected.kind !== "EXTRACTION") return;
+    const sb = extractionCfg.slotBindings;
+    for (const key of ["flashToc", "flashQuickstart"] as const) {
+      const id = sb[key]?.credentialId?.trim();
+      if (id) void fetchModels(id, "flash");
+    }
+    for (const key of ["proExtract", "proMerge"] as const) {
+      const id = sb[key]?.credentialId?.trim();
+      if (id) void fetchModels(id, "pro");
+    }
+  }, [gateway, selected?.id, selected?.kind, extractionBindingsKey, fetchModels]);
+
+  const createProfile = async (kind: "EXTRACTION" | "CHAT", opts?: { tabAfter?: RuntimeKindTab }) => {
     try {
       let configJson: ExtractionProfileConfigParsed | ChatProfileConfigParsed;
       if (kind === "EXTRACTION") {
@@ -242,7 +279,7 @@ export default function AiRuntimeSettingsPage() {
       if (!res.ok) throw new Error(j.message || "创建失败");
       toast.success("已创建");
       await loadAll();
-      setKindTab(kind);
+      setKindTab(kind === "EXTRACTION" ? "EXTRACTION" : opts?.tabAfter ?? "CHAT");
       setSelectedId(j.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "创建失败");
@@ -374,54 +411,29 @@ export default function AiRuntimeSettingsPage() {
           </Field>
           <Field>
             <FieldLabel>模型</FieldLabel>
-            <div className="flex gap-2">
-              <Select
-                value={model && models.some((m) => m.name === model) ? model : ""}
-                onValueChange={(v) =>
-                  onChange({
-                    ...binding,
-                    credentialId: cid,
-                    model: v,
-                    ...(slot === "chat"
-                      ? {
-                          temperature: binding?.temperature ?? gateway?.chatOptions.temperature ?? 0.2,
-                          maxTokens: binding?.maxTokens ?? gateway?.chatOptions.maxTokens ?? 8192,
-                        }
-                      : {}),
-                  })
-                }
-                disabled={!cid || loadingModels[k]}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={loadingModels[k] ? "加载中…" : "选择模型"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((m) => (
-                    <SelectItem key={m.name} value={m.name}>
-                      {m.displayName ?? m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                className="flex-1 font-mono text-xs"
-                placeholder="或手动填写模型 ID"
-                value={model}
-                onChange={(e) =>
-                  onChange({
-                    ...binding,
-                    credentialId: cid,
-                    model: e.target.value,
-                    ...(slot === "chat"
-                      ? {
-                          temperature: binding?.temperature ?? 0.2,
-                          maxTokens: binding?.maxTokens ?? 8192,
-                        }
-                      : {}),
-                  })
-                }
-              />
-            </div>
+            <GeminiModelPicker
+              slot={slot}
+              vendor={
+                cid ? (gateway?.credentials.find((c) => c.id === cid)?.vendor ?? "gemini") : "gemini"
+              }
+              models={models}
+              value={model}
+              onChange={(v) =>
+                onChange({
+                  ...binding,
+                  credentialId: cid,
+                  model: v,
+                  ...(slot === "chat"
+                    ? {
+                        temperature: binding?.temperature ?? gateway?.chatOptions.temperature ?? 0.2,
+                        maxTokens: binding?.maxTokens ?? gateway?.chatOptions.maxTokens ?? 8192,
+                      }
+                    : {}),
+                })
+              }
+              loading={Boolean(loadingModels[k])}
+              disabled={!cid}
+            />
           </Field>
         </div>
         {slot !== "chat" ? (
@@ -518,8 +530,6 @@ export default function AiRuntimeSettingsPage() {
     );
   }
 
-  const list = profiles.filter((p) => p.kind === kindTab);
-
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-1 pb-16">
       <div className="flex items-start gap-3 pt-1">
@@ -529,8 +539,8 @@ export default function AiRuntimeSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">AI 运行时模版</h1>
           <p className="text-muted-foreground mt-1 max-w-3xl text-pretty">
-            提取管线可细分四个模型槽位与节点参数；聊天模版覆盖 Chat 槽与 RAG 默认。凭证仍在
-            <a href="/models" className="underline underline-offset-2">
+            提取管线可细分四个模型槽位与节点参数；「聊天」模版只覆盖对话模型，「索引」模版只覆盖检索与建索引默认（同一套 CHAT 类模版，分栏编辑）。凭证仍在
+            <a href="/models/extraction" className="underline underline-offset-2">
               模型管理
             </a>
             维护。
@@ -573,7 +583,7 @@ export default function AiRuntimeSettingsPage() {
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <Card className="h-fit">
           <CardHeader className="space-y-4">
-            <div className="bg-muted grid grid-cols-2 rounded-lg p-1 text-sm">
+            <div className="bg-muted grid grid-cols-3 rounded-lg p-1 text-sm">
               <button
                 type="button"
                 className={
@@ -596,23 +606,37 @@ export default function AiRuntimeSettingsPage() {
               >
                 聊天
               </button>
+              <button
+                type="button"
+                className={
+                  kindTab === "INDEX"
+                    ? "bg-background shadow-sm rounded-md py-2 font-medium"
+                    : "rounded-md py-2 text-muted-foreground"
+                }
+                onClick={() => setKindTab("INDEX")}
+              >
+                索引
+              </button>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="w-full gap-1"
-              onClick={() => void createProfile(kindTab)}
+              onClick={() => {
+                if (kindTab === "EXTRACTION") void createProfile("EXTRACTION");
+                else void createProfile("CHAT", { tabAfter: kindTab });
+              }}
             >
               <Plus className="h-4 w-4" />
               新建模版
             </Button>
           </CardHeader>
           <CardContent className="space-y-1">
-            {list.length === 0 ? (
+            {profileList.length === 0 ? (
               <p className="text-muted-foreground text-sm">暂无模版</p>
             ) : (
-              list.map((p) => (
+              profileList.map((p) => (
                 <button
                   key={p.id}
                   type="button"
@@ -832,7 +856,11 @@ export default function AiRuntimeSettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">{selected.name}</CardTitle>
-                <CardDescription>覆盖 Chat 槽与 RAG 默认（用于对话与建索引）。</CardDescription>
+                <CardDescription>
+                  {kindTab === "INDEX"
+                    ? "编辑检索与建索引默认（与「聊天」页签共用同一套模版数据）。"
+                    : "编辑对话模型与生成参数（与「索引」页签共用同一套模版数据）。"}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <FieldGroup>
@@ -850,21 +878,24 @@ export default function AiRuntimeSettingsPage() {
                   </Field>
                 </FieldGroup>
 
-                {renderSlotRow(
-                  "Chat 槽位",
-                  "RAG 回答合成",
-                  chatCfg.chat,
-                  "chat",
-                  (b) => {
-                    if (!b) return;
-                    setChatCfg((c) => ({ ...c, chat: b }));
-                  },
-                  false,
-                )}
+                {kindTab === "CHAT"
+                  ? renderSlotRow(
+                      "Chat 槽位",
+                      "RAG 对话合成",
+                      chatCfg.chat,
+                      "chat",
+                      (b) => {
+                        if (!b) return;
+                        setChatCfg((c) => ({ ...c, chat: b }));
+                      },
+                      false,
+                    )
+                  : null}
 
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">RAG / 建索引默认</h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                {kindTab === "INDEX" ? (
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium">RAG / 建索引默认</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
                     <Field>
                       <FieldLabel>rerankModel</FieldLabel>
                       <Input
@@ -955,14 +986,15 @@ export default function AiRuntimeSettingsPage() {
                       </Select>
                     </Field>
                   </div>
-                  <Field className="mt-3 flex flex-row items-center gap-2">
-                    <Checkbox
-                      checked={chatCfg.ragOptions?.useRerank !== false}
-                      onCheckedChange={(v) => updateChatRag({ useRerank: v === true })}
-                    />
-                    <span className="text-sm">useRerank（关闭则跳过重排）</span>
-                  </Field>
-                </div>
+                    <Field className="mt-3 flex flex-row items-center gap-2">
+                      <Checkbox
+                        checked={chatCfg.ragOptions?.useRerank !== false}
+                        onCheckedChange={(v) => updateChatRag({ useRerank: v === true })}
+                      />
+                      <span className="text-sm">useRerank（关闭则跳过重排）</span>
+                    </Field>
+                  </div>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" onClick={() => void saveSelected()} disabled={saving}>

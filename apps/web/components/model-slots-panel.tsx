@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -65,9 +65,15 @@ function vendorShort(v: AiVendor): string {
 type Props = {
   data: AiGatewayPublic;
   onUpdated: (next: AiGatewayPublic) => void;
+  /** When set, only these slots are shown (e.g. extraction: flash+pro, chat: chat, index: embed). */
+  allowedSlots?: SlotKey[];
 };
 
-export function ModelSlotsPanel({ data, onUpdated }: Props) {
+export function ModelSlotsPanel({ data, onUpdated, allowedSlots }: Props) {
+  const slotsShown = useMemo(() => {
+    if (!allowedSlots?.length) return SLOTS;
+    return SLOTS.filter((s) => allowedSlots.includes(s.key));
+  }, [allowedSlots]);
   const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
   const [savingSlot, setSavingSlot] = useState<SlotKey | null>(null);
@@ -103,14 +109,14 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
 
   /** Prefetch model lists for slots already saved on server (per credential + slot). */
   useEffect(() => {
-    for (const s of SLOTS) {
+    for (const s of slotsShown) {
       const b = data.slotBindings[s.key];
       if (b?.credentialId) {
         void fetchModels(b.credentialId, s.key);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- slotBindingsKey serializes data.slotBindings
-  }, [slotBindingsKey, fetchModels]);
+  }, [slotBindingsKey, fetchModels, slotsShown]);
 
   const saveSlot = useCallback(
     async (slot: SlotKey) => {
@@ -218,7 +224,7 @@ export function ModelSlotsPanel({ data, onUpdated }: Props) {
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-1 xl:grid-cols-2">
-          {SLOTS.map(({ key, label, hint }) => {
+          {slotsShown.map(({ key, label, hint }) => {
             const row = local[key];
             const ck = row.credentialId ? modelsCacheKey(row.credentialId, key) : "";
             const list = row.credentialId ? (modelLists[ck] ?? []) : [];
