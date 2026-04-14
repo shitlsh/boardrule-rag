@@ -23,24 +23,28 @@ def _bedrock_botocore_config() -> Config:
     return Config(read_timeout=max(1.0, float(ms) / 1000.0), connect_timeout=30)
 
 
-def _bedrock_runtime_client(
+def _bedrock_runtime_client_iam(
     *,
     region: str,
-    auth_mode: Literal["iam", "api_key"],
-    api_key_secret: str,
+    secret_access_key: str,
     aws_access_key_id: str | None,
     aws_session_token: str | None,
 ):
+    """IAM (SigV4): explicit keys on the client."""
     cfg = _bedrock_botocore_config()
-    if auth_mode == "iam":
-        return boto3.client(
-            "bedrock-runtime",
-            region_name=region,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=api_key_secret,
-            aws_session_token=aws_session_token,
-            config=cfg,
-        )
+    return boto3.client(
+        "bedrock-runtime",
+        region_name=region,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=secret_access_key,
+        aws_session_token=aws_session_token,
+        config=cfg,
+    )
+
+
+def _bedrock_runtime_client_api_key(*, region: str):
+    """Bedrock product API key: ``AWS_BEARER_TOKEN_BEDROCK`` must be set *before* ``boto3.client`` (AWS docs / boto3#4723)."""
+    cfg = _bedrock_botocore_config()
     return boto3.client("bedrock-runtime", region_name=region, config=cfg)
 
 
@@ -97,22 +101,25 @@ def converse_messages(
 ) -> tuple[str, bool]:
     """Multi-turn Converse; returns (assistant text, truncated)."""
     region, mode = _require_bedrock_slot(slot)
-    client = _bedrock_runtime_client(
-        region=region,
-        auth_mode=mode,
-        api_key_secret=slot.api_key,
-        aws_access_key_id=slot.aws_access_key_id,
-        aws_session_token=slot.aws_session_token,
-    )
     body = {
         "modelId": slot.model,
         "messages": messages,
         "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
     }
     if mode == "api_key":
-        with _BearerEnv(slot.api_key):
+        token = (slot.api_key or "").strip()
+        if not token:
+            raise ValueError("Bedrock api_key mode requires non-empty apiKey (Bearer token)")
+        with _BearerEnv(token):
+            client = _bedrock_runtime_client_api_key(region=region)
             resp = client.converse(**body)
     else:
+        client = _bedrock_runtime_client_iam(
+            region=region,
+            secret_access_key=slot.api_key,
+            aws_access_key_id=(slot.aws_access_key_id or "").strip() or None,
+            aws_session_token=(slot.aws_session_token or "").strip() or None,
+        )
         resp = client.converse(**body)
     text = _extract_output_text(resp)
     return text, _stop_truncated(resp.get("stopReason"))

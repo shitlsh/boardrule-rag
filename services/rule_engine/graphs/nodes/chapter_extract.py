@@ -122,6 +122,12 @@ def run(state: ExtractionState) -> dict:
                 out = retry(_call, attempts=3)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"chapter_extract vision batch {i + 1}: {e}")
+                _LOG.warning(
+                    "chapter_extract: vision batch %s/%s failed after retries: %s",
+                    i + 1,
+                    len(batch_list),
+                    e,
+                )
                 outputs.append(f"<!-- extract failed batch {i + 1}: {e} -->")
                 i = k + 1
                 continue
