@@ -61,7 +61,8 @@ def build_extraction_graph(checkpointer: BaseCheckpointSaver | None = None):
 def get_extraction_mermaid_text() -> str:
     """Return Mermaid diagram source for the extraction graph topology (same nodes/edges as production)."""
     # Checkpointer does not affect graph shape; omit so this works without DB / app init.
-    return build_extraction_graph(None).compile().get_graph().draw_mermaid()
+    # ``build_extraction_graph`` already returns ``builder.compile(...)`` (CompiledStateGraph).
+    return build_extraction_graph(None).get_graph().draw_mermaid()
 
 
 def run_extraction(
