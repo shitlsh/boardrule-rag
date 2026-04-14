@@ -111,7 +111,7 @@ export async function syncTaskFromRuleEngine(taskId: string) {
 
   let poll;
   try {
-    poll = await getExtractJob(task.jobId);
+    poll = await getExtractJob(task.gameId, task.jobId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await prisma.task.update({

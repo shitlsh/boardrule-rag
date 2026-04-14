@@ -99,16 +99,19 @@ export async function startExtractionWithPagePlan(params: {
   return (await res.json()) as ExtractStartResponse;
 }
 
-export async function getExtractJob(jobId: string): Promise<ExtractPollResponse> {
+export async function getExtractJob(gameId: string, jobId: string): Promise<ExtractPollResponse> {
   const base = getRuleEngineBaseUrl();
   let res: Response;
   try {
-    res = await fetch(`${base}/extract/${encodeURIComponent(jobId)}`, {
-      method: "GET",
-      headers: ruleEngineBearerAuth(),
-      cache: "no-store",
-      signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
-    });
+    res = await fetch(
+      `${base}/games/${encodeURIComponent(gameId)}/extract/${encodeURIComponent(jobId)}`,
+      {
+        method: "GET",
+        headers: ruleEngineBearerAuth(),
+        cache: "no-store",
+        signal: AbortSignal.timeout(RULE_ENGINE_POLL_FETCH_MS),
+      },
+    );
   } catch (e: unknown) {
     if (isAbortError(e)) {
       throw new Error(
