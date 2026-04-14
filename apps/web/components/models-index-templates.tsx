@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,6 +26,7 @@ import {
   type IndexProfileConfigParsed,
   indexProfileConfigSchema,
 } from "@/lib/ai-runtime-profile-schema";
+import { INDEX_RAG_DEFAULTS } from "@/lib/rule-engine-defaults";
 
 type ProfileRow = {
   id: string;
@@ -330,8 +331,8 @@ export function ModelsIndexTemplates() {
                   onClick={() => setSelectedId(p.id)}
                   className={
                     selectedId === p.id
-                      ? "bg-primary/10 text-primary w-full rounded-md px-2 py-2 text-left text-sm"
-                      : "hover:bg-muted w-full rounded-md px-2 py-2 text-left text-sm"
+                      ? "bg-primary/10 text-primary w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
+                      : "hover:bg-muted w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
                   }
                 >
                   {p.name}
@@ -417,90 +418,146 @@ export function ModelsIndexTemplates() {
                   </div>
                 </div>
 
-                <div className="border-border space-y-3 rounded-lg border p-4">
-                  <div className="font-medium">检索与分块默认</div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>similarityTopK</FieldLabel>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={ro.similarityTopK ?? ""}
-                        onChange={(e) => {
-                          const t = e.target.value.trim();
-                          patchRag(t === "" ? {} : { similarityTopK: Math.trunc(Number(t)) || undefined });
-                        }}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>rerankTopN</FieldLabel>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={ro.rerankTopN ?? ""}
-                        onChange={(e) => {
-                          const t = e.target.value.trim();
-                          patchRag(t === "" ? {} : { rerankTopN: Math.trunc(Number(t)) || undefined });
-                        }}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>chunkSize</FieldLabel>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={ro.chunkSize ?? ""}
-                        onChange={(e) => {
-                          const t = e.target.value.trim();
-                          patchRag(t === "" ? {} : { chunkSize: Math.trunc(Number(t)) || undefined });
-                        }}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>chunkOverlap</FieldLabel>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={ro.chunkOverlap ?? ""}
-                        onChange={(e) => {
-                          const t = e.target.value.trim();
-                          patchRag(t === "" ? {} : { chunkOverlap: Math.trunc(Number(t)) || undefined });
-                        }}
-                      />
-                    </Field>
+                <div className="border-border space-y-6 rounded-lg border p-4">
+                  <div>
+                    <div className="text-foreground font-medium">检索与分块默认</div>
+                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                      下列数值会进入建索引与查询时的默认行为；已建立的索引会在 manifest 中记录当时选用的一部分参数。
+                      修改分块、BM25 配置、检索模式或元数据后，通常需要<strong>重新建索引</strong>才能在检索侧完全生效（详见 ingestion 文档）。
+                    </p>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel>retrievalMode</FieldLabel>
-                      <Select
-                        value={ro.retrievalMode ?? "hybrid"}
-                        onValueChange={(v) =>
-                          patchRag({
-                            retrievalMode: v === "hybrid" || v === "vector_only" ? v : "hybrid",
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="hybrid">hybrid</SelectItem>
-                          <SelectItem value="vector_only">vector_only</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field className="flex items-end">
-                      <div className="flex items-center gap-2 pb-2">
-                        <Checkbox
-                          id="useRerank"
-                          checked={ro.useRerank ?? true}
-                          onCheckedChange={(v) => patchRag({ useRerank: v === true })}
+
+                  <div className="space-y-3">
+                    <p className="text-foreground text-sm font-medium">召回与重排</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>similarityTopK</FieldLabel>
+                        <FieldDescription>
+                          向量检索阶段从索引中取回的<strong>候选条数上限</strong>（<code className="text-xs">RAG_SIMILARITY_TOP_K</code>
+                          ）。数值越大越不易漏召回，但延迟与后续重排成本更高；需要「列全表」类问题时可酌情调高（例如 12–16）。
+                        </FieldDescription>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder={String(INDEX_RAG_DEFAULTS.similarityTopK)}
+                          className="tabular-nums"
+                          value={ro.similarityTopK ?? ""}
+                          onChange={(e) => {
+                            const t = e.target.value.trim();
+                            patchRag(t === "" ? {} : { similarityTopK: Math.trunc(Number(t)) || undefined });
+                          }}
                         />
-                        <Label htmlFor="useRerank" className="font-normal">
-                          useRerank
-                        </Label>
+                      </Field>
+                      <Field>
+                        <FieldLabel>rerankTopN</FieldLabel>
+                        <FieldDescription>
+                          经过交叉编码器重排后，实际交给上游（或进入生成上下文）的<strong>条数上限</strong>（
+                          <code className="text-xs">RAG_RERANK_TOP_N</code>）。应 ≤ similarityTopK；复杂问答可略增大，但会提高 token 消耗。
+                        </FieldDescription>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder={String(INDEX_RAG_DEFAULTS.rerankTopN)}
+                          className="tabular-nums"
+                          value={ro.rerankTopN ?? ""}
+                          onChange={(e) => {
+                            const t = e.target.value.trim();
+                            patchRag(t === "" ? {} : { rerankTopN: Math.trunc(Number(t)) || undefined });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-foreground text-sm font-medium">分块（建索引）</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>chunkSize</FieldLabel>
+                        <FieldDescription>
+                          每个文本块的目标字符规模（<code className="text-xs">CHUNK_SIZE</code>
+                          ）。影响向量粒度与 BM25 词面命中；与语种、排版强相关，调整后需重建索引。
+                        </FieldDescription>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder={String(INDEX_RAG_DEFAULTS.chunkSize)}
+                          className="tabular-nums"
+                          value={ro.chunkSize ?? ""}
+                          onChange={(e) => {
+                            const t = e.target.value.trim();
+                            patchRag(t === "" ? {} : { chunkSize: Math.trunc(Number(t)) || undefined });
+                          }}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>chunkOverlap</FieldLabel>
+                        <FieldDescription>
+                          相邻块之间的重叠长度（<code className="text-xs">CHUNK_OVERLAP</code>
+                          ），减少在块边界处被切断的规则句；略增可提高召回稳定性，也会略增存储。
+                        </FieldDescription>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder={String(INDEX_RAG_DEFAULTS.chunkOverlap)}
+                          className="tabular-nums"
+                          value={ro.chunkOverlap ?? ""}
+                          onChange={(e) => {
+                            const t = e.target.value.trim();
+                            patchRag(t === "" ? {} : { chunkOverlap: Math.trunc(Number(t)) || undefined });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-foreground text-sm font-medium">检索模式与重排开关</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>retrievalMode</FieldLabel>
+                        <FieldDescription>
+                          <strong>hybrid</strong>：BM25（词面）+ 向量 + RRF 融合（
+                          <code className="text-xs">RAG_RETRIEVAL_MODE</code>
+                          ）。<strong>vector_only</strong>：仅稠密向量，不做磁盘 BM25；适合纯语义场景或调试。
+                        </FieldDescription>
+                        <Select
+                          value={ro.retrievalMode ?? "hybrid"}
+                          onValueChange={(v) =>
+                            patchRag({
+                              retrievalMode: v === "hybrid" || v === "vector_only" ? v : "hybrid",
+                            })
+                          }
+                        >
+                          <SelectTrigger className="cursor-pointer">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hybrid">hybrid（BM25 + 向量）</SelectItem>
+                            <SelectItem value="vector_only">vector_only（仅向量）</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <div className="bg-muted/40 flex flex-col justify-end rounded-lg border border-border/60 p-4">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="useRerank"
+                            className="mt-1 shrink-0"
+                            checked={ro.useRerank ?? true}
+                            onCheckedChange={(v) => patchRag({ useRerank: v === true })}
+                          />
+                          <div className="min-w-0 space-y-1">
+                            <Label htmlFor="useRerank" className="cursor-pointer text-sm font-medium leading-snug">
+                              启用交叉编码器重排（useRerank）
+                            </Label>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                              关闭后跳过 rerank 模型，仅保留向量 / 混合检索结果，内存与延迟更低，但排序质量可能下降。对应{" "}
+                              <code className="text-xs">RAG_USE_RERANK</code>。
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </Field>
+                    </div>
                   </div>
                 </div>
 

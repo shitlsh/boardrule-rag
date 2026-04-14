@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -160,7 +160,7 @@ export function ModelsChatTemplates() {
           credentialId,
           model,
           temperature: gateway.chatOptions.temperature ?? 0.2,
-          maxTokens: gateway.chatOptions.maxTokens ?? 8192,
+          maxTokens: gateway.chatOptions.maxTokens ?? 16384,
         },
       };
       const res = await fetch("/api/ai-runtime-profiles", {
@@ -316,8 +316,8 @@ export function ModelsChatTemplates() {
                   onClick={() => setSelectedId(p.id)}
                   className={
                     selectedId === p.id
-                      ? "bg-primary/10 text-primary w-full rounded-md px-2 py-2 text-left text-sm"
-                      : "hover:bg-muted w-full rounded-md px-2 py-2 text-left text-sm"
+                      ? "bg-primary/10 text-primary w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
+                      : "hover:bg-muted w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
                   }
                 >
                   {p.name}
@@ -338,7 +338,9 @@ export function ModelsChatTemplates() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">{selected.name}</CardTitle>
-                <CardDescription>Chat 槽位：凭证、模型、temperature、maxTokens。</CardDescription>
+                <CardDescription>
+                  对话使用 Chat 槽中的模型；温度与长度仅作用于本模版。
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <FieldGroup>
@@ -423,7 +425,11 @@ export function ModelsChatTemplates() {
                       />
                     </Field>
                     <Field>
-                      <FieldLabel>Max tokens</FieldLabel>
+                      <FieldLabel>单次回复上限（max tokens）</FieldLabel>
+                      <FieldDescription>
+                        限制的是<strong>模型单次生成的总输出长度</strong>（含助手最终回复），不是仅用户输入字数。
+                        RAG 场景下系统提示、检索到的规则片段与用户问题都会占用上下文，若回答常被截断请适当调高（例如 16384–32768）。
+                      </FieldDescription>
                       <Input
                         type="number"
                         min={1}
@@ -433,7 +439,7 @@ export function ModelsChatTemplates() {
                             ...c,
                             chat: {
                               ...c.chat,
-                              maxTokens: Math.max(1, Math.trunc(Number(e.target.value)) || 8192),
+                              maxTokens: Math.max(1, Math.trunc(Number(e.target.value)) || 16384),
                               temperature: c.chat.temperature ?? gateway.chatOptions.temperature,
                             },
                           }))

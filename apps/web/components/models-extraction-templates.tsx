@@ -28,6 +28,11 @@ import {
   type ExtractionRuntimeOverridesParsed,
   extractionProfileConfigSchema,
 } from "@/lib/ai-runtime-profile-schema";
+import {
+  EXTRACTION_RUNTIME_DEFAULTS,
+  EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT,
+  defaultVisionMaxMergePages,
+} from "@/lib/rule-engine-defaults";
 
 type ProfileRow = {
   id: string;
@@ -315,9 +320,16 @@ export function ModelsExtractionTemplates() {
         </div>
         <Field>
           <FieldLabel>最大输出 tokens（可选）</FieldLabel>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            留空则使用规则引擎默认{" "}
+            <span className="text-foreground font-medium tabular-nums">
+              {EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT.toLocaleString()}
+            </span>{" "}
+           （亦可通过服务器环境变量覆盖 Flash / Pro）。
+          </p>
           <Input
             value={maxOut}
-            placeholder="留空则使用引擎默认"
+            placeholder={`默认 ${EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT.toLocaleString()}`}
             onChange={(e) => {
               const t = e.target.value.trim();
               const next: SlotBinding = {
@@ -362,15 +374,44 @@ export function ModelsExtractionTemplates() {
     );
   }
 
+  const mergePagesHint = defaultVisionMaxMergePages(EXTRACTION_RUNTIME_DEFAULTS.visionBatchPages);
+
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-sm leading-relaxed">
         API 凭证在「
-        <a href="/models/credentials" className="text-primary underline underline-offset-2">
+        <a
+          href="/models/credentials"
+          className="text-primary underline underline-offset-2 transition-colors hover:text-primary/90"
+        >
           凭证管理
         </a>
-        」添加。游戏页开始提取时必须选择一套提取模版；请至少为 TOC/Quickstart 之一与 Extract/Merge 之一配置模型（用于引擎 Flash/Pro 基线）。
+        」添加。游戏页开始提取时必须选择一套提取模版；请至少为 TOC / Quickstart 之一与 Extract / Merge 之一配置模型（用于引擎 Flash / Pro 基线）。
       </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <GitBranch className="h-4 w-4 shrink-0" aria-hidden />
+            提取流程（只读）
+          </CardTitle>
+          <CardDescription>
+            LangGraph 编译图，与 rule_engine 一致；不随左侧模版切换而变化，便于对照各节点与下方槽位命名。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {mermaidLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" aria-hidden />
+            </div>
+          ) : (
+            <div
+              ref={mermaidRef}
+              className="bg-muted/30 overflow-x-auto rounded-md border border-border/60 p-4 text-sm"
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <Card className="h-fit">
@@ -392,8 +433,8 @@ export function ModelsExtractionTemplates() {
                   onClick={() => setSelectedId(p.id)}
                   className={
                     selectedId === p.id
-                      ? "bg-primary/10 text-primary w-full rounded-md px-2 py-2 text-left text-sm"
-                      : "hover:bg-muted w-full rounded-md px-2 py-2 text-left text-sm"
+                      ? "bg-primary/10 text-primary w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
+                      : "hover:bg-muted w-full cursor-pointer rounded-md px-2 py-2 text-left text-sm transition-colors"
                   }
                 >
                   {p.name}
@@ -406,8 +447,14 @@ export function ModelsExtractionTemplates() {
         <div className="space-y-6">
           {!selected || selected.kind !== "EXTRACTION" ? (
             <Card>
-              <CardContent className="text-muted-foreground py-12 text-center text-sm">
-                请选择左侧模版或新建
+              <CardHeader>
+                <CardTitle className="text-base">编辑提取模版</CardTitle>
+                <CardDescription>
+                  从左侧选择已有模版，或点击「新建模版」以配置各节点模型与可选的运行时覆盖。上方流程图始终展示当前引擎拓扑。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-muted-foreground py-6 text-center text-sm">
+                请选择左侧模版或新建后开始编辑
               </CardContent>
             </Card>
           ) : (
@@ -480,37 +527,69 @@ export function ModelsExtractionTemplates() {
                       })),
                   )}
 
-                  <Collapsible>
-                    <CollapsibleTrigger className="text-primary flex items-center gap-2 text-sm font-medium">
-                      <Sparkles className="h-4 w-4" />
+                  <Collapsible defaultOpen>
+                    <CollapsibleTrigger className="text-primary hover:text-primary/90 flex cursor-pointer items-center gap-2 text-sm font-medium transition-colors">
+                      <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
                       节点与环境覆盖
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-4 space-y-3">
-                      <p className="text-muted-foreground text-xs">
-                        未填写时继承规则引擎环境变量（见{" "}
-                        <code className="text-xs">services/rule_engine/.env.example</code>）。
+                    <CollapsibleContent className="mt-4 space-y-4">
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        以下为可选覆盖：留空表示<strong>不写入模版</strong>，运行时使用规则引擎进程的环境变量或代码内默认值（与{" "}
+                        <code className="rounded bg-muted px-1 py-0.5 text-[11px]">services/rule_engine/.env.example</code>{" "}
+                        对照）。一般无需填写，除非你要针对该模版固定不同数值。
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         {(
                           [
-                            ["visionBatchPages", "每批视觉页数（VISION_BATCH_PAGES）"],
-                            ["extractionSimpleMaxBodyPages", "简单路径正文页上限"],
-                            ["extractionComplexRouteBodyPages", "复杂路由正文页阈值"],
+                            [
+                              "visionBatchPages",
+                              "每批视觉页数",
+                              `VISION_BATCH_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.visionBatchPages}`,
+                            ],
+                            [
+                              "extractionSimpleMaxBodyPages",
+                              "简单路径：正文页数上限",
+                              `EXTRACTION_SIMPLE_MAX_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionSimpleMaxBodyPages}（超过则不走简单画像）`,
+                            ],
+                            [
+                              "extractionComplexRouteBodyPages",
+                              "复杂路由：正文页阈值",
+                              `EXTRACTION_COMPLEX_ROUTE_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionComplexRouteBodyPages}`,
+                            ],
                             [
                               "extractionSimplePathWarnBodyPages",
-                              "简单路径单批正文页告警阈值（仅打日志）",
+                              "简单路径单批页数告警",
+                              `EXTRACTION_SIMPLE_PATH_WARN_BODY_PAGES · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.extractionSimplePathWarnBodyPages}（仅日志）`,
                             ],
-                            ["visionMaxMergePages", "NEED_MORE_CONTEXT 合并时单请求最多几页图"],
-                            ["needMoreContextMaxExpand", "NEED_MORE_CONTEXT 邻批合并最多步数"],
-                            ["llmMaxContinuationRounds", "输出截断后续写轮数"],
+                            [
+                              "visionMaxMergePages",
+                              "合并批次时单请求最多页图",
+                              `VISION_MAX_MERGE_PAGES · 未设时引擎按批次计算（示例批次 ${EXTRACTION_RUNTIME_DEFAULTS.visionBatchPages} → 约 ${mergePagesHint}）`,
+                            ],
+                            [
+                              "needMoreContextMaxExpand",
+                              "NEED_MORE_CONTEXT 邻批合并最多步数",
+                              `NEED_MORE_CONTEXT_MAX_EXPAND · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.needMoreContextMaxExpand}`,
+                            ],
+                            [
+                              "llmMaxContinuationRounds",
+                              "输出截断后续写轮数",
+                              `BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS · 默认 ${EXTRACTION_RUNTIME_DEFAULTS.llmMaxContinuationRounds}`,
+                            ],
                           ] as const
-                        ).map(([field, lab]) => (
+                        ).map(([field, title, hint]) => (
                           <Field key={field}>
-                            <FieldLabel>{lab}</FieldLabel>
+                            <FieldLabel>{title}</FieldLabel>
+                            <p className="text-muted-foreground mb-1.5 text-xs leading-relaxed">{hint}</p>
                             <Input
                               type="number"
                               min={0}
-                              placeholder="继承环境"
+                              placeholder={
+                                field === "visionMaxMergePages"
+                                  ? `示例默认 ${mergePagesHint}`
+                                  : String(EXTRACTION_RUNTIME_DEFAULTS[field as keyof typeof EXTRACTION_RUNTIME_DEFAULTS] ?? "")
+                              }
+                              className="tabular-nums"
                               value={
                                 extractionCfg.extractionRuntime?.[field] != null
                                   ? String(extractionCfg.extractionRuntime[field])
@@ -521,25 +600,40 @@ export function ModelsExtractionTemplates() {
                           </Field>
                         ))}
                       </div>
-                      <p className="text-muted-foreground text-xs">HTTP 超时（毫秒）</p>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <p className="text-foreground text-sm font-medium">HTTP 超时（毫秒）</p>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Gemini 空环境时为 {EXTRACTION_RUNTIME_DEFAULTS.geminiHttpTimeoutMs.toLocaleString()} ms；填{" "}
+                        <span className="tabular-nums">0</span> 表示由客户端不限制（见引擎逻辑）。
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2">
                         {(
                           [
                             [
                               "geminiHttpTimeoutMs",
-                              "Gemini / Google GenAI（填 0 表示客户端不限制）",
+                              "Gemini / Google GenAI",
+                              `默认 ${EXTRACTION_RUNTIME_DEFAULTS.geminiHttpTimeoutMs.toLocaleString()} ms`,
                             ],
-                            ["dashscopeHttpTimeoutMs", "DashScope（Qwen 等）"],
-                            ["openrouterHttpTimeoutMs", "OpenRouter"],
+                            [
+                              "dashscopeHttpTimeoutMs",
+                              "DashScope（Qwen 等）",
+                              `默认 ${EXTRACTION_RUNTIME_DEFAULTS.dashscopeHttpTimeoutMs.toLocaleString()} ms（空环境）`,
+                            ],
+                            [
+                              "openrouterHttpTimeoutMs",
+                              "OpenRouter",
+                              `默认 ${EXTRACTION_RUNTIME_DEFAULTS.openrouterHttpTimeoutMs.toLocaleString()} ms（空环境）`,
+                            ],
                           ] as const
-                        ).map(([field, lab]) => (
+                        ).map(([field, title, hint]) => (
                           <Field key={field}>
-                            <FieldLabel>{lab}</FieldLabel>
+                            <FieldLabel>{title}</FieldLabel>
+                            <p className="text-muted-foreground mb-1.5 text-xs">{hint}</p>
                             <Input
                               type="number"
                               min={0}
                               step={1000}
-                              placeholder="继承环境"
+                              placeholder={String(EXTRACTION_RUNTIME_DEFAULTS[field])}
+                              className="tabular-nums"
                               value={
                                 extractionCfg.extractionRuntime?.[field] != null
                                   ? String(extractionCfg.extractionRuntime[field])
@@ -550,18 +644,32 @@ export function ModelsExtractionTemplates() {
                           </Field>
                         ))}
                       </div>
-                      <Field className="flex flex-row items-center gap-2">
-                        <Checkbox
-                          checked={extractionCfg.forceFullPipelineDefault === true}
-                          onCheckedChange={(v) =>
-                            setExtractionCfg((c) => ({
-                              ...c,
-                              forceFullPipelineDefault: v === true,
-                            }))
-                          }
-                        />
-                        <span className="text-sm">默认强制完整管线（可与游戏页「强制」叠加为 OR）</span>
-                      </Field>
+                      <div className="bg-muted/40 rounded-lg border border-border/60 p-4">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="force-full-pipeline"
+                            className="mt-1 shrink-0"
+                            checked={extractionCfg.forceFullPipelineDefault === true}
+                            onCheckedChange={(v) =>
+                              setExtractionCfg((c) => ({
+                                ...c,
+                                forceFullPipelineDefault: v === true,
+                              }))
+                            }
+                          />
+                          <div className="min-w-0 space-y-1">
+                            <label
+                              htmlFor="force-full-pipeline"
+                              className="cursor-pointer text-sm font-medium leading-snug"
+                            >
+                              默认强制完整管线
+                            </label>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                              勾选后本模版默认走完整提取图；可与游戏页的「强制完整管线」做逻辑或（任一满足即生效）。未勾选时仍由页数与路由策略决定简单/复杂路径。
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </CollapsibleContent>
                   </Collapsible>
 
@@ -575,25 +683,6 @@ export function ModelsExtractionTemplates() {
                       删除
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <GitBranch className="h-4 w-4" />
-                    提取流程（只读）
-                  </CardTitle>
-                  <CardDescription>LangGraph 编译图，与引擎一致。</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {mermaidLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-                    </div>
-                  ) : (
-                    <div ref={mermaidRef} className="bg-muted/30 overflow-x-auto rounded-md p-4 text-sm" />
-                  )}
                 </CardContent>
               </Card>
             </>

@@ -31,7 +31,8 @@ import {
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
 
-const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
+/** Global chat defaults when a CHAT template omits temperature/maxTokens. Prefer a higher cap for RAG (system + retrieval + answer). */
+const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 16384 };
 
 /** Rewrite DB row once after removing legacy `slotBindings` / `ragOptions` from gateway JSON. */
 function shouldRewriteGatewayJsonToSlim(raw: string): boolean {
