@@ -27,7 +27,7 @@ from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.exception_format import format_exception_for_job
-from utils.paths import page_assets_root
+from utils.paths import game_extract_json, game_page_job_json, game_pages_dir, job_index_json, page_assets_root
 
 router = APIRouter(tags=["extract"])
 
@@ -173,6 +173,72 @@ def _build_page_rows(assets: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _write_extract_json(job_id: str, game_id: str, status: str, thread_id: str, error: str | None, result: dict[str, Any] | None, vision_cache: dict[str, Any] | None, ai_snapshot: dict[str, Any] | None) -> None:
+    """Persist extract job state to disk so it survives process restarts."""
+    try:
+        path = game_extract_json(game_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, Any] = {
+            "job_id": job_id,
+            "game_id": game_id,
+            "status": status,
+            "thread_id": thread_id,
+            "error": error,
+            "result": result,
+            "vision_cache": vision_cache,
+            "ai_snapshot": ai_snapshot,
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        # Keep global job_id → game_id index up to date (used by GET /extract/{job_id}).
+        _update_job_index(job_id, game_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("extract job %s: failed to write extract.json (non-fatal)", job_id, exc_info=True)
+
+
+_job_index_lock = Lock()
+
+
+def _update_job_index(job_id: str, game_id: str) -> None:
+    """Atomically add/update {job_id: game_id} in job_index.json."""
+    try:
+        idx_path = job_index_json()
+        idx_path.parent.mkdir(parents=True, exist_ok=True)
+        with _job_index_lock:
+            try:
+                idx: dict[str, str] = json.loads(idx_path.read_text(encoding="utf-8")) if idx_path.is_file() else {}
+            except Exception:  # noqa: BLE001
+                idx = {}
+            idx[job_id] = game_id
+            idx_path.write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        logger.warning("extract: failed to update job_index.json (non-fatal)", exc_info=True)
+
+
+def _lookup_game_id(job_id: str) -> str | None:
+    """Look up game_id for a job_id from the on-disk index."""
+    try:
+        idx_path = job_index_json()
+        if not idx_path.is_file():
+            return None
+        with _job_index_lock:
+            idx = json.loads(idx_path.read_text(encoding="utf-8"))
+        return idx.get(job_id)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _read_extract_json(game_id: str) -> dict[str, Any] | None:
+    """Load persisted extract job state from disk; returns None if absent or corrupt."""
+    try:
+        path = game_extract_json(game_id)
+        if not path.is_file():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        logger.warning("extract: failed to read extract.json for game_id=%s (non-fatal)", game_id, exc_info=True)
+        return None
+
+
 def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]) -> None:
     logger.info("extract job %s: background worker started", job_id)
     with boardrule_ai_runtime(ai_snapshot):
@@ -205,13 +271,16 @@ def _run_sync(job_id: str, initial: ExtractionState, ai_snapshot: dict[str, Any]
                 if j:
                     j.result = out
                     j.status = JobStatus.completed
+            _write_extract_json(job_id, initial.get("game_id", ""), JobStatus.completed, thread_id, None, out, None, None)
         except Exception as e:  # noqa: BLE001
             logger.exception("extract job %s: failed", job_id)
+            err_str = format_exception_for_job(e)
             with _jobs_lock:
                 j = _jobs.get(job_id)
                 if j:
                     j.status = JobStatus.failed
-                    j.error = format_exception_for_job(e)
+                    j.error = err_str
+            _write_extract_json(job_id, initial.get("game_id", ""), JobStatus.failed, thread_id, err_str, None, None, None)
 
 
 def _download_to_temp(url: str) -> Path:
@@ -267,9 +336,9 @@ def _parse_max_side_form(raw: str | None) -> int | None:
     return n
 
 
-def _public_page_url(job_id: str, filename: str) -> str:
+def _public_page_url(game_id: str, page_job_id: str, filename: str) -> str:
     base = os.environ.get("RULE_ENGINE_PUBLIC_URL", "").strip().rstrip("/")
-    rel = f"/page-assets/{job_id}/{filename}"
+    rel = f"/page-assets/{game_id}/pages/{page_job_id}/{filename}"
     if base:
         return f"{base}{rel}"
     return rel
@@ -331,9 +400,17 @@ async def prepare_rulebook_pages(
     )
 
     jid = str(uuid.uuid4())
-    root = page_assets_root()
-    root.mkdir(parents=True, exist_ok=True)
-    out_dir = root / jid
+    pages_dir = game_pages_dir(game_id)
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean up previous page-job directory for this game to reclaim disk space.
+    # Keep only the one we are about to create.
+    for old in pages_dir.iterdir():
+        if old.is_dir() and old.name != jid:
+            shutil.rmtree(old, ignore_errors=True)
+            logger.info("prepare_pages: removed old page_job dir %s for game_id=%s", old.name, game_id)
+
+    out_dir = pages_dir / jid
 
     tmp_paths: list[Path] = []
     try:
@@ -415,10 +492,22 @@ async def prepare_rulebook_pages(
 
         register_job(jid, src_name, assets, meta)
 
+        # Persist page-job metadata so the extract resume path survives restarts.
+        page_rows_for_disk = [{"page": int(a.page), "path": str(a.path)} for a in assets]
+        try:
+            pj_path = game_page_job_json(game_id)
+            pj_path.parent.mkdir(parents=True, exist_ok=True)
+            pj_path.write_text(
+                json.dumps({"page_job_id": jid, "source_name": src_name, "page_rows": page_rows_for_disk, "meta": meta}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("prepare_pages: failed to write page_job.json (non-fatal)", exc_info=True)
+
         pages_out: list[PageInfo] = []
         for a in assets:
             name = a.path.name
-            pages_out.append(PageInfo(page=int(a.page), url=_public_page_url(jid, name)))
+            pages_out.append(PageInfo(page=int(a.page), url=_public_page_url(game_id, jid, name)))
 
         return ExtractPagesResponse(
             job_id=jid,
@@ -460,11 +549,42 @@ async def start_extract(
             raise HTTPException(status_code=400, detail="job_id is required when resume=true")
         with _jobs_lock:
             prev = _jobs.get(jid)
+
+        # Fall back to disk if the process restarted and lost the in-memory record.
+        disk_data: dict[str, Any] | None = None
         if not prev or not prev.vision_cache:
-            raise HTTPException(status_code=400, detail="Cannot resume: unknown job or missing vision cache")
-        gn = game_name if game_name is not None else (prev.game_name or "")
-        tc = terminology_context if terminology_context is not None else (prev.terminology_context or "")
-        vc = prev.vision_cache
+            disk_data = _read_extract_json(game_id)
+            if disk_data and disk_data.get("job_id") == jid and disk_data.get("vision_cache"):
+                logger.info("extract resume: restoring job %s from extract.json", jid)
+            else:
+                # Also try the page_job.json for the current game (may be a different extract attempt).
+                disk_data = None
+
+        vision_cache_src = (prev.vision_cache if prev else None) or (disk_data.get("vision_cache") if disk_data else None)
+        if not vision_cache_src:
+            # Last resort: reconstruct vision_cache from page_job.json on disk.
+            try:
+                pj_raw = game_page_job_json(game_id)
+                if pj_raw.is_file():
+                    pj = json.loads(pj_raw.read_text(encoding="utf-8"))
+                    vision_cache_src = {
+                        "page_rows": pj.get("page_rows", []),
+                        "toc_page_indices": [],
+                        "exclude_page_indices": [],
+                        "body_page_indices": [],
+                        "source_file": pj.get("source_name", "resumed"),
+                        "source_url": None,
+                        "force_full_pipeline": False,
+                    }
+                    logger.info("extract resume: rebuilt vision_cache from page_job.json for game_id=%s", game_id)
+            except Exception:  # noqa: BLE001
+                logger.warning("extract resume: failed to read page_job.json", exc_info=True)
+
+        if not vision_cache_src:
+            raise HTTPException(status_code=400, detail="Cannot resume: unknown job or missing vision cache (process may have restarted — re-upload the rulebook)")
+        gn = game_name if game_name is not None else ((prev.game_name if prev else None) or (disk_data.get("game_id", "") if disk_data else "") or "")
+        tc = terminology_context if terminology_context is not None else ((prev.terminology_context if prev else None) or "")
+        vc = vision_cache_src
         initial = {
             "game_id": game_id,
             "game_name": gn,
@@ -488,17 +608,30 @@ async def start_extract(
         )
         with _jobs_lock:
             job = _jobs.get(jid)
-        if not job:
-            raise HTTPException(status_code=404, detail="Extract job not found")
-        with _jobs_lock:
-            job.status = JobStatus.pending
-            job.error = None
-            job.result = None
-            job.thread_id = thread_id
-            job.game_id = game_id
-            job.game_name = gn
-            job.terminology_context = tc
-            job.ai_snapshot = snapshot
+        if job:
+            with _jobs_lock:
+                job.status = JobStatus.pending
+                job.error = None
+                job.result = None
+                job.thread_id = thread_id
+                job.game_id = game_id
+                job.game_name = gn
+                job.terminology_context = tc
+                job.vision_cache = vc
+                job.ai_snapshot = snapshot
+        else:
+            # Process restarted — recreate the in-memory record from what we recovered from disk.
+            with _jobs_lock:
+                _jobs[jid] = ExtractJob(
+                    status=JobStatus.pending,
+                    thread_id=thread_id,
+                    game_id=game_id,
+                    game_name=gn,
+                    terminology_context=tc,
+                    vision_cache=vc,
+                    ai_snapshot=snapshot,
+                )
+        _write_extract_json(jid, game_id, JobStatus.pending, thread_id, None, None, vc, snapshot)
     else:
         if not page_job_id:
             raise HTTPException(
@@ -582,6 +715,7 @@ async def start_extract(
                 vision_cache=vision_cache,
                 ai_snapshot=snapshot,
             )
+        _write_extract_json(jid, game_id, JobStatus.pending, thread_id, None, None, vision_cache, snapshot)
 
     background_tasks.add_task(_run_sync, jid, initial, snapshot)
 
@@ -597,22 +731,52 @@ async def start_extract(
 async def get_extract_job(job_id: str) -> ExtractPollResponse:
     with _jobs_lock:
         job = _jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
 
-    res = job.result or {}
-    return ExtractPollResponse(
-        job_id=job_id,
-        status=job.status,
-        game_id=job.game_id,
-        error=job.error,
-        merged_markdown=res.get("merged_markdown"),
-        structured_chapters=res.get("structured_chapters") or [],
-        quick_start=res.get("quick_start"),
-        suggested_questions=res.get("suggested_questions") or [],
-        errors=res.get("errors") or [],
-        last_checkpoint_id=res.get("last_checkpoint_id"),
-        complexity=res.get("complexity"),
-        extraction_profile=res.get("extraction_profile"),
-        toc=res.get("toc"),
-    )
+    if job:
+        res = job.result or {}
+        return ExtractPollResponse(
+            job_id=job_id,
+            status=job.status,
+            game_id=job.game_id,
+            error=job.error,
+            merged_markdown=res.get("merged_markdown"),
+            structured_chapters=res.get("structured_chapters") or [],
+            quick_start=res.get("quick_start"),
+            suggested_questions=res.get("suggested_questions") or [],
+            errors=res.get("errors") or [],
+            last_checkpoint_id=res.get("last_checkpoint_id"),
+            complexity=res.get("complexity"),
+            extraction_profile=res.get("extraction_profile"),
+            toc=res.get("toc"),
+        )
+
+    # Memory miss — process may have restarted. Try to recover from disk.
+    game_id = _lookup_game_id(job_id)
+    if game_id:
+        disk = _read_extract_json(game_id)
+        if disk and disk.get("job_id") == job_id:
+            res = disk.get("result") or {}
+            raw_status = disk.get("status", JobStatus.failed)
+            # A job that was pending/processing when the process died is now effectively failed.
+            if raw_status in (JobStatus.pending, JobStatus.processing, "pending", "processing"):
+                raw_status = JobStatus.failed
+                disk_error = "Process restarted while job was running — please re-submit."
+            else:
+                disk_error = disk.get("error")
+            return ExtractPollResponse(
+                job_id=job_id,
+                status=raw_status,
+                game_id=game_id,
+                error=disk_error,
+                merged_markdown=res.get("merged_markdown"),
+                structured_chapters=res.get("structured_chapters") or [],
+                quick_start=res.get("quick_start"),
+                suggested_questions=res.get("suggested_questions") or [],
+                errors=res.get("errors") or [],
+                last_checkpoint_id=res.get("last_checkpoint_id"),
+                complexity=res.get("complexity"),
+                extraction_profile=res.get("extraction_profile"),
+                toc=res.get("toc"),
+            )
+
+    raise HTTPException(status_code=404, detail="Job not found")

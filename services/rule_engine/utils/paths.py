@@ -13,11 +13,31 @@ def service_root() -> Path:
 
 
 def page_assets_root() -> Path:
-    """Directory for rasterized per-page PNGs (`{job_id}/page_0001.png`)."""
+    """Root directory for all page-asset data, organised as ``{game_id}/pages/{page_job_id}/``."""
     raw = os.environ.get("PAGE_ASSETS_ROOT")
     if raw:
         return Path(raw).expanduser().resolve()
     return _SERVICE_ROOT / "data" / "pages"
+
+
+def game_pages_dir(game_id: str) -> Path:
+    """``{page_assets_root}/{game_id}/pages/`` — parent of per-job image directories."""
+    return page_assets_root() / game_id / "pages"
+
+
+def game_page_job_json(game_id: str) -> Path:
+    """``{page_assets_root}/{game_id}/pages/page_job.json`` — latest page-job metadata."""
+    return game_pages_dir(game_id) / "page_job.json"
+
+
+def game_extract_json(game_id: str) -> Path:
+    """``{page_assets_root}/{game_id}/extract.json`` — latest extract-job metadata + result."""
+    return page_assets_root() / game_id / "extract.json"
+
+
+def job_index_json() -> Path:
+    """``{page_assets_root}/job_index.json`` — flat map of {extract_job_id: game_id} for O(1) lookup."""
+    return page_assets_root() / "job_index.json"
 
 
 def prompts_dir() -> Path:
