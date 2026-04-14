@@ -39,6 +39,7 @@ export const extractionRuntimeOverridesSchema = z
     geminiHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     dashscopeHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     openrouterHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
+    bedrockHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     llmMaxContinuationRounds: z.number().int().min(0).max(32).optional(),
     forceFullPipelineDefault: z.boolean().optional(),
   })

@@ -31,12 +31,24 @@ export async function POST(req: Request) {
   let vendor: AiVendor = "gemini";
   if (o.vendor !== undefined) {
     if (typeof o.vendor !== "string" || !isAiVendor(o.vendor)) {
-      return NextResponse.json({ message: "vendor 必须为 gemini、openrouter 或 qwen" }, { status: 400 });
+      return NextResponse.json(
+        { message: "vendor 必须为 gemini、openrouter、qwen 或 bedrock" },
+        { status: 400 },
+      );
     }
     vendor = o.vendor;
   }
   const dashscopeCompatibleBase =
     typeof o.dashscopeCompatibleBase === "string" ? o.dashscopeCompatibleBase : undefined;
+  const bedrockRegion = typeof o.bedrockRegion === "string" ? o.bedrockRegion : undefined;
+  const bedrockAuthMode =
+    o.bedrockAuthMode === "iam" || o.bedrockAuthMode === "api_key" ? o.bedrockAuthMode : undefined;
+  const bedrockAccessKeyId =
+    typeof o.bedrockAccessKeyId === "string" ? o.bedrockAccessKeyId : undefined;
+  const bedrockSecretAccessKey =
+    typeof o.bedrockSecretAccessKey === "string" ? o.bedrockSecretAccessKey : undefined;
+  const bedrockSessionToken =
+    typeof o.bedrockSessionToken === "string" ? o.bedrockSessionToken : undefined;
 
   try {
     const data = await addCredential({
@@ -45,6 +57,15 @@ export async function POST(req: Request) {
       apiKey,
       vendor,
       ...(vendor === "qwen" ? { dashscopeCompatibleBase } : {}),
+      ...(vendor === "bedrock"
+        ? {
+            bedrockRegion,
+            bedrockAuthMode,
+            bedrockAccessKeyId,
+            bedrockSecretAccessKey,
+            bedrockSessionToken,
+          }
+        : {}),
     });
     return NextResponse.json(data);
   } catch (e) {

@@ -1,5 +1,5 @@
 /**
- * Fetches Dify official-plugin YAMLs (tongyi, gemini, openrouter: llm + text_embedding)
+ * Fetches Dify official-plugin YAMLs (tongyi, gemini, openrouter, bedrock: llm + text_embedding)
  * and writes lib/data/dify-model-metadata.json for runtime model metadata enrichment.
  *
  * https://github.com/langgenius/dify-official-plugins
@@ -22,6 +22,7 @@ const PLUGINS = [
   { vendor: "qwen", base: "models/tongyi/models" },
   { vendor: "gemini", base: "models/gemini/models" },
   { vendor: "openrouter", base: "models/openrouter/models" },
+  { vendor: "bedrock", base: "models/bedrock/models" },
 ];
 
 const SUBDIRS = ["llm", "text_embedding"];
@@ -131,7 +132,7 @@ async function collectFromDir(contentPath) {
 
 async function main() {
   /** @type {Record<string, Record<string, object>>} */
-  const byVendor = { qwen: {}, gemini: {}, openrouter: {} };
+  const byVendor = { qwen: {}, gemini: {}, openrouter: {}, bedrock: {} };
 
   for (const { vendor, base } of PLUGINS) {
     const merged = [];

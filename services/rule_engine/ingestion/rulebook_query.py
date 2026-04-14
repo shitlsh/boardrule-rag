@@ -12,6 +12,7 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.response_synthesizers import ResponseMode, get_response_synthesizer
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+from llama_index.llms.bedrock_converse import BedrockConverse
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.openrouter import OpenRouter
@@ -62,7 +63,7 @@ def _qwen_chat_context_window() -> int:
         return 128_000
 
 
-def get_chat_llm() -> GoogleGenAI | OpenRouter | OpenAILike:
+def get_chat_llm() -> GoogleGenAI | OpenRouter | OpenAILike | BedrockConverse:
     c = get_slots().chat
     if c.provider == "openrouter":
         return OpenRouter(
@@ -82,6 +83,39 @@ def get_chat_llm() -> GoogleGenAI | OpenRouter | OpenAILike:
             context_window=_qwen_chat_context_window(),
             is_chat_model=True,
         )
+    if c.provider == "bedrock":
+        rn = (c.bedrock_region or "").strip()
+        mode = c.bedrock_auth_mode
+        if not rn or mode not in ("iam", "api_key"):
+            raise RuntimeError("Chat slot: Bedrock requires bedrockRegion and bedrockAuthMode (iam | api_key)")
+        if mode == "iam":
+            aid = (c.aws_access_key_id or "").strip()
+            if not aid:
+                raise RuntimeError("Chat slot: Bedrock IAM requires awsAccessKeyId")
+            return BedrockConverse(
+                model=c.model,
+                region_name=rn,
+                temperature=float(c.temperature),
+                max_tokens=int(c.max_tokens),
+                aws_access_key_id=aid,
+                aws_secret_access_key=c.api_key,
+                aws_session_token=c.aws_session_token,
+            )
+        k = "AWS_BEARER_TOKEN_BEDROCK"
+        prev = os.environ.get(k)
+        os.environ[k] = c.api_key
+        try:
+            return BedrockConverse(
+                model=c.model,
+                region_name=rn,
+                temperature=float(c.temperature),
+                max_tokens=int(c.max_tokens),
+            )
+        finally:
+            if prev is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = prev
     return GoogleGenAI(
         model=c.model,
         api_key=c.api_key,

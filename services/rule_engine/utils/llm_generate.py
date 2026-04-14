@@ -29,6 +29,7 @@ from utils.ai_gateway import (
     get_slots,
 )
 from utils.dashscope_client import resolve_dashscope_api_base
+from utils.bedrock_converse import converse_messages, parts_to_bedrock_content
 from utils.openrouter_client import chat_completion_with_meta
 
 # Preset names (use at call sites to avoid magic strings)
@@ -468,6 +469,88 @@ def _dashscope_messages_loop(
     return acc
 
 
+def _bedrock_messages_loop(
+    *,
+    initial_messages: list[dict[str, Any]],
+    slot: Any,
+    temperature: float,
+    max_tokens: int,
+    node: str,
+    out_warnings: list[str] | None,
+) -> str:
+    """Bedrock Converse: ``initial_messages`` use OpenAI-style ``content`` string per message."""
+    max_r = _max_continuation_rounds()
+    messages: list[dict[str, Any]] = []
+    for m in initial_messages:
+        role = m.get("role", "user")
+        c = m.get("content", "")
+        if isinstance(c, str):
+            content = [{"text": c}]
+        else:
+            content = c
+        messages.append({"role": role, "content": content})
+    acc = ""
+    last_truncated = False
+    for r in range(max_r):
+        text, truncated = converse_messages(
+            slot,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        acc += text
+        last_truncated = truncated
+        if not last_truncated:
+            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
+            return acc
+        messages.append({"role": "assistant", "content": [{"text": text}]})
+        messages.append({"role": "user", "content": [{"text": CONTINUE_MSG}]})
+    _append_continuation_warnings(
+        out_warnings,
+        node=node,
+        continuation_calls=max(0, max_r - 1),
+        still_truncated=last_truncated,
+    )
+    return acc
+
+
+def _bedrock_vision_parts_loop(
+    *,
+    parts: list[Any],
+    slot: Any,
+    temperature: float,
+    max_tokens: int,
+    node: str,
+    out_warnings: list[str] | None,
+) -> str:
+    max_r = _max_continuation_rounds()
+    blocks = parts_to_bedrock_content(parts)
+    messages: list[dict[str, Any]] = [{"role": "user", "content": blocks}]
+    acc = ""
+    last_truncated = False
+    for r in range(max_r):
+        text, truncated = converse_messages(
+            slot,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        acc += text
+        last_truncated = truncated
+        if not last_truncated:
+            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
+            return acc
+        messages.append({"role": "assistant", "content": [{"text": text}]})
+        messages.append({"role": "user", "content": [{"text": CONTINUE_MSG}]})
+    _append_continuation_warnings(
+        out_warnings,
+        node=node,
+        continuation_calls=max(0, max_r - 1),
+        still_truncated=last_truncated,
+    )
+    return acc
+
+
 def _openrouter_vision_parts_loop(
     *,
     parts: list[Any],
@@ -660,6 +743,26 @@ def generate_flash(
             empty_error="Qwen (DashScope) Flash returned empty response",
         )
 
+    if slot.provider == "bedrock":
+
+        def _fn_br() -> str:
+            return _bedrock_messages_loop(
+                initial_messages=[{"role": "user", "content": prompt}],
+                slot=slot,
+                temperature=temp,
+                max_tokens=mot,
+                node=node,
+                out_warnings=out_warnings,
+            )
+
+        return _run_with_optional_trace(
+            provider="bedrock",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn_br,
+            empty_error="Bedrock (Converse) Flash returned empty response",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
 
     def _gem() -> str:
@@ -737,6 +840,26 @@ def generate_pro(
             contents_for_hash=prompt,
             fn=_fn_q,
             empty_error="Qwen (DashScope) Pro returned empty response",
+        )
+
+    if slot.provider == "bedrock":
+
+        def _fn_br() -> str:
+            return _bedrock_messages_loop(
+                initial_messages=[{"role": "user", "content": prompt}],
+                slot=slot,
+                temperature=temp,
+                max_tokens=mot,
+                node=node,
+                out_warnings=out_warnings,
+            )
+
+        return _run_with_optional_trace(
+            provider="bedrock",
+            meta=meta,
+            contents_for_hash=prompt,
+            fn=_fn_br,
+            empty_error="Bedrock (Converse) Pro returned empty response",
         )
 
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
@@ -848,6 +971,26 @@ def generate_flash_vision(
             empty_error="Qwen (DashScope) Flash returned empty response (vision)",
         )
 
+    if slot.provider == "bedrock":
+
+        def _fn_br() -> str:
+            return _bedrock_vision_parts_loop(
+                parts=parts,
+                slot=slot,
+                temperature=temp,
+                max_tokens=mot,
+                node=node,
+                out_warnings=out_warnings,
+            )
+
+        return _run_with_optional_trace(
+            provider="bedrock",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn_br,
+            empty_error="Bedrock (Converse) Flash returned empty response (vision)",
+        )
+
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
 
     def _gem() -> str:
@@ -926,6 +1069,26 @@ def generate_pro_vision(
             contents_for_hash=parts,
             fn=_fn_q,
             empty_error="Qwen (DashScope) Pro returned empty response (vision)",
+        )
+
+    if slot.provider == "bedrock":
+
+        def _fn_br() -> str:
+            return _bedrock_vision_parts_loop(
+                parts=parts,
+                slot=slot,
+                temperature=temp,
+                max_tokens=mot,
+                node=node,
+                out_warnings=out_warnings,
+            )
+
+        return _run_with_optional_trace(
+            provider="bedrock",
+            meta=meta,
+            contents_for_hash=parts,
+            fn=_fn_br,
+            empty_error="Bedrock (Converse) Pro returned empty response (vision)",
         )
 
     gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)

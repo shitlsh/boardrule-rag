@@ -39,6 +39,32 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         ? o.dashscopeCompatibleBase
         : undefined
       : undefined;
+  const bedrockRegion =
+    o.bedrockRegion !== undefined
+      ? typeof o.bedrockRegion === "string"
+        ? o.bedrockRegion
+        : undefined
+      : undefined;
+  const bedrockAuthMode =
+    o.bedrockAuthMode === "iam" || o.bedrockAuthMode === "api_key" ? o.bedrockAuthMode : undefined;
+  const bedrockAccessKeyId =
+    o.bedrockAccessKeyId !== undefined
+      ? typeof o.bedrockAccessKeyId === "string"
+        ? o.bedrockAccessKeyId
+        : undefined
+      : undefined;
+  const bedrockSecretAccessKey =
+    o.bedrockSecretAccessKey !== undefined
+      ? typeof o.bedrockSecretAccessKey === "string"
+        ? o.bedrockSecretAccessKey
+        : undefined
+      : undefined;
+  const bedrockSessionToken =
+    o.bedrockSessionToken !== undefined
+      ? typeof o.bedrockSessionToken === "string"
+        ? o.bedrockSessionToken
+        : undefined
+      : undefined;
 
   const enabled =
     o.enabled !== undefined ? (typeof o.enabled === "boolean" ? o.enabled : undefined) : undefined;
@@ -61,6 +87,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       ...(apiKey !== undefined ? { apiKey } : {}),
       ...(vendor !== undefined ? { vendor } : {}),
       ...(dashscopeCompatibleBase !== undefined ? { dashscopeCompatibleBase } : {}),
+      ...(bedrockRegion !== undefined ? { bedrockRegion } : {}),
+      ...(bedrockAuthMode !== undefined ? { bedrockAuthMode } : {}),
+      ...(bedrockAccessKeyId !== undefined ? { bedrockAccessKeyId } : {}),
+      ...(bedrockSecretAccessKey !== undefined ? { bedrockSecretAccessKey } : {}),
+      ...(bedrockSessionToken !== undefined ? { bedrockSessionToken } : {}),
       ...(enabled !== undefined ? { enabled } : {}),
       ...(hiddenModelIds !== undefined ? { hiddenModelIds } : {}),
     });

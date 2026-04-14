@@ -95,3 +95,55 @@ def test_boardrule_ai_config_v3_extraction_runtime_vision_max_merge_key() -> Non
     assert isinstance(cfg, BoardruleAiConfigV3)
     assert cfg.extraction_runtime is not None
     assert cfg.extraction_runtime.vision_max_merge_pages == 22
+
+
+def test_boardrule_ai_config_v3_bedrock_iam_and_runtime() -> None:
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {
+          "provider": "bedrock",
+          "apiKey": "secret",
+          "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "bedrockRegion": "us-east-1",
+          "bedrockAuthMode": "iam",
+          "awsAccessKeyId": "AKIATEST"
+        },
+        "pro": {
+          "provider": "bedrock",
+          "apiKey": "secret",
+          "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "bedrockRegion": "us-east-1",
+          "bedrockAuthMode": "iam",
+          "awsAccessKeyId": "AKIATEST"
+        },
+        "embed": {
+          "provider": "bedrock",
+          "apiKey": "secret",
+          "model": "amazon.titan-embed-text-v2:0",
+          "bedrockRegion": "us-east-1",
+          "bedrockAuthMode": "iam",
+          "awsAccessKeyId": "AKIATEST"
+        },
+        "chat": {
+          "provider": "bedrock",
+          "apiKey": "secret",
+          "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "temperature": 0.2,
+          "maxTokens": 8192,
+          "bedrockRegion": "us-east-1",
+          "bedrockAuthMode": "iam",
+          "awsAccessKeyId": "AKIATEST"
+        }
+      },
+      "extractionRuntime": {"bedrockHttpTimeoutMs": 90000}
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    assert isinstance(cfg, BoardruleAiConfigV3)
+    assert cfg.slots.chat.provider == "bedrock"
+    assert cfg.slots.chat.bedrock_auth_mode == "iam"
+    assert cfg.slots.chat.aws_access_key_id == "AKIATEST"
+    assert cfg.extraction_runtime is not None
+    assert cfg.extraction_runtime.bedrock_http_timeout_ms == 90000

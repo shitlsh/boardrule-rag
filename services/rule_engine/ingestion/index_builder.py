@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex, load_index_from_storage
 from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle, TextNode
+from llama_index.embeddings.bedrock import BedrockEmbedding
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.embeddings.openai import OpenAIEmbedding
 
@@ -508,7 +509,9 @@ def _pgvector_physical_table_name(game_id: str) -> str:
 
 
 def configure_embedding_settings() -> None:
-    """Set global LlamaIndex embedding model from the Embed slot (Gemini, OpenRouter, or Qwen/DashScope)."""
+    """Set global LlamaIndex embedding model from the Embed slot (Gemini, OpenRouter, Qwen, or Bedrock)."""
+    import os
+
     slot = get_slots().embed
     if slot.provider == "openrouter":
         Settings.embed_model = OpenAIEmbedding(
@@ -522,6 +525,36 @@ def configure_embedding_settings() -> None:
             api_key=slot.api_key,
             api_base=resolve_dashscope_api_base(slot.dashscope_compatible_base),
         )
+    elif slot.provider == "bedrock":
+        rn = (slot.bedrock_region or "").strip()
+        mode = slot.bedrock_auth_mode
+        if not rn or mode not in ("iam", "api_key"):
+            raise ValueError("Embed slot: Bedrock requires bedrockRegion and bedrockAuthMode (iam | api_key)")
+        if mode == "iam":
+            aid = (slot.aws_access_key_id or "").strip()
+            if not aid:
+                raise ValueError("Embed slot: Bedrock IAM requires awsAccessKeyId")
+            Settings.embed_model = BedrockEmbedding(
+                model_name=slot.model,
+                region_name=rn,
+                aws_access_key_id=aid,
+                aws_secret_access_key=slot.api_key,
+                aws_session_token=slot.aws_session_token,
+            )
+        else:
+            k = "AWS_BEARER_TOKEN_BEDROCK"
+            prev = os.environ.get(k)
+            os.environ[k] = slot.api_key
+            try:
+                Settings.embed_model = BedrockEmbedding(
+                    model_name=slot.model,
+                    region_name=rn,
+                )
+            finally:
+                if prev is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = prev
     else:
         Settings.embed_model = GoogleGenAIEmbedding(
             model_name=slot.model,

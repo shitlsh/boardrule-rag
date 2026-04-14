@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ModelTagFilterChips } from "@/components/model-tag-filter-chips";
 import { QwenEndpointPicker } from "@/components/qwen-endpoint-picker";
-import type { AiCredentialPublic, AiGatewayPublic, AiVendor } from "@/lib/ai-gateway-types";
+import type { AiCredentialPublic, AiGatewayPublic, AiVendor, BedrockAuthMode } from "@/lib/ai-gateway-types";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import {
   filterModelsByTagIds,
@@ -45,6 +45,7 @@ const VENDOR_LABEL: Record<AiVendor, string> = {
   gemini: "Google Gemini",
   openrouter: "OpenRouter",
   qwen: "阿里云百炼（Qwen）",
+  bedrock: "Amazon Bedrock",
 };
 
 /** Short label for the closed select trigger (avoids overflow in narrow layouts). */
@@ -52,6 +53,7 @@ const VENDOR_TRIGGER_LABEL: Record<AiVendor, string> = {
   gemini: "Gemini",
   openrouter: "OpenRouter",
   qwen: "Qwen",
+  bedrock: "Bedrock",
 };
 
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
@@ -59,6 +61,11 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [vendor, setVendor] = useState<AiVendor>("gemini");
   const [qwenBase, setQwenBase] = useState(DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
+  const [bedrockRegion, setBedrockRegion] = useState("us-east-1");
+  const [bedrockAuthMode, setBedrockAuthMode] = useState<BedrockAuthMode>("api_key");
+  const [bedrockAccessKeyId, setBedrockAccessKeyId] = useState("");
+  const [bedrockSecretAccessKey, setBedrockSecretAccessKey] = useState("");
+  const [bedrockSessionToken, setBedrockSessionToken] = useState("");
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingEnabledId, setTogglingEnabledId] = useState<string | null>(null);
@@ -67,6 +74,13 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
   useEffect(() => {
     if (vendor === "qwen" && prevVendorRef.current !== "qwen") {
       setQwenBase(DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
+    }
+    if (vendor === "bedrock" && prevVendorRef.current !== "bedrock") {
+      setBedrockRegion("us-east-1");
+      setBedrockAuthMode("api_key");
+      setBedrockAccessKeyId("");
+      setBedrockSecretAccessKey("");
+      setBedrockSessionToken("");
     }
     prevVendorRef.current = vendor;
   }, [vendor]);
@@ -78,7 +92,24 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
       toast.error("请填写别名");
       return;
     }
-    if (!k) {
+    if (vendor !== "bedrock" || bedrockAuthMode === "api_key") {
+      if (!k) {
+        toast.error("请填写 API Key");
+        return;
+      }
+    }
+    if (vendor === "bedrock") {
+      if (!bedrockRegion.trim()) {
+        toast.error("请填写 AWS 区域");
+        return;
+      }
+      if (bedrockAuthMode === "iam") {
+        if (!bedrockAccessKeyId.trim() || !bedrockSecretAccessKey.trim()) {
+          toast.error("IAM 模式请填写 Access Key ID 与 Secret Access Key");
+          return;
+        }
+      }
+    } else if (!k) {
       toast.error("请填写 API Key");
       return;
     }
@@ -95,6 +126,21 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
           ...(vendor === "qwen"
             ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(qwenBase) }
             : {}),
+          ...(vendor === "bedrock"
+            ? {
+                bedrockRegion: bedrockRegion.trim(),
+                bedrockAuthMode,
+                ...(bedrockAuthMode === "iam"
+                  ? {
+                      bedrockAccessKeyId: bedrockAccessKeyId.trim(),
+                      bedrockSecretAccessKey: bedrockSecretAccessKey.trim(),
+                      ...(bedrockSessionToken.trim()
+                        ? { bedrockSessionToken: bedrockSessionToken.trim() }
+                        : {}),
+                    }
+                  : {}),
+              }
+            : {}),
         }),
       });
       const json = (await res.json()) as AiGatewayPublic & { message?: string };
@@ -104,6 +150,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
       onUpdated(json);
       setAlias("");
       setApiKey("");
+      setBedrockAccessKeyId("");
+      setBedrockSecretAccessKey("");
+      setBedrockSessionToken("");
       toast.success("凭证已保存");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "添加失败");
@@ -218,6 +267,18 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                       </span>
                     </span>
                   </SelectItem>
+                  <SelectItem
+                    value="bedrock"
+                    textValue="Amazon Bedrock AWS"
+                    className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                  >
+                    <span className="flex flex-col gap-1 text-left leading-snug">
+                      <span className="font-medium">Amazon Bedrock</span>
+                      <span className="text-muted-foreground text-xs">
+                        IAM（AK/SK）或 Bedrock API Key；需与区域一致
+                      </span>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -225,6 +286,34 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
               <div className="min-w-0 flex-[2] lg:max-w-md">
                 <QwenEndpointPicker value={qwenBase} onChange={setQwenBase} disabled={adding} />
               </div>
+            ) : null}
+            {vendor === "bedrock" ? (
+              <>
+                <Field className="min-w-0 flex-1 sm:max-w-[11rem]">
+                  <FieldLabel>区域</FieldLabel>
+                  <Input
+                    placeholder="us-east-1"
+                    value={bedrockRegion}
+                    onChange={(e) => setBedrockRegion(e.target.value)}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field className="min-w-0 flex-1 sm:max-w-[12rem]">
+                  <FieldLabel>认证</FieldLabel>
+                  <Select
+                    value={bedrockAuthMode}
+                    onValueChange={(v) => setBedrockAuthMode(v as BedrockAuthMode)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="api_key">Bedrock API Key</SelectItem>
+                      <SelectItem value="iam">IAM（AK/SK）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </>
             ) : null}
             <Field className="min-w-0 flex-1 lg:max-w-xs">
               <FieldLabel>别名</FieldLabel>
@@ -235,22 +324,59 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                 autoComplete="off"
               />
             </Field>
-            <Field className="min-w-0 flex-[2]">
-              <FieldLabel>API Key</FieldLabel>
-              <Input
-                type="password"
-                placeholder={
-                  vendor === "openrouter"
-                    ? "粘贴 OpenRouter 控制台中的 API Key"
-                    : vendor === "qwen"
-                      ? "粘贴阿里云百炼（DashScope）API Key"
-                      : "粘贴 Google AI Studio 或兼容渠道的密钥"
-                }
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="new-password"
-              />
-            </Field>
+            {vendor === "bedrock" && bedrockAuthMode === "iam" ? (
+              <>
+                <Field className="min-w-0 flex-[2] lg:max-w-xs">
+                  <FieldLabel>Access Key ID</FieldLabel>
+                  <Input
+                    type="password"
+                    placeholder="AKIA…"
+                    value={bedrockAccessKeyId}
+                    onChange={(e) => setBedrockAccessKeyId(e.target.value)}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field className="min-w-0 flex-[2] lg:max-w-xs">
+                  <FieldLabel>Secret Access Key</FieldLabel>
+                  <Input
+                    type="password"
+                    placeholder="Secret"
+                    value={bedrockSecretAccessKey}
+                    onChange={(e) => setBedrockSecretAccessKey(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </Field>
+                <Field className="min-w-0 flex-[2] lg:max-w-md">
+                  <FieldLabel>Session Token（可选）</FieldLabel>
+                  <Input
+                    type="password"
+                    placeholder="临时凭证时填写"
+                    value={bedrockSessionToken}
+                    onChange={(e) => setBedrockSessionToken(e.target.value)}
+                    autoComplete="off"
+                  />
+                </Field>
+              </>
+            ) : (
+              <Field className="min-w-0 flex-[2]">
+                <FieldLabel>{vendor === "bedrock" ? "Bedrock API Key" : "API Key"}</FieldLabel>
+                <Input
+                  type="password"
+                  placeholder={
+                    vendor === "bedrock"
+                      ? "Bedrock 控制台生成的 API Key"
+                      : vendor === "openrouter"
+                        ? "粘贴 OpenRouter 控制台中的 API Key"
+                        : vendor === "qwen"
+                          ? "粘贴阿里云百炼（DashScope）API Key"
+                          : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                  }
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </Field>
+            )}
             <Button type="button" className="shrink-0 lg:min-w-[9rem]" onClick={add} disabled={adding}>
               {adding ? (
                 <>

@@ -15,31 +15,43 @@ _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config",
 class FlashProSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     max_output_tokens: int | None = Field(None, alias="maxOutputTokens")
     dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
+    bedrock_region: str | None = Field(None, alias="bedrockRegion")
+    bedrock_auth_mode: Literal["iam", "api_key"] | None = Field(None, alias="bedrockAuthMode")
+    aws_access_key_id: str | None = Field(None, alias="awsAccessKeyId")
+    aws_session_token: str | None = Field(None, alias="awsSessionToken")
 
 
 class EmbedSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
+    bedrock_region: str | None = Field(None, alias="bedrockRegion")
+    bedrock_auth_mode: Literal["iam", "api_key"] | None = Field(None, alias="bedrockAuthMode")
+    aws_access_key_id: str | None = Field(None, alias="awsAccessKeyId")
+    aws_session_token: str | None = Field(None, alias="awsSessionToken")
 
 
 class ChatSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     temperature: float = 0.2
     max_tokens: int = Field(8192, alias="maxTokens")
     dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
+    bedrock_region: str | None = Field(None, alias="bedrockRegion")
+    bedrock_auth_mode: Literal["iam", "api_key"] | None = Field(None, alias="bedrockAuthMode")
+    aws_access_key_id: str | None = Field(None, alias="awsAccessKeyId")
+    aws_session_token: str | None = Field(None, alias="awsSessionToken")
 
 
 class SlotsBundle(BaseModel):
@@ -108,6 +120,7 @@ class ExtractionRuntimeOverrides(BaseModel):
     gemini_http_timeout_ms: int | None = Field(None, alias="geminiHttpTimeoutMs")
     dashscope_http_timeout_ms: int | None = Field(None, alias="dashscopeHttpTimeoutMs")
     openrouter_http_timeout_ms: int | None = Field(None, alias="openrouterHttpTimeoutMs")
+    bedrock_http_timeout_ms: int | None = Field(None, alias="bedrockHttpTimeoutMs")
     llm_max_continuation_rounds: int | None = Field(None, alias="llmMaxContinuationRounds", ge=0, le=32)
     force_full_pipeline_default: bool | None = Field(None, alias="forceFullPipelineDefault")
 
@@ -144,7 +157,10 @@ def get_slots() -> SlotsBundle | SlotsBundleV3:
 
 
 def get_extraction_runtime() -> ExtractionRuntimeOverrides | None:
-    c = get_config()
+    """Return BFF overrides when ``X-Boardrule-Ai-Config`` is set; else ``None`` (use env defaults)."""
+    c = _CTX.get()
+    if c is None:
+        return None
     if isinstance(c, BoardruleAiConfigV3) and c.extraction_runtime is not None:
         return c.extraction_runtime
     return None

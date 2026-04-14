@@ -1,5 +1,5 @@
 /**
- * Enrich model rows using vendored metadata from Dify official plugins (tongyi / gemini / openrouter).
+ * Enrich model rows using vendored metadata from Dify official plugins (tongyi / gemini / openrouter / bedrock).
  * Generated JSON: lib/data/dify-model-metadata.json — see scripts/sync-dify-model-metadata.mjs.
  */
 
@@ -134,6 +134,9 @@ function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | n
   if (vendor === "qwen") {
     return lookupQwen(registry, modelName);
   }
+  if (vendor === "bedrock") {
+    return lookupOpenRouterOrQwen(registry, modelName);
+  }
   return lookupOpenRouterOrQwen(registry, modelName);
 }
 
@@ -141,7 +144,7 @@ export function enrichModelsWithDifyMetadata(
   vendor: AiVendor,
   models: GeminiModelOption[],
 ): GeminiModelOption[] {
-  if (vendor !== "qwen" && vendor !== "gemini" && vendor !== "openrouter") {
+  if (vendor !== "qwen" && vendor !== "gemini" && vendor !== "openrouter" && vendor !== "bedrock") {
     return models;
   }
 

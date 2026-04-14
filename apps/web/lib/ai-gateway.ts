@@ -8,6 +8,7 @@ import type {
   AiGatewayPublic,
   AiGatewayStored,
   AiVendor,
+  BedrockAuthMode,
   EngineAiPayloadV2,
   EngineAiPayloadV3,
   ExtractionRuntimeOverrides,
@@ -30,6 +31,13 @@ import {
   DASHSCOPE_COMPATIBLE_BASE_DEFAULT,
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
+import {
+  assertBedrockCredentialComplete,
+  bedrockKeyLast4FromPlain,
+  encryptBedrockApiKeyEnc,
+  isBedrockIamPayload,
+  parseBedrockIamPayload,
+} from "@/lib/bedrock-credential";
 
 /** Global chat defaults when a CHAT template omits temperature/maxTokens. Prefer a higher cap for RAG (system + retrieval + answer). */
 const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 16384 };
@@ -101,10 +109,17 @@ function parseStored(raw: string): AiGatewayStored {
         }).map((c) => {
           const base =
             typeof c.dashscopeCompatibleBase === "string" ? c.dashscopeCompatibleBase.trim() : "";
+          const region =
+            typeof c.bedrockRegion === "string" ? c.bedrockRegion.trim() : "";
           const merged: AiCredentialStored = {
             ...c,
             ...(c.vendor === "qwen" && base
               ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(base) }
+              : {}),
+            ...(c.vendor === "bedrock" && region ? { bedrockRegion: region } : {}),
+            ...(c.vendor === "bedrock" &&
+            (c.bedrockAuthMode === "iam" || c.bedrockAuthMode === "api_key")
+              ? { bedrockAuthMode: c.bedrockAuthMode }
               : {}),
           };
           return normalizeCredentialFromStored(merged);
@@ -149,7 +164,8 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
     try {
       const plain = decryptSecret(c.apiKeyEnc);
       hasKey = plain.length > 0;
-      last4 = keyLast4(plain);
+      last4 =
+        c.vendor === "bedrock" ? bedrockKeyLast4FromPlain(plain) : keyLast4(plain);
     } catch {
       hasKey = false;
     }
@@ -163,6 +179,12 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
       hiddenModelIds: c.hiddenModelIds ?? [],
       ...(c.vendor === "qwen"
         ? { dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(c.dashscopeCompatibleBase) }
+        : {}),
+      ...(c.vendor === "bedrock"
+        ? {
+            ...(c.bedrockRegion?.trim() ? { bedrockRegion: c.bedrockRegion.trim() } : {}),
+            ...(c.bedrockAuthMode ? { bedrockAuthMode: c.bedrockAuthMode } : {}),
+          }
         : {}),
     };
   });
@@ -226,7 +248,7 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     const next: AiCredentialStored[] = [];
     for (const p of patch.credentials) {
       if (!isAiVendor(p.vendor)) {
-        throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
+        throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
       }
       const alias = p.alias.trim();
       if (!alias) throw new Error("别名不能为空");
@@ -320,6 +342,10 @@ export function resolveSlotBinding(
   model: string;
   vendor: AiVendor;
   dashscopeCompatibleBase?: string;
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  awsAccessKeyId?: string;
+  awsSessionToken?: string;
 } {
   if (!binding.credentialId || !binding.model?.trim()) {
     throw new Error(`${labelForError}：请选择凭证并填写模型`);
@@ -329,13 +355,40 @@ export function resolveSlotBinding(
   if (cred.enabled === false) {
     throw new Error(`凭证「${cred.alias}」已停用`);
   }
-  const apiKey = decryptSecret(cred.apiKeyEnc).trim();
-  if (!apiKey) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
+  const plain = decryptSecret(cred.apiKeyEnc).trim();
+  if (!plain) throw new Error(`凭证 ${cred.alias} 的 API Key 无效`);
   const dashscopeCompatibleBase =
     cred.vendor === "qwen"
       ? normalizeDashscopeCompatibleBase(cred.dashscopeCompatibleBase)
       : undefined;
-  return { apiKey, model: binding.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
+  if (cred.vendor === "bedrock") {
+    assertBedrockCredentialComplete(cred);
+    const region = (cred.bedrockRegion ?? "").trim();
+    const mode = cred.bedrockAuthMode!;
+    if (mode === "api_key") {
+      return {
+        apiKey: plain,
+        model: binding.model.trim(),
+        vendor: "bedrock",
+        bedrockRegion: region,
+        bedrockAuthMode: "api_key",
+      };
+    }
+    if (!isBedrockIamPayload(plain)) {
+      throw new Error(`凭证 ${cred.alias} 的 Bedrock IAM 密钥格式无效`);
+    }
+    const iam = parseBedrockIamPayload(plain);
+    return {
+      apiKey: iam.secretAccessKey,
+      model: binding.model.trim(),
+      vendor: "bedrock",
+      bedrockRegion: region,
+      bedrockAuthMode: "iam",
+      awsAccessKeyId: iam.accessKeyId,
+      ...(iam.sessionToken ? { awsSessionToken: iam.sessionToken } : {}),
+    };
+  }
+  return { apiKey: plain, model: binding.model.trim(), vendor: cred.vendor, dashscopeCompatibleBase };
 }
 
 function engineFlashProFromBinding(
@@ -354,6 +407,18 @@ function engineFlashProFromBinding(
     model: r.model,
     ...(mot != null ? { maxOutputTokens: mot } : {}),
     ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
+    ...(r.vendor === "bedrock"
+      ? {
+          bedrockRegion: r.bedrockRegion,
+          bedrockAuthMode: r.bedrockAuthMode,
+          ...(r.bedrockAuthMode === "iam"
+            ? {
+                awsAccessKeyId: r.awsAccessKeyId,
+                ...(r.awsSessionToken ? { awsSessionToken: r.awsSessionToken } : {}),
+              }
+            : {}),
+        }
+      : {}),
   };
 }
 
@@ -372,6 +437,18 @@ function engineChatFromBinding(
     temperature,
     maxTokens,
     ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
+    ...(r.vendor === "bedrock"
+      ? {
+          bedrockRegion: r.bedrockRegion,
+          bedrockAuthMode: r.bedrockAuthMode,
+          ...(r.bedrockAuthMode === "iam"
+            ? {
+                awsAccessKeyId: r.awsAccessKeyId,
+                ...(r.awsSessionToken ? { awsSessionToken: r.awsSessionToken } : {}),
+              }
+            : {}),
+        }
+      : {}),
   };
 }
 
@@ -400,6 +477,18 @@ function engineEmbedFromBinding(
     apiKey: r.apiKey,
     model: r.model,
     ...(r.vendor === "qwen" ? { dashscopeCompatibleBase: r.dashscopeCompatibleBase } : {}),
+    ...(r.vendor === "bedrock"
+      ? {
+          bedrockRegion: r.bedrockRegion,
+          bedrockAuthMode: r.bedrockAuthMode,
+          ...(r.bedrockAuthMode === "iam"
+            ? {
+                awsAccessKeyId: r.awsAccessKeyId,
+                ...(r.awsSessionToken ? { awsSessionToken: r.awsSessionToken } : {}),
+              }
+            : {}),
+        }
+      : {}),
   };
 }
 
@@ -564,14 +653,19 @@ export async function addCredential(params: {
   vendor: AiVendor;
   /** Required for vendor qwen (normalized); defaults to Beijing if omitted. */
   dashscopeCompatibleBase?: string;
+  /** vendor bedrock */
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  /** IAM only */
+  bedrockAccessKeyId?: string;
+  bedrockSecretAccessKey?: string;
+  bedrockSessionToken?: string;
 }): Promise<AiGatewayPublic> {
   if (!isAiVendor(params.vendor)) {
-    throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
+    throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
   }
   const alias = params.alias.trim();
-  const key = params.apiKey.trim();
   if (!alias) throw new Error("别名不能为空");
-  if (!key) throw new Error("API Key 不能为空");
   const cur = await getAiGatewayStored();
   const newKey = aliasKey(alias);
   for (const c of cur.credentials) {
@@ -584,6 +678,8 @@ export async function addCredential(params: {
   }
   let next: AiCredentialStored;
   if (params.vendor === "qwen") {
+    const key = params.apiKey.trim();
+    if (!key) throw new Error("API Key 不能为空");
     const raw = (params.dashscopeCompatibleBase ?? "").trim();
     const merged = raw || DASHSCOPE_COMPATIBLE_BASE_DEFAULT;
     assertValidDashscopeCompatibleBase(merged);
@@ -594,7 +690,39 @@ export async function addCredential(params: {
       apiKeyEnc: encryptSecret(key),
       dashscopeCompatibleBase: normalizeDashscopeCompatibleBase(merged),
     };
+  } else if (params.vendor === "bedrock") {
+    const region = (params.bedrockRegion ?? "").trim();
+    const mode = params.bedrockAuthMode;
+    if (!region) throw new Error("Bedrock 区域不能为空");
+    if (mode !== "iam" && mode !== "api_key") {
+      throw new Error("Bedrock 认证方式须为 iam 或 api_key");
+    }
+    let apiKeyEnc: string;
+    if (mode === "api_key") {
+      const k = params.apiKey.trim();
+      if (!k) throw new Error("Bedrock API Key 不能为空");
+      apiKeyEnc = encryptBedrockApiKeyEnc("api_key", { apiKey: k });
+    } else {
+      const ak = (params.bedrockAccessKeyId ?? "").trim();
+      const sk = (params.bedrockSecretAccessKey ?? "").trim();
+      if (!ak || !sk) throw new Error("Bedrock IAM 需要 Access Key ID 与 Secret Access Key");
+      apiKeyEnc = encryptBedrockApiKeyEnc("iam", {
+        accessKeyId: ak,
+        secretAccessKey: sk,
+        sessionToken: (params.bedrockSessionToken ?? "").trim() || undefined,
+      });
+    }
+    next = {
+      id: params.id,
+      vendor: "bedrock",
+      alias,
+      apiKeyEnc,
+      bedrockRegion: region,
+      bedrockAuthMode: mode,
+    };
   } else {
+    const key = params.apiKey.trim();
+    if (!key) throw new Error("API Key 不能为空");
     next = {
       id: params.id,
       vendor: params.vendor,
@@ -627,6 +755,11 @@ export async function updateCredential(params: {
   dashscopeCompatibleBase?: string;
   enabled?: boolean;
   hiddenModelIds?: string[];
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  bedrockAccessKeyId?: string;
+  bedrockSecretAccessKey?: string;
+  bedrockSessionToken?: string;
 }): Promise<AiGatewayPublic> {
   const cur = await getAiGatewayStored();
   const idx = cur.credentials.findIndex((c) => c.id === params.id);
@@ -646,14 +779,17 @@ export async function updateCredential(params: {
   let vendor: AiVendor = prev.vendor;
   if (params.vendor !== undefined) {
     if (!isAiVendor(params.vendor)) {
-      throw new Error("vendor 必须为 gemini、openrouter 或 qwen");
+      throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
     }
     vendor = params.vendor;
   }
   let apiKeyEnc = prev.apiKeyEnc;
-  if (params.apiKey !== undefined && params.apiKey.trim() !== "") {
-    apiKeyEnc = encryptSecret(params.apiKey.trim());
-  }
+  const secretProvided =
+    params.apiKey !== undefined && params.apiKey.trim() !== "";
+  const bedrockSecretProvided =
+    (params.bedrockSecretAccessKey !== undefined && params.bedrockSecretAccessKey.trim() !== "") ||
+    (params.bedrockAccessKeyId !== undefined && params.bedrockAccessKeyId.trim() !== "") ||
+    (params.bedrockSessionToken !== undefined && params.bedrockSessionToken.trim() !== "");
 
   let dashscopeCompatibleBase: string | undefined;
   if (vendor === "qwen") {
@@ -669,6 +805,59 @@ export async function updateCredential(params: {
     }
   }
 
+  let bedrockRegion =
+    params.bedrockRegion !== undefined
+      ? params.bedrockRegion.trim()
+      : (prev.bedrockRegion ?? "").trim();
+  let bedrockAuthMode: BedrockAuthMode | undefined =
+    params.bedrockAuthMode !== undefined ? params.bedrockAuthMode : prev.bedrockAuthMode;
+
+  if (vendor === "bedrock") {
+    if (params.bedrockRegion !== undefined && !bedrockRegion) {
+      throw new Error("Bedrock 区域不能为空");
+    }
+    if (params.bedrockAuthMode !== undefined) {
+      bedrockAuthMode = params.bedrockAuthMode;
+    }
+    const effectiveMode = bedrockAuthMode ?? prev.bedrockAuthMode;
+    if (effectiveMode !== "iam" && effectiveMode !== "api_key") {
+      throw new Error("Bedrock 认证方式须为 iam 或 api_key");
+    }
+    const switchingToBedrock = prev.vendor !== "bedrock" && vendor === "bedrock";
+    if (switchingToBedrock && !secretProvided && !bedrockSecretProvided) {
+      throw new Error("切换到 Bedrock 时请填写完整密钥");
+    }
+    if (secretProvided || bedrockSecretProvided) {
+      if (effectiveMode === "api_key") {
+        if (!secretProvided) throw new Error("Bedrock API Key 不能为空");
+        apiKeyEnc = encryptBedrockApiKeyEnc("api_key", { apiKey: params.apiKey!.trim() });
+      } else {
+        const ak = (params.bedrockAccessKeyId ?? "").trim();
+        const sk = (params.bedrockSecretAccessKey ?? "").trim();
+        const prevPlain =
+          prev.vendor === "bedrock" && isBedrockIamPayload(decryptSecret(prev.apiKeyEnc))
+            ? parseBedrockIamPayload(decryptSecret(prev.apiKeyEnc))
+            : null;
+        const accessKeyId = ak || prevPlain?.accessKeyId || "";
+        const secretAccessKey = sk || prevPlain?.secretAccessKey || "";
+        const sessionTok =
+          params.bedrockSessionToken !== undefined
+            ? params.bedrockSessionToken.trim()
+            : prevPlain?.sessionToken ?? "";
+        if (!accessKeyId || !secretAccessKey) {
+          throw new Error("Bedrock IAM 需要 Access Key ID 与 Secret Access Key");
+        }
+        apiKeyEnc = encryptBedrockApiKeyEnc("iam", {
+          accessKeyId: accessKeyId,
+          secretAccessKey: secretAccessKey,
+          sessionToken: sessionTok || undefined,
+        });
+      }
+    }
+  } else if (secretProvided) {
+    apiKeyEnc = encryptSecret(params.apiKey!.trim());
+  }
+
   const nextCred: AiCredentialStored = {
     ...prev,
     id: prev.id,
@@ -678,8 +867,16 @@ export async function updateCredential(params: {
   };
   if (vendor === "qwen") {
     nextCred.dashscopeCompatibleBase = dashscopeCompatibleBase!;
+    delete nextCred.bedrockRegion;
+    delete nextCred.bedrockAuthMode;
+  } else if (vendor === "bedrock") {
+    delete nextCred.dashscopeCompatibleBase;
+    nextCred.bedrockRegion = bedrockRegion || prev.bedrockRegion;
+    nextCred.bedrockAuthMode = bedrockAuthMode ?? prev.bedrockAuthMode;
   } else {
     delete nextCred.dashscopeCompatibleBase;
+    delete nextCred.bedrockRegion;
+    delete nextCred.bedrockAuthMode;
   }
 
   if (params.enabled !== undefined) {

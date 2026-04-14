@@ -1,5 +1,5 @@
 /**
- * Server-only: list models for a saved credential (Gemini, OpenRouter, or Qwen/DashScope).
+ * Server-only: list models for a saved credential (Gemini, OpenRouter, Qwen/DashScope, or Bedrock).
  * Used by /api/ai/models and slot binding validation.
  */
 
@@ -10,6 +10,7 @@ import {
   getCredentialVendor,
   getStoredCredential,
 } from "@/lib/ai-gateway";
+import { fetchBedrockModelsForStoredCredential } from "@/lib/bedrock-models-list";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import { enrichModelMetadata } from "@/lib/model-metadata-enrich";
@@ -45,19 +46,23 @@ export async function fetchModelsForCredential(
     return [];
   }
   const vendor = getCredentialVendor(stored, credentialId);
-  const apiKey = getCredentialApiKey(stored, credentialId);
   let models: GeminiModelOption[];
-  if (vendor === "openrouter") {
-    models = slot
-      ? await fetchOpenRouterModelsForSlot(apiKey, slot)
-      : await fetchOpenRouterModelsFromApi(apiKey);
-  } else if (vendor === "qwen") {
-    const base = getCredentialDashscopeCompatibleBase(stored, credentialId);
-    models = slot
-      ? await fetchQwenModelsForSlot(apiKey, slot, base)
-      : await fetchQwenModelsFromApi(apiKey, base);
+  if (vendor === "bedrock") {
+    models = await fetchBedrockModelsForStoredCredential(stored, credentialId, slot);
   } else {
-    models = slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
+    const apiKey = getCredentialApiKey(stored, credentialId);
+    if (vendor === "openrouter") {
+      models = slot
+        ? await fetchOpenRouterModelsForSlot(apiKey, slot)
+        : await fetchOpenRouterModelsFromApi(apiKey);
+    } else if (vendor === "qwen") {
+      const base = getCredentialDashscopeCompatibleBase(stored, credentialId);
+      models = slot
+        ? await fetchQwenModelsForSlot(apiKey, slot, base)
+        : await fetchQwenModelsFromApi(apiKey, base);
+    } else {
+      models = slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
+    }
   }
   models = enrichModelMetadata(vendor, models);
   if (options?.includeHidden) {

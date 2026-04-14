@@ -1,6 +1,6 @@
 /**
  * Optional metadata overlays for model pickers (mode / context / vision badges).
- * Dify official plugins (YAML → dify-model-metadata.json): tongyi, gemini, openrouter.
+ * Dify official plugins (YAML → dify-model-metadata.json): tongyi, gemini, openrouter, bedrock.
  */
 
 import type { AiVendor } from "@/lib/ai-gateway-types";

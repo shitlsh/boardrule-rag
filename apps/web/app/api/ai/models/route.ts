@@ -10,6 +10,10 @@ import {
 } from "@/lib/openrouter-models-list";
 import { normalizeDashscopeCompatibleBase } from "@/lib/dashscope-endpoint";
 import { fetchQwenModelsForSlot, fetchQwenModelsFromApi } from "@/lib/qwen-models-list";
+import {
+  fetchBedrockFoundationModels,
+  filterBedrockModelsForSlot,
+} from "@/lib/bedrock-models-list";
 import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -24,7 +28,7 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
 }
 
 function parseVendor(raw: unknown): AiVendor | "invalid" {
-  if (raw === "gemini" || raw === "openrouter" || raw === "qwen") return raw;
+  if (raw === "gemini" || raw === "openrouter" || raw === "qwen" || raw === "bedrock") return raw;
   return "invalid";
 }
 
@@ -49,8 +53,48 @@ async function listModelsByKey(
   return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
 }
 
+async function listBedrockModelsFromBody(
+  o: Record<string, unknown>,
+  slot: SlotKey | null,
+): Promise<unknown[]> {
+  const region = typeof o.bedrockRegion === "string" ? o.bedrockRegion.trim() : "";
+  const mode = o.bedrockAuthMode === "iam" || o.bedrockAuthMode === "api_key" ? o.bedrockAuthMode : null;
+  if (!region || !mode) {
+    throw new Error("Bedrock 预览需要 bedrockRegion 与 bedrockAuthMode（iam | api_key）");
+  }
+  let models: Awaited<ReturnType<typeof fetchBedrockFoundationModels>>;
+  if (mode === "api_key") {
+    const token = typeof o.apiKey === "string" ? o.apiKey.trim() : "";
+    if (!token) throw new Error("Bedrock API Key 不能为空");
+    models = await fetchBedrockFoundationModels({
+      authMode: "api_key",
+      region,
+      bearerToken: token,
+    });
+  } else {
+    const accessKeyId = typeof o.bedrockAccessKeyId === "string" ? o.bedrockAccessKeyId.trim() : "";
+    const secretAccessKey =
+      typeof o.bedrockSecretAccessKey === "string" ? o.bedrockSecretAccessKey.trim() : "";
+    const sessionToken =
+      typeof o.bedrockSessionToken === "string" && o.bedrockSessionToken.trim() !== ""
+        ? o.bedrockSessionToken.trim()
+        : undefined;
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error("Bedrock IAM 预览需要 bedrockAccessKeyId 与 bedrockSecretAccessKey");
+    }
+    models = await fetchBedrockFoundationModels({
+      authMode: "iam",
+      region,
+      accessKeyId,
+      secretAccessKey,
+      sessionToken,
+    });
+  }
+  return slot ? filterBedrockModelsForSlot(models, slot) : models;
+}
+
 /**
- * List models for a credential (Gemini, OpenRouter, or Qwen/DashScope) with optional slot filter.
+ * List models for a credential (Gemini, OpenRouter, Qwen, or Bedrock) with optional slot filter.
  * - GET ?credentialId=…&slot=flash|pro|embed|chat — slot optional; when set, filters by capability.
  * - POST JSON { credentialId } or { apiKey, vendor }, optional slot — same behavior.
  */
@@ -106,16 +150,31 @@ export async function POST(req: Request) {
 
   let vendor: AiVendor;
   let apiKey: string;
-  if (apiKeyDirect) {
-    const v = parseVendor(o.vendor);
+  const vendorPreview = parseVendor(o.vendor);
+  const bedrockPreview =
+    vendorPreview === "bedrock" &&
+    typeof o.bedrockRegion === "string" &&
+    o.bedrockRegion.trim() !== "";
+
+  if (apiKeyDirect || bedrockPreview) {
+    const v = vendorPreview;
     if (v === "invalid") {
       return NextResponse.json(
-        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen" },
+        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen | bedrock" },
         { status: 400 },
       );
     }
     vendor = v;
     apiKey = apiKeyDirect;
+    if (vendor === "bedrock") {
+      try {
+        const models = await listBedrockModelsFromBody(o, slot);
+        return NextResponse.json({ models, slot: slot ?? null, vendor });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "拉取模型列表失败";
+        return NextResponse.json({ message: msg }, { status: 400 });
+      }
+    }
   } else if (credentialId) {
     try {
       const stored = await getAiGatewayStored();

@@ -2609,111 +2609,6 @@
         "vision"
       ]
     },
-    "anthropic/claude-3-5-haiku": {
-      "model": "anthropic/claude-3-5-haiku",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": false,
-      "maxOutputTokens": 8192,
-      "features": [
-        "agent-thought",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3.5-sonnet": {
-      "model": "anthropic/claude-3.5-sonnet",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 8192,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3-haiku": {
-      "model": "anthropic/claude-3-haiku",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 4096,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3-opus": {
-      "model": "anthropic/claude-3-opus",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 4096,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3-sonnet": {
-      "model": "anthropic/claude-3-sonnet",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 4096,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3.7-sonnet:thinking": {
-      "model": "anthropic/claude-3.7-sonnet:thinking",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 64000,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "anthropic/claude-3.7-sonnet": {
-      "model": "anthropic/claude-3.7-sonnet",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 200000,
-      "supportsVision": true,
-      "maxOutputTokens": 128000,
-      "features": [
-        "agent-thought",
-        "vision",
-        "tool-call",
-        "stream-tool-call",
-        "document"
-      ]
-    },
     "anthropic/claude-haiku-4.5": {
       "model": "anthropic/claude-haiku-4.5",
       "category": "llm",
@@ -2775,6 +2670,23 @@
         "agent-thought",
         "vision",
         "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "anthropic/claude-opus-4.6-fast": {
+      "model": "anthropic/claude-opus-4.6-fast",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "multi-tool-call",
         "stream-tool-call",
         "document"
       ]
@@ -3058,6 +2970,20 @@
         "agent-thought"
       ]
     },
+    "openrouter/elephant-alpha": {
+      "model": "openrouter/elephant-alpha",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": false,
+      "maxOutputTokens": 32768,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
     "google/gst": {
       "model": "google/gst",
       "category": "llm",
@@ -3085,60 +3011,6 @@
         "agent-thought",
         "vision",
         "tool-call",
-        "stream-tool-call"
-      ]
-    },
-    "google/gemini-2.0-flash-lite-001": {
-      "model": "google/gemini-2.0-flash-lite-001",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 1048576,
-      "supportsVision": false,
-      "maxOutputTokens": 8192,
-      "features": [
-        "multi-tool-call",
-        "agent-thought",
-        "stream-tool-call"
-      ]
-    },
-    "google/gemini-2.5-flash-image-preview:free": {
-      "model": "google/gemini-2.5-flash-image-preview:free",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 32768,
-      "supportsVision": true,
-      "maxOutputTokens": 32768,
-      "features": [
-        "vision",
-        "document"
-      ]
-    },
-    "google/gemini-2.5-flash-image-preview": {
-      "model": "google/gemini-2.5-flash-image-preview",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 32768,
-      "supportsVision": true,
-      "maxOutputTokens": 32768,
-      "features": [
-        "vision",
-        "document"
-      ]
-    },
-    "google/gemini-2.5-flash-lite-preview-06-17": {
-      "model": "google/gemini-2.5-flash-lite-preview-06-17",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 1048576,
-      "supportsVision": false,
-      "maxOutputTokens": 65536,
-      "features": [
-        "multi-tool-call",
-        "agent-thought",
         "stream-tool-call"
       ]
     },
@@ -3172,21 +3044,6 @@
         "document",
         "video",
         "audio"
-      ]
-    },
-    "google/gemini-2.5-flash-preview-09-2025": {
-      "model": "google/gemini-2.5-flash-preview-09-2025",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 1048576,
-      "supportsVision": true,
-      "maxOutputTokens": 65536,
-      "features": [
-        "multi-tool-call",
-        "agent-thought",
-        "stream-tool-call",
-        "vision"
       ]
     },
     "google/gemini-2.5-flash": {
@@ -3240,24 +3097,6 @@
         "audio"
       ]
     },
-    "google/gemini-3-pro-preview": {
-      "model": "google/gemini-3-pro-preview",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 1048576,
-      "supportsVision": true,
-      "maxOutputTokens": 65536,
-      "features": [
-        "multi-tool-call",
-        "agent-thought",
-        "stream-tool-call",
-        "vision",
-        "document",
-        "video",
-        "audio"
-      ]
-    },
     "google/gemini-3.1-flash-lite-preview": {
       "model": "google/gemini-3.1-flash-lite-preview",
       "category": "llm",
@@ -3294,20 +3133,6 @@
         "audio"
       ]
     },
-    "google/gemini-pro": {
-      "model": "google/gemini-pro",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 30720,
-      "supportsVision": false,
-      "maxOutputTokens": 2048,
-      "features": [
-        "agent-thought",
-        "tool-call",
-        "stream-tool-call"
-      ]
-    },
     "google/gemma-3n-e2b-it:free": {
       "model": "google/gemma-3n-e2b-it:free",
       "category": "llm",
@@ -3316,6 +3141,65 @@
       "contextSize": 8192,
       "supportsVision": true,
       "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "google/gemma-4-26b-a4b-it": {
+      "model": "google/gemma-4-26b-a4b-it",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 256000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "google/gemma-4-31b-it": {
+      "model": "google/gemma-4-31b-it",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 256000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "z-ai/glm-5.1": {
+      "model": "z-ai/glm-5.1",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 202752,
+      "supportsVision": false,
+      "maxOutputTokens": 131072,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
+      ]
+    },
+    "z-ai/glm-5v-turbo": {
+      "model": "z-ai/glm-5v-turbo",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 202752,
+      "supportsVision": true,
+      "maxOutputTokens": 131072,
       "features": [
         "multi-tool-call",
         "agent-thought",
@@ -3577,20 +3461,6 @@
         "stream-tool-call"
       ]
     },
-    "x-ai/grok-4-fast:free": {
-      "model": "x-ai/grok-4-fast:free",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "chat",
-      "contextSize": 2000000,
-      "supportsVision": true,
-      "features": [
-        "multi-tool-call",
-        "agent-thought",
-        "stream-tool-call",
-        "vision"
-      ]
-    },
     "x-ai/grok-4-fast": {
       "model": "x-ai/grok-4-fast",
       "category": "llm",
@@ -3607,6 +3477,34 @@
     },
     "x-ai/grok-4.1-fast": {
       "model": "x-ai/grok-4.1-fast",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "x-ai/grok-4.20-multi-agent": {
+      "model": "x-ai/grok-4.20-multi-agent",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 2000000,
+      "supportsVision": true,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "x-ai/grok-4.20": {
+      "model": "x-ai/grok-4.20",
       "category": "llm",
       "modelType": "llm",
       "mode": "chat",
@@ -3648,15 +3546,6 @@
         "multi-tool-call",
         "stream-tool-call"
       ]
-    },
-    "meta-llama/llama-3-70b-instruct": {
-      "model": "meta-llama/llama-3-70b-instruct",
-      "category": "llm",
-      "modelType": "llm",
-      "mode": "completion",
-      "contextSize": 8192,
-      "supportsVision": false,
-      "maxOutputTokens": 2048
     },
     "meta-llama/llama-3-8b-instruct": {
       "model": "meta-llama/llama-3-8b-instruct",
@@ -3738,6 +3627,35 @@
       "features": [
         "agent-thought",
         "vision"
+      ]
+    },
+    "xiaomi/mimo-v2-omni": {
+      "model": "xiaomi/mimo-v2-omni",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 262144,
+      "supportsVision": true,
+      "maxOutputTokens": 65536,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "xiaomi/mimo-v2-pro": {
+      "model": "xiaomi/mimo-v2-pro",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1048576,
+      "supportsVision": false,
+      "maxOutputTokens": 131072,
+      "features": [
+        "multi-tool-call",
+        "agent-thought",
+        "stream-tool-call"
       ]
     },
     "mistralai/mistral-7b-instruct": {
@@ -3907,6 +3825,21 @@
         "stream-tool-call"
       ]
     },
+    "qwen/qwen3.6-plus": {
+      "model": "qwen/qwen3.6-plus",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": false,
+      "maxOutputTokens": 65536,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "multi-tool-call",
+        "stream-tool-call"
+      ]
+    },
     "openai/text-embedding-3-large": {
       "model": "openai/text-embedding-3-large",
       "category": "text_embedding",
@@ -3921,6 +3854,170 @@
       "modelType": "text-embedding",
       "mode": "embedding",
       "contextSize": 8191,
+      "supportsVision": false
+    }
+  },
+  "bedrock": {
+    "ai21": {
+      "model": "ai21",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "completion",
+      "contextSize": 256000,
+      "supportsVision": false
+    },
+    "amazon nova": {
+      "model": "amazon nova",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 300000,
+      "supportsVision": true,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call",
+        "vision"
+      ]
+    },
+    "anthropic claude": {
+      "model": "anthropic claude",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "cohere": {
+      "model": "cohere",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "deepseek": {
+      "model": "deepseek",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "meta": {
+      "model": "meta",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 128000,
+      "supportsVision": false,
+      "features": [
+        "tool-call",
+        "agent-thought"
+      ]
+    },
+    "mistral": {
+      "model": "mistral",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32000,
+      "supportsVision": false,
+      "maxOutputTokens": 4096,
+      "features": [
+        "tool-call",
+        "agent-thought"
+      ]
+    },
+    "openai": {
+      "model": "openai",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "qwen": {
+      "model": "qwen",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 32768,
+      "supportsVision": false,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "amazon.nova-2-multimodal-embeddings-v1:0": {
+      "model": "amazon.nova-2-multimodal-embeddings-v1:0",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "amazon.titan-embed-text-v1": {
+      "model": "amazon.titan-embed-text-v1",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "amazon.titan-embed-text-v2:0": {
+      "model": "amazon.titan-embed-text-v2:0",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "cohere.embed-english-v3": {
+      "model": "cohere.embed-english-v3",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 512,
+      "supportsVision": false
+    },
+    "cohere.embed-multilingual-v3": {
+      "model": "cohere.embed-multilingual-v3",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 512,
       "supportsVision": false
     }
   }

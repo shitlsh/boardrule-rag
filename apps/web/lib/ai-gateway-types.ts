@@ -1,6 +1,9 @@
-export type AiVendor = "gemini" | "openrouter" | "qwen";
+export type AiVendor = "gemini" | "openrouter" | "qwen" | "bedrock";
 
-export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen"];
+export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen", "bedrock"];
+
+/** How to authenticate to AWS Bedrock for this credential. */
+export type BedrockAuthMode = "iam" | "api_key";
 
 export function isAiVendor(v: string): v is AiVendor {
   return (AI_VENDOR_IDS as readonly string[]).includes(v);
@@ -26,6 +29,14 @@ export type AiCredentialStored = {
    * Persisted when adding/editing Qwen credentials; drives model list + rule engine.
    */
   dashscopeCompatibleBase?: string;
+  /**
+   * vendor === "bedrock" only: AWS region for Bedrock (e.g. us-east-1).
+   */
+  bedrockRegion?: string;
+  /**
+   * vendor === "bedrock" only: IAM access keys (encrypted JSON in apiKeyEnc) vs Bedrock API key (encrypted string).
+   */
+  bedrockAuthMode?: BedrockAuthMode;
 };
 
 export type SlotBinding = {
@@ -81,6 +92,9 @@ export type AiCredentialPublic = {
   hiddenModelIds: string[];
   /** Set when vendor is qwen (normalized base URL). */
   dashscopeCompatibleBase?: string;
+  /** vendor === "bedrock" (public, non-secret) */
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
 };
 
 export type AiGatewayPublic = {
@@ -96,6 +110,12 @@ export type EngineSlotFlashPro = {
   maxOutputTokens?: number;
   /** Required when provider is qwen: OpenAI-compatible API base (no trailing slash). */
   dashscopeCompatibleBase?: string;
+  /** provider === "bedrock" */
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  /** IAM only: access key id (secret is apiKey). */
+  awsAccessKeyId?: string;
+  awsSessionToken?: string;
 };
 
 export type EngineSlotEmbed = {
@@ -103,6 +123,10 @@ export type EngineSlotEmbed = {
   apiKey: string;
   model: string;
   dashscopeCompatibleBase?: string;
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  awsAccessKeyId?: string;
+  awsSessionToken?: string;
 };
 
 export type EngineSlotChat = {
@@ -112,6 +136,10 @@ export type EngineSlotChat = {
   temperature: number;
   maxTokens: number;
   dashscopeCompatibleBase?: string;
+  bedrockRegion?: string;
+  bedrockAuthMode?: BedrockAuthMode;
+  awsAccessKeyId?: string;
+  awsSessionToken?: string;
 };
 
 /** Payload sent to rule_engine (camelCase). Version 2 only. */
@@ -139,6 +167,7 @@ export type ExtractionRuntimeOverrides = {
   geminiHttpTimeoutMs?: number | null;
   dashscopeHttpTimeoutMs?: number | null;
   openrouterHttpTimeoutMs?: number | null;
+  bedrockHttpTimeoutMs?: number | null;
   llmMaxContinuationRounds?: number;
   /** Default suggestion for full pipeline; BFF may OR with per-request `forceFullPipeline`. */
   forceFullPipelineDefault?: boolean;
