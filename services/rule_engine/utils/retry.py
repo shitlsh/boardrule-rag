@@ -1,38 +1,54 @@
-"""Simple retry helper for flaky API calls."""
+"""Retry helpers for flaky LLM API calls — backed by tenacity.
+
+Public API (unchanged from previous version):
+- ``retry(fn, *, attempts, base_delay_s)``  — generic outer retry wrapper
+- ``is_likely_rate_limit(exc)``             — 429 / quota heuristic
+- ``retry_after_from_exception(exc)``       — parse Retry-After header
+- ``sleep_before_retry_rate_limit(...)``    — manual sleep (kept for compatibility)
+
+New:
+- ``make_rate_limit_retry(attempts)``       — tenacity decorator factory used by all providers
+  for inner rate-limit retry (replaces the hand-rolled for-loop in the old GeminiProvider).
+"""
 
 from __future__ import annotations
 
+import logging
 import random
 import time
 from collections.abc import Callable
 from typing import TypeVar
 
+from tenacity import (
+    RetryCallState,
+    retry,
+    retry_base,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+from tenacity import retry as _tenacity_retry
+
 T = TypeVar("T")
 
-# Outer retries wrapping each LLM call in the extraction graph (in addition to inner 429 handling in
-# ``llm_generate`` for Gemini). Higher than the generic default helps free-tier / burst limits.
+log = logging.getLogger(__name__)
+
+# Outer retries wrapping each LLM call in the extraction graph.
 EXTRACTION_LLM_RETRY_ATTEMPTS = 5
-# merge_and_refine split-half calls (two parallel Pro calls); keep slightly lower than full-node retries.
 EXTRACTION_MERGE_SPLIT_RETRY_ATTEMPTS = 4
 
+# Exception types that represent programming errors — should never be retried.
+_NON_RETRYABLE: tuple[type[BaseException], ...] = (
+    TypeError,
+    ValueError,
+    AttributeError,
+    NotImplementedError,
+)
 
-def retry(
-    fn: Callable[[], T],
-    *,
-    attempts: int = 3,
-    base_delay_s: float = 1.0,
-) -> T:
-    last: Exception | None = None
-    for i in range(attempts):
-        try:
-            return fn()
-        except Exception as e:  # noqa: BLE001 — intentional retry
-            last = e
-            if i == attempts - 1:
-                raise
-            time.sleep(base_delay_s * (2**i))
-    assert last is not None
-    raise last
+
+# ---------------------------------------------------------------------------
+# Rate-limit heuristics (public — tested directly)
+# ---------------------------------------------------------------------------
 
 
 def retry_after_from_exception(exc: BaseException) -> float | None:
@@ -54,7 +70,7 @@ def retry_after_from_exception(exc: BaseException) -> float | None:
 
 def is_likely_rate_limit(exc: BaseException) -> bool:
     """
-    Heuristic for Gemini / Google GenAI HTTP 429 and quota-style failures.
+    Heuristic for HTTP 429 and quota-style failures across all providers.
     Works with ``google.genai.errors.APIError`` (``code`` / ``status``) and plain messages.
     """
     code = getattr(exc, "code", None)
@@ -82,10 +98,108 @@ def sleep_before_retry_rate_limit(
     base_rate_s: float = 8.0,
     max_sleep_s: float = 120.0,
 ) -> None:
-    """Backoff tuned for API quota / burst limits (longer than generic ``retry``)."""
+    """Manual backoff tuned for API quota / burst limits (kept for compatibility)."""
     ra = retry_after_from_exception(exc)
     if ra is not None and ra > 0:
         time.sleep(min(max_sleep_s, ra + random.random()))
         return
     raw = base_rate_s * (2**attempt_index) + random.uniform(0, 1.0)
     time.sleep(min(max_sleep_s, raw))
+
+
+# ---------------------------------------------------------------------------
+# Tenacity-based retry factories
+# ---------------------------------------------------------------------------
+
+
+class _RetryIfRateLimit(retry_base):
+    """Tenacity retry condition: retry only on rate-limit errors, never on programming errors."""
+
+    def __call__(self, retry_state: RetryCallState) -> bool:
+        exc = retry_state.outcome.exception()
+        if exc is None:
+            return False
+        if isinstance(exc, _NON_RETRYABLE):
+            return False
+        return is_likely_rate_limit(exc)
+
+
+def _make_before_sleep_rate_limit(max_sleep_s: float = 120.0):
+    """
+    Before-sleep callback for tenacity: honours ``Retry-After`` header when present,
+    otherwise lets tenacity's ``wait_exponential_jitter`` handle the delay.
+    """
+
+    def _before_sleep(retry_state: RetryCallState) -> None:
+        exc = retry_state.outcome.exception()
+        if exc is None:
+            return
+        ra = retry_after_from_exception(exc)
+        if ra is not None and ra > 0:
+            # Override tenacity's computed wait with the server-specified value.
+            sleep_s = min(max_sleep_s, ra + random.random())
+            log.debug("rate-limit retry: honouring Retry-After=%.1fs (capped %.1fs)", ra, sleep_s)
+            retry_state.next_action.sleep = sleep_s  # type: ignore[union-attr]
+        else:
+            log.debug(
+                "rate-limit retry: attempt %d, sleeping %.1fs",
+                retry_state.attempt_number,
+                retry_state.next_action.sleep,  # type: ignore[union-attr]
+            )
+
+    return _before_sleep
+
+
+def make_rate_limit_retry(attempts: int = 5):
+    """
+    Return a tenacity retry decorator for inner rate-limit retries.
+
+    Used by all providers (Gemini, OpenRouter, Qwen) to give a consistent,
+    quota-aware backoff: base=8 s, exponential with jitter, capped at 120 s.
+    Retry-After header is respected when present.
+
+    Example::
+
+        _retry = make_rate_limit_retry(5)
+
+        @_retry
+        def _do():
+            return api_call(...)
+    """
+    return _tenacity_retry(
+        retry=_RetryIfRateLimit(),
+        stop=stop_after_attempt(attempts),
+        wait=wait_exponential_jitter(initial=8, max=120, jitter=1),
+        before_sleep=_make_before_sleep_rate_limit(),
+        reraise=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Generic outer retry (public — used by graph nodes)
+# ---------------------------------------------------------------------------
+
+
+def retry(
+    fn: Callable[[], T],
+    *,
+    attempts: int = 3,
+    base_delay_s: float = 1.0,
+) -> T:
+    """
+    Generic outer retry with exponential back-off.
+
+    Programming errors (TypeError, ValueError, AttributeError, NotImplementedError)
+    are re-raised immediately without retrying.
+    """
+    decorated = _tenacity_retry(
+        retry=retry_if_exception(lambda e: not isinstance(e, _NON_RETRYABLE)),
+        stop=stop_after_attempt(attempts),
+        wait=wait_exponential_jitter(
+            initial=base_delay_s,
+            max=base_delay_s * (2 ** (attempts - 1)),
+            jitter=0,
+        ),
+        reraise=True,
+    )(fn)
+    return decorated()
