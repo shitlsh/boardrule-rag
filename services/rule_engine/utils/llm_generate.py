@@ -1,25 +1,27 @@
 """Slot-based LLM generation (Flash / Pro, text + vision).
 
-Routes to **Gemini**, **OpenRouter**, or **Qwen (DashScope)** per ``X-Boardrule-Ai-Config``
-(see ``utils/ai_gateway.py``). Supports optional **continuation** when the model hits
-output length limits.
+Routes to **Gemini**, **OpenRouter**, **Qwen (DashScope)**, or **Bedrock** per
+``X-Boardrule-Ai-Config`` (see ``utils/ai_gateway.py``).  Supports optional
+**continuation** when the model hits output length limits.
 
-When LangSmith tracing is enabled, optional :class:`LlmCallMeta` attaches metadata to a child ``llm`` run.
+When LangSmith tracing is enabled, optional :class:`LlmCallMeta` attaches
+metadata to a child ``llm`` run.
+
+Provider dispatch is centralised in :func:`_build_provider` — adding a new
+provider only requires a change there.  The continuation loop and rate-limit
+retry are handled generically by ``utils.providers``.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from google import genai
 from google.genai import types
 
-from utils import dashscope_client as _dashscope
 from utils.ai_gateway import (
     BoardruleAiConfigV3,
     FlashProSlot,
@@ -29,9 +31,9 @@ from utils.ai_gateway import (
     get_slots,
 )
 from utils.dashscope_client import resolve_dashscope_api_base
-from utils.bedrock_converse import converse_messages, parts_to_bedrock_content
-from utils.openrouter_client import chat_completion_with_meta
-from utils.retry import is_likely_rate_limit, sleep_before_retry_rate_limit
+from utils.providers.base import LlmProvider, run_with_continuation
+from utils.providers.gemini import GeminiProvider
+from utils.providers.openai_compat import OpenAICompatProvider
 
 # Preset names (use at call sites to avoid magic strings)
 FLASH_TOC = "flash_toc"
@@ -42,18 +44,11 @@ PRO_MERGE = "pro_merge"
 FlashPreset = Literal["flash_toc", "flash_quickstart"]
 ProPreset = Literal["pro_extract", "pro_merge"]
 
-# Default max output tokens when BFF omits maxOutputTokens (raised from legacy 8192 for long zh rulebooks).
+# Default max output tokens when BFF omits maxOutputTokens.
 _DEFAULT_SLOT_MAX_OUTPUT = 32768
 _ENV_PRO_DEFAULT = "BOARDRULE_PRO_MAX_OUTPUT_TOKENS_DEFAULT"
 _ENV_FLASH_DEFAULT = "BOARDRULE_FLASH_MAX_OUTPUT_TOKENS_DEFAULT"
 _ENV_MAX_CONTINUATION = "BOARDRULE_LLM_MAX_CONTINUATION_ROUNDS"
-_GEMINI_RATE_LIMIT_ATTEMPTS = 5
-
-CONTINUE_MSG = (
-    "【续写】上文为你的部分输出（末尾可能不完整）。"
-    "请仅输出后续内容，从截断处紧接续写，不要重复已给出的段落，"
-    "保持原有 Markdown 结构与标题层级一致。"
-)
 
 
 @dataclass(frozen=True)
@@ -64,6 +59,15 @@ class LlmCallMeta:
     prompt_file: str | None = None
     prompt_sha256: str | None = None
     call_tag: str | None = None
+
+
+# Backward-compatible alias (older name referenced "Gemini" only).
+GeminiCallMeta = LlmCallMeta
+
+
+# ---------------------------------------------------------------------------
+# Slot resolution helpers
+# ---------------------------------------------------------------------------
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -172,16 +176,9 @@ _PRO_PRESET_TEMP: dict[ProPreset, float] = {
 }
 
 
-def _tracing_enabled_for_llm() -> bool:
-    v = (
-        os.environ.get("LANGSMITH_TRACING_V2")
-        or os.environ.get("LANGCHAIN_TRACING_V2")
-        or ""
-    ).strip().lower()
-    if v not in ("true", "1"):
-        return False
-    key = (os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY") or "").strip()
-    return bool(key)
+# ---------------------------------------------------------------------------
+# Gemini client factory (timeout forwarding)
+# ---------------------------------------------------------------------------
 
 
 def _gemini_http_timeout_ms() -> int | None:
@@ -202,11 +199,112 @@ def _gemini_http_timeout_ms() -> int | None:
         return 120_000
 
 
-def _genai_client(api_key: str) -> genai.Client:
-    timeout_ms = _gemini_http_timeout_ms()
-    if timeout_ms is None:
-        return genai.Client(api_key=api_key)
-    return genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_ms))
+# ---------------------------------------------------------------------------
+# Provider factory — the single dispatch point
+# ---------------------------------------------------------------------------
+
+
+def _build_provider(slot: FlashProSlot, temperature: float, max_tokens: int) -> LlmProvider:
+    """Instantiate the correct LlmProvider for *slot*.
+
+    This is the only place in the codebase that branches on ``slot.provider``.
+    All four ``generate_*`` functions call this and then use the uniform
+    ``run_with_continuation`` loop.
+    """
+    if slot.provider == "openrouter":
+        import functools
+
+        import utils.openrouter_client as _or
+
+        call_fn = functools.partial(
+            lambda msgs, temp, mot: _or.chat_completion_with_meta(
+                api_key=slot.api_key,
+                model=slot.model,
+                messages=msgs,
+                temperature=temp,
+                max_tokens=mot,
+            )
+        )
+        return OpenAICompatProvider(provider_name="openrouter", call_fn=call_fn)
+
+    if slot.provider == "qwen":
+        import functools
+
+        import utils.dashscope_client as _ds
+
+        _api_base = _qwen_api_base(slot)
+        call_fn = functools.partial(
+            lambda msgs, temp, mot: _ds.chat_completion_with_meta(
+                api_key=slot.api_key,
+                api_base=_api_base,
+                model=slot.model,
+                messages=msgs,
+                temperature=temp,
+                max_tokens=mot,
+            )
+        )
+        return OpenAICompatProvider(provider_name="qwen", call_fn=call_fn)
+
+    if slot.provider == "bedrock":
+        # Bedrock uses its own continuation loop via converse_messages directly;
+        # wrap it as a minimal LlmProvider so run_with_continuation can drive it.
+        from utils.bedrock_converse import converse_messages, parts_to_bedrock_content
+
+        class _BedrockProvider(LlmProvider):
+            provider_name = "bedrock"
+
+            def text_call(
+                self, messages: list[dict[str, Any]], *, temperature: float, max_tokens: int
+            ) -> tuple[str, bool]:
+                # Convert OpenAI-format string content → Bedrock content blocks.
+                bedrock_messages: list[dict[str, Any]] = []
+                for m in messages:
+                    role = m.get("role", "user")
+                    c = m.get("content", "")
+                    content = [{"text": c}] if isinstance(c, str) else c
+                    bedrock_messages.append({"role": role, "content": content})
+                return converse_messages(
+                    slot,
+                    messages=bedrock_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+
+            def vision_call(
+                self, parts: list[Any], *, temperature: float, max_tokens: int
+            ) -> tuple[str, bool]:
+                blocks = parts_to_bedrock_content(parts)
+                return converse_messages(
+                    slot,
+                    messages=[{"role": "user", "content": blocks}],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+
+        return _BedrockProvider()
+
+    # Default: Gemini
+    gen_config = types.GenerateContentConfig(
+        temperature=temperature, max_output_tokens=max_tokens
+    )
+    return GeminiProvider(api_key=slot.api_key, model=slot.model, gen_config=gen_config)
+
+
+# ---------------------------------------------------------------------------
+# LangSmith tracing helpers
+# ---------------------------------------------------------------------------
+
+
+def _tracing_enabled_for_llm() -> bool:
+    v = (
+        os.environ.get("LANGSMITH_TRACING_V2") or os.environ.get("LANGCHAIN_TRACING_V2") or ""
+    ).strip().lower()
+    if v not in ("true", "1"):
+        return False
+    key = (
+        os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY") or ""
+    ).strip()
+    return bool(key)
 
 
 def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
@@ -223,431 +321,12 @@ def _sha256_for_content(contents: str | list[Any], explicit: str | None) -> str:
     return h.hexdigest()
 
 
-def _gemini_finish_truncated(fr: Any) -> bool:
-    if fr is None:
-        return False
-    if fr == types.FinishReason.MAX_TOKENS:
-        return True
-    name = getattr(fr, "name", None)
-    if name == "MAX_TOKENS":
-        return True
-    s = str(fr).upper()
-    return "MAX_TOKENS" in s
-
-
-def _openai_finish_truncated(fr: str | None) -> bool:
-    if not fr:
-        return False
-    return fr.lower() == "length"
-
-
-def _append_continuation_warnings(
-    out_warnings: list[str] | None,
-    *,
-    node: str,
-    continuation_calls: int,
-    still_truncated: bool,
-) -> None:
-    if out_warnings is None:
-        return
-    if continuation_calls > 0:
-        out_warnings.append(
-            f"llm ({node}): output hit max length; performed {continuation_calls} continuation request(s)"
-        )
-    if still_truncated:
-        out_warnings.append(
-            f"llm ({node}): output still truncated after continuation; text may be incomplete"
-        )
-
-
-def _gemini_generate_with_meta(
-    *,
-    api_key: str,
-    model: str,
-    contents: str | list[Any],
-    gen_config: types.GenerateContentConfig,
-    empty_error: str,
-) -> tuple[str, Any]:
-    client = _genai_client(api_key)
-    for attempt in range(_GEMINI_RATE_LIMIT_ATTEMPTS):
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=gen_config,
-            )
-            if not response.text:
-                raise RuntimeError(empty_error)
-            fr = None
-            if response.candidates:
-                fr = response.candidates[0].finish_reason
-            return response.text, fr
-        except Exception as e:
-            if attempt < _GEMINI_RATE_LIMIT_ATTEMPTS - 1 and is_likely_rate_limit(e):
-                sleep_before_retry_rate_limit(attempt, e)
-                continue
-            raise
-
-
-def _mixed_parts_to_user_content(parts: list[Any]) -> types.Content:
-    gp: list[types.Part] = []
-    for p in parts:
-        if isinstance(p, str):
-            gp.append(types.Part(text=p))
-        else:
-            from PIL import Image
-
-            if isinstance(p, Image.Image):
-                import io
-
-                buf = io.BytesIO()
-                p.convert("RGB").save(buf, format="PNG")
-                gp.append(types.Part(inline_data=types.Blob(data=buf.getvalue(), mime_type="image/png")))
-            else:
-                gp.append(types.Part(text=str(p)))
-    return types.Content(role="user", parts=gp)
-
-
-def _gemini_text_with_continuation(
-    *,
-    api_key: str,
-    model: str,
-    prompt: str,
-    gen_config: types.GenerateContentConfig,
-    empty_error: str,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    max_r = _max_continuation_rounds()
-    acc = ""
-    history: list[types.Content] | None = None
-    last_truncated = False
-    for r in range(max_r):
-        contents_in: str | list[Any] = prompt if r == 0 else (history or [])
-        text, fr = _gemini_generate_with_meta(
-            api_key=api_key,
-            model=model,
-            contents=contents_in,
-            gen_config=gen_config,
-            empty_error=empty_error,
-        )
-        acc += text
-        last_truncated = _gemini_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        if history is None:
-            history = [
-                types.Content(role="user", parts=[types.Part(text=prompt)]),
-                types.Content(role="model", parts=[types.Part(text=text)]),
-                types.Content(role="user", parts=[types.Part(text=CONTINUE_MSG)]),
-            ]
-        else:
-            history.append(types.Content(role="model", parts=[types.Part(text=text)]))
-            history.append(types.Content(role="user", parts=[types.Part(text=CONTINUE_MSG)]))
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _gemini_vision_with_continuation(
-    *,
-    api_key: str,
-    model: str,
-    parts: list[Any],
-    gen_config: types.GenerateContentConfig,
-    empty_error: str,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    max_r = _max_continuation_rounds()
-    acc = ""
-    history: list[types.Content] | None = None
-    last_truncated = False
-    for r in range(max_r):
-        contents_in: str | list[Any] = parts if r == 0 else (history or [])
-        text, fr = _gemini_generate_with_meta(
-            api_key=api_key,
-            model=model,
-            contents=contents_in,
-            gen_config=gen_config,
-            empty_error=empty_error,
-        )
-        acc += text
-        last_truncated = _gemini_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        if history is None:
-            history = [
-                _mixed_parts_to_user_content(parts),
-                types.Content(role="model", parts=[types.Part(text=text)]),
-                types.Content(role="user", parts=[types.Part(text=CONTINUE_MSG)]),
-            ]
-        else:
-            history.append(types.Content(role="model", parts=[types.Part(text=text)]))
-            history.append(types.Content(role="user", parts=[types.Part(text=CONTINUE_MSG)]))
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _openrouter_messages_loop(
-    *,
-    initial_messages: list[dict[str, Any]],
-    api_key: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    max_r = _max_continuation_rounds()
-    messages = [dict(m) for m in initial_messages]
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, fr = chat_completion_with_meta(
-            api_key=api_key,
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = _openai_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": text})
-        messages.append({"role": "user", "content": CONTINUE_MSG})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _dashscope_messages_loop(
-    *,
-    initial_messages: list[dict[str, Any]],
-    api_key: str,
-    api_base: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    max_r = _max_continuation_rounds()
-    messages = [dict(m) for m in initial_messages]
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, fr = _dashscope.chat_completion_with_meta(
-            api_key=api_key,
-            api_base=api_base,
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = _openai_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": text})
-        messages.append({"role": "user", "content": CONTINUE_MSG})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _bedrock_messages_loop(
-    *,
-    initial_messages: list[dict[str, Any]],
-    slot: Any,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    """Bedrock Converse: ``initial_messages`` use OpenAI-style ``content`` string per message."""
-    max_r = _max_continuation_rounds()
-    messages: list[dict[str, Any]] = []
-    for m in initial_messages:
-        role = m.get("role", "user")
-        c = m.get("content", "")
-        if isinstance(c, str):
-            content = [{"text": c}]
-        else:
-            content = c
-        messages.append({"role": role, "content": content})
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, truncated = converse_messages(
-            slot,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = truncated
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": [{"text": text}]})
-        messages.append({"role": "user", "content": [{"text": CONTINUE_MSG}]})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _bedrock_vision_parts_loop(
-    *,
-    parts: list[Any],
-    slot: Any,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    max_r = _max_continuation_rounds()
-    blocks = parts_to_bedrock_content(parts)
-    messages: list[dict[str, Any]] = [{"role": "user", "content": blocks}]
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, truncated = converse_messages(
-            slot,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = truncated
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": [{"text": text}]})
-        messages.append({"role": "user", "content": [{"text": CONTINUE_MSG}]})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _openrouter_vision_parts_loop(
-    *,
-    parts: list[Any],
-    api_key: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    from utils.openrouter_client import parts_to_openrouter_messages
-
-    max_r = _max_continuation_rounds()
-    messages = parts_to_openrouter_messages(parts)
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, fr = chat_completion_with_meta(
-            api_key=api_key,
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = _openai_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": text})
-        messages.append({"role": "user", "content": CONTINUE_MSG})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
-def _dashscope_vision_parts_loop(
-    *,
-    parts: list[Any],
-    api_key: str,
-    api_base: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    node: str,
-    out_warnings: list[str] | None,
-) -> str:
-    from utils.dashscope_client import parts_to_dashscope_messages
-
-    max_r = _max_continuation_rounds()
-    messages = parts_to_dashscope_messages(parts)
-    acc = ""
-    last_truncated = False
-    for r in range(max_r):
-        text, fr = _dashscope.chat_completion_with_meta(
-            api_key=api_key,
-            api_base=api_base,
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        acc += text
-        last_truncated = _openai_finish_truncated(fr)
-        if not last_truncated:
-            _append_continuation_warnings(out_warnings, node=node, continuation_calls=r, still_truncated=False)
-            return acc
-        messages.append({"role": "assistant", "content": text})
-        messages.append({"role": "user", "content": CONTINUE_MSG})
-    _append_continuation_warnings(
-        out_warnings,
-        node=node,
-        continuation_calls=max(0, max_r - 1),
-        still_truncated=last_truncated,
-    )
-    return acc
-
-
 def _run_with_optional_trace(
     *,
     provider: str,
     meta: LlmCallMeta | None,
     contents_for_hash: str | list[Any],
-    fn: Callable[[], str],
+    fn: Any,
     empty_error: str,
 ) -> str:
     def _call() -> str:
@@ -695,6 +374,11 @@ def _run_with_optional_trace(
             raise
 
 
+# ---------------------------------------------------------------------------
+# Public generation API
+# ---------------------------------------------------------------------------
+
+
 def generate_flash(
     prompt: str,
     *,
@@ -704,93 +388,31 @@ def generate_flash(
     meta: LlmCallMeta | None = None,
     out_warnings: list[str] | None = None,
 ) -> str:
+    """Generate text with the Flash-tier model for *preset*."""
     slot = _resolve_flash_slot(meta, preset)
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else _max_output_for_flash_slot(slot)
     node = meta.node if meta else "flash"
+    provider = _build_provider(slot, temp, mot)
 
-    if slot.provider == "openrouter":
-
-        def _fn() -> str:
-            return _openrouter_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                api_key=slot.api_key,
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="openrouter",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn,
-            empty_error="OpenRouter Flash returned empty response",
-        )
-
-    if slot.provider == "qwen":
-
-        def _fn_q() -> str:
-            return _dashscope_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                api_key=slot.api_key,
-                api_base=_qwen_api_base(slot),
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="qwen",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn_q,
-            empty_error="Qwen (DashScope) Flash returned empty response",
-        )
-
-    if slot.provider == "bedrock":
-
-        def _fn_br() -> str:
-            return _bedrock_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                slot=slot,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="bedrock",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn_br,
-            empty_error="Bedrock (Converse) Flash returned empty response",
-        )
-
-    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-
-    def _gem() -> str:
-        return _gemini_text_with_continuation(
-            api_key=slot.api_key,
-            model=slot.model,
-            prompt=prompt,
-            gen_config=gen_config,
-            empty_error="Gemini Flash returned empty response",
+    def _fn() -> str:
+        return run_with_continuation(
+            provider,
+            call_type="text",
+            initial_input=prompt,
+            temperature=temp,
+            max_tokens=mot,
             node=node,
             out_warnings=out_warnings,
+            max_continuation_rounds=_max_continuation_rounds(),
         )
 
     return _run_with_optional_trace(
-        provider="gemini",
+        provider=slot.provider,
         meta=meta,
         contents_for_hash=prompt,
-        fn=_gem,
-        empty_error="Gemini Flash returned empty response",
+        fn=_fn,
+        empty_error=f"{slot.provider} Flash returned empty response",
     )
 
 
@@ -803,97 +425,35 @@ def generate_pro(
     meta: LlmCallMeta | None = None,
     out_warnings: list[str] | None = None,
 ) -> str:
+    """Generate text with the Pro-tier model for *preset*."""
     slot = _resolve_pro_slot(meta, preset)
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else _max_output_for_pro_slot(slot)
     node = meta.node if meta else "pro"
+    provider = _build_provider(slot, temp, mot)
 
-    if slot.provider == "openrouter":
-
-        def _fn() -> str:
-            return _openrouter_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                api_key=slot.api_key,
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="openrouter",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn,
-            empty_error="OpenRouter Pro returned empty response",
-        )
-
-    if slot.provider == "qwen":
-
-        def _fn_q() -> str:
-            return _dashscope_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                api_key=slot.api_key,
-                api_base=_qwen_api_base(slot),
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="qwen",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn_q,
-            empty_error="Qwen (DashScope) Pro returned empty response",
-        )
-
-    if slot.provider == "bedrock":
-
-        def _fn_br() -> str:
-            return _bedrock_messages_loop(
-                initial_messages=[{"role": "user", "content": prompt}],
-                slot=slot,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="bedrock",
-            meta=meta,
-            contents_for_hash=prompt,
-            fn=_fn_br,
-            empty_error="Bedrock (Converse) Pro returned empty response",
-        )
-
-    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-
-    def _gem() -> str:
-        return _gemini_text_with_continuation(
-            api_key=slot.api_key,
-            model=slot.model,
-            prompt=prompt,
-            gen_config=gen_config,
-            empty_error="Gemini Pro returned empty response",
+    def _fn() -> str:
+        return run_with_continuation(
+            provider,
+            call_type="text",
+            initial_input=prompt,
+            temperature=temp,
+            max_tokens=mot,
             node=node,
             out_warnings=out_warnings,
+            max_continuation_rounds=_max_continuation_rounds(),
         )
 
     return _run_with_optional_trace(
-        provider="gemini",
+        provider=slot.provider,
         meta=meta,
         contents_for_hash=prompt,
-        fn=_gem,
-        empty_error="Gemini Pro returned empty response",
+        fn=_fn,
+        empty_error=f"{slot.provider} Pro returned empty response",
     )
 
 
-def _pil_open(path: Path | str):
+def _pil_open(path: Path | str) -> Any:
     from PIL import Image
 
     p = Path(path) if isinstance(path, str) else path
@@ -906,8 +466,7 @@ def build_labeled_image_parts(
     preamble: str = "",
     closing: str = "",
 ) -> list[Any]:
-    """
-    Interleave explicit page labels with images to reduce page-number hallucination.
+    """Interleave explicit page labels with images to reduce page-number hallucination.
 
     Each item is (1-based physical page number, image path).
     """
@@ -936,89 +495,26 @@ def generate_flash_vision(
     temp = temperature if temperature is not None else _FLASH_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else _max_output_for_flash_slot(slot)
     node = meta.node if meta else "flash"
+    provider = _build_provider(slot, temp, mot)
 
-    if slot.provider == "openrouter":
-
-        def _fn() -> str:
-            return _openrouter_vision_parts_loop(
-                parts=parts,
-                api_key=slot.api_key,
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="openrouter",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn,
-            empty_error="OpenRouter Flash returned empty response (vision)",
-        )
-
-    if slot.provider == "qwen":
-
-        def _fn_q() -> str:
-            return _dashscope_vision_parts_loop(
-                parts=parts,
-                api_key=slot.api_key,
-                api_base=_qwen_api_base(slot),
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="qwen",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn_q,
-            empty_error="Qwen (DashScope) Flash returned empty response (vision)",
-        )
-
-    if slot.provider == "bedrock":
-
-        def _fn_br() -> str:
-            return _bedrock_vision_parts_loop(
-                parts=parts,
-                slot=slot,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="bedrock",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn_br,
-            empty_error="Bedrock (Converse) Flash returned empty response (vision)",
-        )
-
-    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-
-    def _gem() -> str:
-        return _gemini_vision_with_continuation(
-            api_key=slot.api_key,
-            model=slot.model,
-            parts=parts,
-            gen_config=gen_config,
-            empty_error="Gemini Flash returned empty response (vision)",
+    def _fn() -> str:
+        return run_with_continuation(
+            provider,
+            call_type="vision",
+            initial_input=parts,
+            temperature=temp,
+            max_tokens=mot,
             node=node,
             out_warnings=out_warnings,
+            max_continuation_rounds=_max_continuation_rounds(),
         )
 
     return _run_with_optional_trace(
-        provider="gemini",
+        provider=slot.provider,
         meta=meta,
         contents_for_hash=parts,
-        fn=_gem,
-        empty_error="Gemini Flash returned empty response (vision)",
+        fn=_fn,
+        empty_error=f"{slot.provider} Flash returned empty response (vision)",
     )
 
 
@@ -1036,91 +532,24 @@ def generate_pro_vision(
     temp = temperature if temperature is not None else _PRO_PRESET_TEMP[preset]
     mot = max_output_tokens if max_output_tokens is not None else _max_output_for_pro_slot(slot)
     node = meta.node if meta else "pro"
+    provider = _build_provider(slot, temp, mot)
 
-    if slot.provider == "openrouter":
-
-        def _fn() -> str:
-            return _openrouter_vision_parts_loop(
-                parts=parts,
-                api_key=slot.api_key,
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="openrouter",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn,
-            empty_error="OpenRouter Pro returned empty response (vision)",
-        )
-
-    if slot.provider == "qwen":
-
-        def _fn_q() -> str:
-            return _dashscope_vision_parts_loop(
-                parts=parts,
-                api_key=slot.api_key,
-                api_base=_qwen_api_base(slot),
-                model=slot.model,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="qwen",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn_q,
-            empty_error="Qwen (DashScope) Pro returned empty response (vision)",
-        )
-
-    if slot.provider == "bedrock":
-
-        def _fn_br() -> str:
-            return _bedrock_vision_parts_loop(
-                parts=parts,
-                slot=slot,
-                temperature=temp,
-                max_tokens=mot,
-                node=node,
-                out_warnings=out_warnings,
-            )
-
-        return _run_with_optional_trace(
-            provider="bedrock",
-            meta=meta,
-            contents_for_hash=parts,
-            fn=_fn_br,
-            empty_error="Bedrock (Converse) Pro returned empty response (vision)",
-        )
-
-    gen_config = types.GenerateContentConfig(temperature=temp, max_output_tokens=mot)
-
-    def _gem() -> str:
-        return _gemini_vision_with_continuation(
-            api_key=slot.api_key,
-            model=slot.model,
-            parts=parts,
-            gen_config=gen_config,
-            empty_error="Gemini Pro returned empty response (vision)",
+    def _fn() -> str:
+        return run_with_continuation(
+            provider,
+            call_type="vision",
+            initial_input=parts,
+            temperature=temp,
+            max_tokens=mot,
             node=node,
             out_warnings=out_warnings,
+            max_continuation_rounds=_max_continuation_rounds(),
         )
 
     return _run_with_optional_trace(
-        provider="gemini",
+        provider=slot.provider,
         meta=meta,
         contents_for_hash=parts,
-        fn=_gem,
-        empty_error="Gemini Pro returned empty response (vision)",
+        fn=_fn,
+        empty_error=f"{slot.provider} Pro returned empty response (vision)",
     )
-
-
-# Backward-compatible alias (older name referenced "Gemini" only).
-GeminiCallMeta = LlmCallMeta
