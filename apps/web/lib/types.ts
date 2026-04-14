@@ -46,6 +46,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  /** Assistant only; filled when RAG returns citations (snake_case from API). */
+  sources?: Record<string, unknown>[]
 }
 
 export interface ChatRequest {

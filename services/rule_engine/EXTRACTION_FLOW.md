@@ -19,7 +19,7 @@ flowchart TB
     EX[POST /extract 启动图]
     G[LangGraph 六节点]
     BI[POST /build-index/start]
-    CH[POST /chat]
+    CH[POST /chat/stream]
   end
 
   subgraph storage [存储与索引]
@@ -144,7 +144,7 @@ flowchart LR
   disk["sync 写入 exports rules.md"]
   fail["completed 且无 merged_markdown 则失败"]
   bi["POST /build-index/start → GET /build-index/jobs"]
-  chat["POST /chat"]
+  chat["POST /chat/stream"]
   idx[(BM25 + Vector)]
 
   poll --> disk

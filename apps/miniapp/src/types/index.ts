@@ -40,24 +40,11 @@ export interface ChatMessage {
   sources?: SourceRef[]
 }
 
-/** POST /api/chat 请求体 */
+/** POST /api/chat/stream 请求体（与 BFF 转发到规则引擎的 JSON 一致） */
 export interface ChatRequest {
   gameId: string
   message: string
   messages: { role: 'user' | 'assistant'; content: string }[]
-}
-
-/** POST /api/chat BFF 响应体 */
-export interface ChatBffResponse {
-  message: {
-    id: string
-    role: 'assistant'
-    content: string
-    createdAt: string
-  }
-  answer: string
-  game_id: string
-  sources: SourceRef[]
 }
 
 /** GET /api/games 列表响应（元素） */

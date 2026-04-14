@@ -115,8 +115,8 @@ logger = logging.getLogger("boardrule.api")
 async def boardrule_ai_header_middleware(request: Request, call_next):
     """Parse ``X-Boardrule-Ai-Config`` (v2, ``slots``) onto ``request.state`` for AI routes."""
     if request.method == "POST":
-        if request.url.path == "/chat":
-            logger.info("POST /chat received (before handler)")
+        if request.url.path == "/chat/stream":
+            logger.info("POST /chat/stream received (before handler)")
         elif request.url.path == "/extract":
             logger.info("POST /extract received (before handler; background task runs after response)")
     raw = request.headers.get("x-boardrule-ai-config")

@@ -75,11 +75,11 @@ npm run db:apply-migration    # 执行 migration.sql + migrate resolve --applied
 
 - **上传 / 任务**：`POST /api/tasks`（multipart：`gameId`、`file`，可选 `terminologyContext`）→ 调用规则引擎 `POST /extract`（附带 **`X-Boardrule-Ai-Config`**）。
 - **轮询**：任务详情 `GET /api/tasks/[taskId]` 会同步规则引擎任务状态并写回导出文件路径。
-- **问答**：`POST /api/chat` 代理规则引擎 `POST /chat`；**需先**对该 `game_id` 完成向量索引（游戏详情 **建立索引**，引擎侧为 `POST /build-index/start` + 轮询，见 **QUICKSTART.md**）。
+- **问答**：`POST /api/chat/stream` 代理规则引擎 `POST /chat/stream`（SSE）；**需先**对该 `game_id` 完成向量索引（游戏详情 **建立索引**，引擎侧为 `POST /build-index/start` + 轮询，见 **QUICKSTART.md**）。
 
 ## C 端登录 & 每日限流（小程序 / H5）
 
-`POST /api/chat` 在 **miniapp JWT**（`Authorization: Bearer`）场景下，按 **`AppSettings.dailyChatLimit`（每 IP）** 与 **`AppSettings.dailyChatLimitGlobal`（全站 C 端合计）** 做每日（UTC）限制；与 JWT `sub` 无关。
+`POST /api/chat/stream` 在 **miniapp JWT**（`Authorization: Bearer`）场景下，按 **`AppSettings.dailyChatLimit`（每 IP）** 与 **`AppSettings.dailyChatLimitGlobal`（全站 C 端合计）** 做每日（UTC）限制；与 JWT `sub` 无关。
 
 | 路由 | 说明 |
 |------|------|

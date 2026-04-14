@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { chatRules, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
+import { fetchChatRulesStream, getRuleEngineBaseUrl } from "@/lib/ingestion/client";
 import { prisma } from "@/lib/prisma";
 import { getCEndChatLimitsPublic } from "@/lib/c-end-chat-settings";
 import { getClientIp } from "@/lib/client-ip";
 import { assertStaffOrMiniapp } from "@/lib/request-auth";
 import { checkAndIncrementMiniappChatLimits, MiniappChatRateLimitError } from "@/lib/rate-limit";
-import type { ChatMessage } from "@/lib/types";
 
-/** Same idea as build-index: first chat may load cross-encoder weights (sentence-transformers) + RAG + Gemini. */
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -19,8 +17,7 @@ type ChatBody = {
 };
 
 /**
- * C-side RAG chat: proxies to rule_engine `POST /chat` (LlamaIndex QueryEngine + hybrid + rerank).
- * Response includes `message` for the v0 chat UI and `answer` / `sources` for compatibility.
+ * SSE proxy to rule_engine `POST /chat/stream`. Same auth / rate limits / index gates as other chat routes.
  */
 export async function POST(req: Request) {
   const gate = await assertStaffOrMiniapp(req);
@@ -39,10 +36,9 @@ export async function POST(req: Request) {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.info("[api/chat] request", { gameId });
+    console.info("[api/chat/stream] request", { gameId });
   }
 
-  // ── C-end rate limits: per-IP + global daily (miniapp JWT only; staff unlimited) ─
   if (gate.kind === "miniapp") {
     try {
       const { dailyChatLimitPerIp, dailyChatLimitGlobal } = await getCEndChatLimitsPublic();
@@ -56,10 +52,8 @@ export async function POST(req: Request) {
       if (e instanceof MiniappChatRateLimitError) {
         return NextResponse.json({ message: e.message }, { status: 429 });
       }
-      // DB / transaction errors — fail open
     }
   }
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const game = await prisma.game.findUnique({ where: { id: gameId } });
   if (!game) {
@@ -103,14 +97,15 @@ export async function POST(req: Request) {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.info("[api/chat] calling rule engine", {
+    console.info("[api/chat/stream] calling rule engine", {
       base: getRuleEngineBaseUrl(),
       gameId,
     });
   }
 
+  let upstream: Response;
   try {
-    const result = await chatRules({
+    upstream = await fetchChatRulesStream({
       gameId,
       message,
       messages: messages?.map((m) => ({
@@ -118,23 +113,26 @@ export async function POST(req: Request) {
         content: m.content.trim(),
       })),
     });
-
-    const assistant: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: result.answer,
-      createdAt: new Date().toISOString(),
-    };
-
-    return NextResponse.json({
-      message: assistant,
-      answer: result.answer,
-      game_id: result.game_id,
-      sources: result.sources,
-    });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Chat request failed";
-    const isNotFound = /404|not found|No vector index/i.test(msg);
-    return NextResponse.json({ message: msg }, { status: isNotFound ? 404 : 502 });
+    const msg = e instanceof Error ? e.message : "Chat stream request failed";
+    return NextResponse.json({ message: msg }, { status: 502 });
   }
+
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => "");
+    const isNotFound = upstream.status === 404 || /not found|No vector index/i.test(text);
+    return NextResponse.json(
+      { message: text || "Chat stream failed" },
+      { status: isNotFound ? 404 : upstream.status >= 400 ? upstream.status : 502 },
+    );
+  }
+
+  return new Response(upstream.body, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

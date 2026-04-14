@@ -81,7 +81,7 @@ uni-app 客户端（微信小程序 或 H5）
     ↓  miniapp JWT 缓存到 storage
     ↓  后续请求：Authorization: Bearer <JWT>
 Next.js BFF (apps/web)
-    ↓  /api/chat：按客户端 IP + 当日 UTC 计数（RateLimit 表，键 ip:…）
+    ↓  /api/chat/stream：按客户端 IP + 当日 UTC 计数（RateLimit 表，键 ip:…）
     ↓  限额来自后台「每日对话次数上限」
     ↓  内部 HTTP → rule_engine (FastAPI) → RAG / AI
 ```
@@ -90,7 +90,7 @@ Next.js BFF (apps/web)
 
 ## 登录与每日限流
 
-对话页在 `onShow` 时会调用 `getOrFetchUserId()`，用于获取 **miniapp JWT**（`/api/games`、`/api/chat` 等接口需要登录）。
+对话页在 `onShow` 时会调用 `getOrFetchUserId()`，用于获取 **miniapp JWT**（`/api/games`、`/api/chat/stream` 等接口需要登录）。
 
 ### 微信小程序登录流程
 

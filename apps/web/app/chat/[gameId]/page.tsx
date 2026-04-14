@@ -26,6 +26,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useGame } from "@/hooks/use-game";
+import { CHAT_PHASE_LABEL_ZH } from "@/lib/chat-sse-protocol";
+import { createSseBuffer, feedSseBuffer } from "@/lib/chat-sse-parse";
+import type { ChatSseEvent, ChatSsePhaseId } from "@/lib/chat-sse-protocol";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
 
@@ -47,6 +50,8 @@ export default function GameChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [streamPhaseLabel, setStreamPhaseLabel] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [quickStartOpen, setQuickStartOpen] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -62,11 +67,14 @@ export default function GameChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [messages, scrollToBottom, streamPhaseLabel]);
 
   const handleSend = async (messageText?: string) => {
     const trimmedInput = (messageText || input).trim();
     if (!trimmedInput || isSending || !game) return;
+
+    /** Prior turns only (exclude the message we are about to send). */
+    const priorForApi = messages;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -75,7 +83,19 @@ export default function GameChatPage() {
       createdAt: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantId = crypto.randomUUID();
+    setStreamingMessageId(assistantId);
+    setStreamPhaseLabel(CHAT_PHASE_LABEL_ZH.prepare);
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
     setInput("");
     setIsSending(true);
     if (messages.length === 0) {
@@ -83,13 +103,13 @@ export default function GameChatPage() {
     }
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           gameId: game.id,
           message: trimmedInput,
-          messages: messages.map((m) => ({
+          messages: priorForApi.map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -108,24 +128,66 @@ export default function GameChatPage() {
         throw new Error(error.message || error.error || "发送失败");
       }
 
-      const data = (await res.json()) as {
-        message?: { id?: string; content?: string };
-        answer?: string;
-      };
-      const assistantMessage: ChatMessage = {
-        id: data.message?.id || crypto.randomUUID(),
-        role: "assistant",
-        content: data.message?.content || data.answer || "抱歉，无法生成回复",
-        createdAt: new Date().toISOString(),
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("无法读取回复流");
+      }
+
+      const decoder = new TextDecoder();
+      const sseBuf = createSseBuffer();
+      let accumulated = "";
+      let sources: Record<string, unknown>[] | undefined;
+
+      const applyEvent = (ev: ChatSseEvent) => {
+        if (ev.type === "phase") {
+          const id = ev.id as ChatSsePhaseId;
+          if (id in CHAT_PHASE_LABEL_ZH) {
+            setStreamPhaseLabel(CHAT_PHASE_LABEL_ZH[id]);
+          }
+        } else if (ev.type === "delta" && ev.text) {
+          accumulated += ev.text;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, content: accumulated } : m,
+            ),
+          );
+        } else if (ev.type === "sources") {
+          sources = ev.sources as Record<string, unknown>[];
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, sources } : m,
+            ),
+          );
+        } else if (ev.type === "error") {
+          throw new Error(ev.message || "流式回答失败");
+        }
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        feedSseBuffer(sseBuf, decoder.decode(value, { stream: true }), applyEvent);
+      }
+      feedSseBuffer(sseBuf, decoder.decode(), applyEvent);
+
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          const content =
+            m.content.trim() ||
+            accumulated.trim() ||
+            "抱歉，无法生成回复";
+          return { ...m, content, sources: sources ?? m.sources };
+        }),
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "发送失败，请重试");
-      setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+      setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantId));
       setInput(trimmedInput);
     } finally {
       setIsSending(false);
+      setStreamPhaseLabel(null);
+      setStreamingMessageId(null);
       textareaRef.current?.focus();
     }
   };
@@ -303,20 +365,27 @@ export default function GameChatPage() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                  {message.role === "user" ? (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                  ) : message.content.trim() ? (
+                    <div className="prose prose-sm max-w-none dark:prose-invert prose-p:text-foreground prose-headings:text-foreground prose-li:text-foreground">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      {streamingMessageId === message.id ? (
+                        <>
+                          <Spinner className="h-4 w-4 shrink-0" />
+                          <span>{streamPhaseLabel ?? "请稍候…"}</span>
+                        </>
+                      ) : (
+                        <span>…</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-            {isSending ? (
-              <div className="flex justify-start">
-                <div className="rounded-2xl bg-muted px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Spinner className="h-4 w-4" />
-                    <span className="text-sm text-muted-foreground">思考中...</span>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </ScrollArea>
 

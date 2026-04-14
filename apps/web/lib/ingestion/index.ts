@@ -1,5 +1,5 @@
 export {
-  chatRules,
+  fetchChatRulesStream,
   getBuildIndexJob,
   getExtractJob,
   getRuleEngineBaseUrl,
@@ -11,7 +11,6 @@ export { syncIndexBuildTask, syncTaskFromRuleEngine } from "./sync";
 export type {
   BuildIndexJobPollResponse,
   BuildIndexStartResponse,
-  ChatResponse,
   ChatSourceRef,
   ExtractJobStatus,
   ExtractPagesResponse,

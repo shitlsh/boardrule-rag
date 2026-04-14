@@ -157,7 +157,7 @@ _RULE_QA_TEMPLATE = PromptTemplate(
 )
 
 
-def build_rulebook_query_engine(game_id: str) -> RetrieverQueryEngine:
+def build_rulebook_query_engine(game_id: str, *, streaming: bool = False) -> RetrieverQueryEngine:
     """
     Retrieval and postprocessing follow ``manifest.json`` for this ``game_id`` (written at index build).
 
@@ -209,6 +209,7 @@ def build_rulebook_query_engine(game_id: str) -> RetrieverQueryEngine:
         llm=llm,
         text_qa_template=_RULE_QA_TEMPLATE,
         response_mode=ResponseMode.SIMPLE_SUMMARIZE,
+        streaming=streaming,
     )
 
     return RetrieverQueryEngine.from_args(

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  *
  * Exchanges a WeChat miniapp `code` (from `uni.login()`) for a stable `userId`
  * (the WeChat `openid`). The openid is returned to the miniapp and used as the
- * `x-user-id` header on subsequent `/api/chat` requests.
+ * `x-user-id` header on subsequent `/api/chat/stream` (and other BFF) requests.
  *
  * Body: { code: string }
  * Response: { userId: string, accessToken: string, expiresIn: number }

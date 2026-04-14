@@ -77,7 +77,7 @@ Edit `services/rule_engine/.env` and set at least the keys in the table below.
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | `postgresql://` — LangGraph **PostgresSaver** (checkpoints) and **pgvector** for new indexes. Use the same URL as **`apps/web`** (Supabase local or hosted). |
 | `CORS_ORIGINS` | Recommended | Comma-separated browser origins for FastAPI CORS (default in `.env.example`: `http://localhost:3000`). Must include your **`apps/web`** origin. |
-| *(API keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (JSON v2 with **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure credentials (Gemini or OpenRouter) and per-slot models in the web app (**`/models`**). See §4.1. |
+| *(API keys / models)* | — | **Not set in the rule engine `.env`.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (JSON v2 with **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat/stream`, etc. Configure credentials (Gemini or OpenRouter) and per-slot models in the web app (**`/models`**). See §4.1. |
 | `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith tracing. |
 | `LANGCHAIN_API_KEY` | If tracing | LangSmith API key. |
 | `LANGCHAIN_PROJECT` | No | Defaults to `boardrule-rag` in docs; set to group runs in LangSmith. |
@@ -162,7 +162,7 @@ Copy `apps/web/.env.example` to `apps/web/.env` and adjust values.
 
 Chat temperature / max tokens are configured on the models UI where applicable.
 
-**Direct `curl` to the rule engine:** for `POST /extract`, `POST /build-index/start`, or `POST /chat`, you must supply the same JSON header the BFF would send (or run flows through the web so the header is added automatically).
+**Direct `curl` to the rule engine:** for `POST /extract`, `POST /build-index/start`, or `POST /chat/stream`, you must supply the same JSON header the BFF would send (or run flows through the web so the header is added automatically).
 
 **Web rulebook UI:** game detail page supports **PDF**, **multiple images**, or **Gstone URL** (preview API), then **thumbnail click** for TOC/exclude before extract.
 
@@ -187,11 +187,11 @@ Open `http://localhost:3000` (or the port shown in the terminal).
 4. **LangSmith**：设置 `LANGCHAIN_TRACING_V2=true` 与 `LANGCHAIN_API_KEY`，在项目中查看与 `toc_analyzer` / `chapter_extract` 等节点对齐的 Run。
 5. **索引（Phase 2）**：调用 **`POST /build-index/start`**（同上 JSON 体），携带 **`X-Boardrule-Ai-Config`**；用返回的 `job_id` 轮询 **`GET /build-index/jobs/{job_id}`** 至 `completed`。若配置了 PostgreSQL + pgvector，向量写入 PG；BM25 仍落盘。再访问 `GET /index/{game_id}/manifest` 与 `GET /index/{game_id}/smoke-retrieve?q=…`。
 6. **Web**：游戏详情页在提取完成后可预览 Markdown，并 **建立索引**（BFF 异步提交引擎任务并轮询）；**Chat** 未建索引时返回 **409**。
-7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用 `POST /chat` 或 Next.js `POST /api/chat`（同样需要 AI 配置头）。
+7. **问答（Phase 3）**：在已为该 `game_id` 建索引的前提下，调用规则引擎 **`POST /chat/stream`**（SSE）或 Next.js **`POST /api/chat/stream`**（同样需要 AI 配置头）。
 
 ## 6. C-end (H5 / WeChat miniapp) chat rate limiting
 
-`POST /api/chat` applies when the caller uses a **miniapp JWT** (`Authorization: Bearer`). Limits are **per client IP** and **global total per UTC day** (`AppSettings.dailyChatLimit`, `dailyChatLimitGlobal`; default `20` / `1000`). Keys in `RateLimit` include `ip:…` and `global:c_end:…`.
+`POST /api/chat/stream` applies when the caller uses a **miniapp JWT** (`Authorization: Bearer`). Limits are **per client IP** and **global total per UTC day** (`AppSettings.dailyChatLimit`, `dailyChatLimitGlobal`; default `20` / `1000`). Keys in `RateLimit` include `ip:…` and `global:c_end:…`.
 
 1. H5 uses `POST /api/h5-auth`; the mini program uses `POST /api/wx-login` with `uni.login()` → `jscode2session` → openid; both issue the same JWT shape.
 2. BFF increments per-IP and global counters in one transaction; either cap returns **429** when exceeded.

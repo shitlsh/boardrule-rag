@@ -1,15 +1,23 @@
-"""Phase 3: RAG chat over per-game index (LlamaIndex QueryEngine + optional multi-turn condense)."""
+"""Phase 3: RAG chat over per-game index (LlamaIndex QueryEngine + optional multi-turn condense).
+
+SSE streaming: ``POST /chat/stream`` emits JSON lines documented in ``apps/web/lib/chat-sse-protocol.ts``.
+"""
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from collections.abc import Iterator
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.base.response.schema import StreamingResponse as LlamaStreamingResponse
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.core.prompts import PromptTemplate
+from llama_index.core.schema import QueryBundle
 from pydantic import BaseModel, Field
 
 from api.deps import require_boardrule_ai
@@ -55,10 +63,9 @@ class SourceRef(BaseModel):
     score: float | None = None
 
 
-class ChatResponse(BaseModel):
-    answer: str
-    game_id: str
-    sources: list[SourceRef]
+def _sse_bytes(payload: dict[str, Any]) -> bytes:
+    """One SSE event: ``data: <JSON>\\n\\n`` (see ``chat-sse-protocol.ts``)."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
 def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
@@ -90,86 +97,111 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
     return out
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(  # sync: LlamaIndex GoogleGenAI uses asyncio.run(); async def would nest a running loop and crash.
-    body: ChatRequest,
-    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
-) -> ChatResponse:
-    t0 = time.perf_counter()
+def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
+    """Core generator: phases + token deltas + sources + done / error."""
     logger.info(
-        "chat start game_id=%s prior_turns=%d message_chars=%d",
+        "chat stream start game_id=%s prior_turns=%d message_chars=%d",
         body.game_id,
         len(body.messages),
         len(body.message),
     )
-    with boardrule_ai_runtime(_ai):
-        chat_slot = get_slots().chat
-        logger.info(
-            "chat llm provider=%s model=%s index_dir=%s",
-            chat_slot.provider,
-            chat_slot.model,
-            game_index_dir(body.game_id),
+    t0 = time.perf_counter()
+    try:
+        yield _sse_bytes({"type": "phase", "id": "prepare"})
+        query_engine = build_rulebook_query_engine(body.game_id, streaming=True)
+    except FileNotFoundError as e:
+        yield _sse_bytes({"type": "error", "message": str(e)})
+        return
+    except RuntimeError as e:
+        yield _sse_bytes({"type": "error", "message": str(e)})
+        return
+
+    llm = get_chat_llm()
+
+    try:
+        if body.messages:
+            yield _sse_bytes({"type": "phase", "id": "clarify"})
+            history: list[ChatMessage] = []
+            for m in body.messages:
+                role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
+                history.append(ChatMessage(role=role, content=m.content))
+            chat_engine = CondenseQuestionChatEngine.from_defaults(
+                query_engine=query_engine,
+                chat_history=history,
+                llm=llm,
+                condense_question_prompt=_RULEBOOK_CONDENSE_PROMPT,
+            )
+            condensed_question = chat_engine._condense_question(
+                chat_engine.chat_history,
+                body.message,
+            )
+        else:
+            condensed_question = body.message
+
+        yield _sse_bytes({"type": "phase", "id": "search"})
+        nodes = query_engine.retrieve(QueryBundle(condensed_question))
+        yield _sse_bytes({"type": "phase", "id": "organize"})
+        yield _sse_bytes({"type": "phase", "id": "answer"})
+
+        synth = query_engine.synthesize(QueryBundle(condensed_question), nodes)
+        if not isinstance(synth, LlamaStreamingResponse) or synth.response_gen is None:
+            yield _sse_bytes(
+                {
+                    "type": "error",
+                    "message": "Streaming synthesis unavailable for this model configuration",
+                },
+            )
+            return
+
+        for chunk in synth.response_gen:
+            piece = chunk if isinstance(chunk, str) else str(chunk)
+            if piece:
+                yield _sse_bytes({"type": "delta", "text": piece})
+
+        refs = _serialize_sources(nodes)
+        yield _sse_bytes(
+            {
+                "type": "sources",
+                "sources": [r.model_dump() for r in refs],
+            },
         )
-        t_build0 = time.perf_counter()
-        try:
-            query_engine = build_rulebook_query_engine(body.game_id)
-        except FileNotFoundError as e:
-            logger.warning("chat failed (no index) game_id=%s: %s", body.game_id, e)
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        except RuntimeError as e:
-            logger.warning("chat failed (runtime) game_id=%s: %s", body.game_id, e)
-            raise HTTPException(status_code=503, detail=str(e)) from e
-        build_ms = (time.perf_counter() - t_build0) * 1000.0
-        logger.info("chat build_query_engine_ms=%.1f game_id=%s", build_ms, body.game_id)
-
-        llm = get_chat_llm()
-
-        t_run0 = time.perf_counter()
-        mode = "unknown"
-        try:
-            if body.messages:
-                mode = "condense"
-                history: list[ChatMessage] = []
-                for m in body.messages:
-                    role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
-                    history.append(ChatMessage(role=role, content=m.content))
-                # ``CondenseQuestionChatEngine`` does not support ``system_prompt`` (LlamaIndex raises
-                # NotImplementedError). We pass a Chinese ``condense_question_prompt``; the final answer
-                # still uses ``rulebook_query._RULE_QA_TEMPLATE`` on the condensed question.
-                chat_engine = CondenseQuestionChatEngine.from_defaults(
-                    query_engine=query_engine,
-                    chat_history=history,
-                    llm=llm,
-                    condense_question_prompt=_RULEBOOK_CONDENSE_PROMPT,
-                )
-                out = chat_engine.chat(body.message)
-                answer = out.response or ""
-                nodes = list(out.source_nodes or [])
-            else:
-                mode = "single"
-                resp = query_engine.query(body.message)
-                answer = resp.response or ""
-                nodes = list(resp.source_nodes or [])
-        except HTTPException:
-            raise
-        except Exception:
-            logger.exception("chat failed (retrieve or llm) game_id=%s mode=%s", body.game_id, mode)
-            raise
-
-        run_ms = (time.perf_counter() - t_run0) * 1000.0
+        yield _sse_bytes({"type": "done"})
         total_ms = (time.perf_counter() - t0) * 1000.0
         logger.info(
-            "chat ok game_id=%s mode=%s run_ms=%.1f total_ms=%.1f sources=%d answer_chars=%d",
+            "chat stream ok game_id=%s total_ms=%.1f sources=%d",
             body.game_id,
-            mode,
-            run_ms,
             total_ms,
             len(nodes),
-            len(answer),
         )
+    except Exception:
+        logger.exception("chat stream failed game_id=%s", body.game_id)
+        yield _sse_bytes({"type": "error", "message": "Chat stream failed"})
 
-    return ChatResponse(
-        answer=answer,
-        game_id=body.game_id,
-        sources=_serialize_sources(nodes),
+
+@router.post("/chat/stream")
+def chat_stream(
+    body: ChatRequest,
+    _ai: BoardruleAiConfig = Depends(require_boardrule_ai),
+) -> StreamingResponse:
+    """SSE chat: request body matches ``ChatRequest``; response ``text/event-stream``."""
+
+    def gen() -> Iterator[bytes]:
+        with boardrule_ai_runtime(_ai):
+            chat_slot = get_slots().chat
+            logger.info(
+                "chat stream llm provider=%s model=%s index_dir=%s",
+                chat_slot.provider,
+                chat_slot.model,
+                game_index_dir(body.game_id),
+            )
+            yield from _chat_stream_impl(body)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

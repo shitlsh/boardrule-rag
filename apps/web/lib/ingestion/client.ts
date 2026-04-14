@@ -3,13 +3,12 @@ import { ruleEngineAiHeaders, ruleEngineBearerAuth } from "@/lib/rule-engine-hea
 import type {
   BuildIndexJobPollResponse,
   BuildIndexStartResponse,
-  ChatResponse,
   ExtractPagesResponse,
   ExtractPollResponse,
   ExtractStartResponse,
 } from "./types";
 
-/** Align with `app/api/chat/route.ts` maxDuration; Node fetch has no default limit. */
+/** Align with `app/api/chat/stream/route.ts` maxDuration; Node fetch has no default limit. */
 const RULE_ENGINE_CHAT_FETCH_MS = 300_000;
 
 /** Poll endpoints should return quickly; cap wait so `/api/games/.../tasks` cannot hang forever. */
@@ -220,37 +219,25 @@ export async function getBuildIndexJob(jobId: string): Promise<BuildIndexJobPoll
   return normalizeBuildIndexPoll(raw);
 }
 
-export async function chatRules(params: {
+/**
+ * Stream chat from rule_engine `POST /chat/stream` (SSE). Caller reads `response.body`.
+ * Same auth and timeout pattern as other rule_engine JSON POSTs.
+ */
+export async function fetchChatRulesStream(params: {
   gameId: string;
   message: string;
-  /** Prior turns only (exclude the current message). */
   messages?: { role: "user" | "assistant"; content: string }[];
-}): Promise<ChatResponse> {
+}): Promise<Response> {
   const base = getRuleEngineBaseUrl();
   const ai = await ruleEngineAiHeaders({ gameId: params.gameId });
-  let res: Response;
-  try {
-    res = await fetch(`${base}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...ai },
-      body: JSON.stringify({
-        game_id: params.gameId,
-        message: params.message,
-        messages: params.messages ?? [],
-      }),
-      signal: AbortSignal.timeout(RULE_ENGINE_CHAT_FETCH_MS),
-    });
-  } catch (e: unknown) {
-    if (isAbortError(e)) {
-      throw new Error(
-        `规则引擎聊天超时（>${Math.round(RULE_ENGINE_CHAT_FETCH_MS / 1000)}s）。请确认 RULE_ENGINE_URL（当前 ${base}）可访问、服务已启动，且首次问答可能加载 rerank 模型。`,
-      );
-    }
-    throw e;
-  }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Chat failed: ${res.status}`);
-  }
-  return (await res.json()) as ChatResponse;
+  return fetch(`${base}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...ai },
+    body: JSON.stringify({
+      game_id: params.gameId,
+      message: params.message,
+      messages: params.messages ?? [],
+    }),
+    signal: AbortSignal.timeout(RULE_ENGINE_CHAT_FETCH_MS),
+  });
 }

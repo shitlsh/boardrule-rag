@@ -31,7 +31,7 @@ export type ExtractPollResponse = {
   toc?: Record<string, unknown> | null;
 };
 
-/** Mirrors `POST /chat` on the rule engine (snake_case JSON). */
+/** Source citation shape (e.g. SSE `sources` event from `POST /chat/stream`). */
 export type ChatSourceRef = {
   game_id: string | null;
   source_file: string | null;
@@ -41,12 +41,6 @@ export type ChatSourceRef = {
   page_end: number | null;
   text_preview: string | null;
   score: number | null;
-};
-
-export type ChatResponse = {
-  answer: string;
-  game_id: string;
-  sources: ChatSourceRef[];
 };
 
 /** `POST /build-index/start` */

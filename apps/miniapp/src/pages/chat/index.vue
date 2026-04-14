@@ -106,6 +106,9 @@
             >
               <text v-if="msg.role === 'user'" class="bubble__text">{{ msg.content }}</text>
               <!-- #ifdef MP-WEIXIN -->
+              <view v-else-if="!msg.content.trim()" class="bubble__streaming-placeholder">
+                <text class="bubble__phase-text">{{ streamPhaseLabel || '请稍候…' }}</text>
+              </view>
               <towxml
                 v-else
                 :nodes="getOrBuildNodes(msg.id, msg.content)"
@@ -114,6 +117,9 @@
               />
               <!-- #endif -->
               <!-- #ifdef H5 -->
+              <view v-else-if="!msg.content.trim()" class="bubble__streaming-placeholder">
+                <text class="bubble__phase-text">{{ streamPhaseLabel || '请稍候…' }}</text>
+              </view>
               <view
                 v-else
                 class="bubble__md markdown-body"
@@ -129,25 +135,6 @@
               <circle cx="12" cy="8" r="4" stroke="#b45309" stroke-width="1.6"/>
               <path d="M4 20c0-4 3.58-7 8-7s8 3 8 7" stroke="#b45309" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
-          </view>
-        </view>
-
-        <!-- 打字 loading -->
-        <view v-if="chatStore.isLoading" class="msg-row msg-row--assistant">
-          <view class="avatar avatar--assistant" aria-hidden="true">
-            <svg width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M 100 28 C 143 28 178 58 178 100 C 178 142 143 172 100 172 C 81 172 63 165 49 172 L 40 177 L 44 153 C 33 138 22 120 22 100 C 22 58 57 28 100 28 Z" fill="white" fill-opacity="0.22" stroke="none"/>
-              <circle cx="74" cy="100" r="11" fill="white"/>
-              <circle cx="100" cy="100" r="11" fill="white"/>
-              <circle cx="126" cy="100" r="11" fill="white"/>
-            </svg>
-          </view>
-          <view class="bubble bubble--assistant bubble--loading">
-            <view class="typing-dots">
-              <view class="typing-dots__dot" />
-              <view class="typing-dots__dot" />
-              <view class="typing-dots__dot" />
-            </view>
           </view>
         </view>
 
@@ -218,11 +205,16 @@
 import { ref, computed, onMounted, nextTick, watch, reactive, onBeforeUnmount } from 'vue'
 import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { useChatStore } from '../../store/chat'
-import { fetchGame, sendChatMessage } from '../../api/bff'
+import { fetchGame, streamChatMessage } from '../../api/bff'
+import {
+  CHAT_PHASE_LABEL_ZH,
+  type ChatSseEvent,
+  type ChatSsePhaseId,
+} from '../../utils/chat-sse'
 import { getOrFetchUserId } from '../../utils/auth'
 import { hapticLight, hapticMedium } from '../../utils/haptic'
 import SkeletonMessage from '../../components/SkeletonMessage.vue'
-import type { Game } from '../../types/index'
+import type { Game, SourceRef } from '../../types/index'
 
 // #ifdef H5
 import { renderMarkdownToHtml } from '../../utils/markdown'
@@ -299,6 +291,9 @@ const towxmlAttrs = { theme: 'light' }
 const nodeCache = new Map<string, unknown>()
 
 function getOrBuildNodes(msgId: string, content: string) {
+  if (streamingAssistantId.value === msgId) {
+    return towxml(content, 'markdown', { theme: 'light' })
+  }
   if (!nodeCache.has(msgId)) {
     nodeCache.set(msgId, towxml(content, 'markdown', { theme: 'light' }))
   }
@@ -315,6 +310,9 @@ const quickStartHtml = computed(() => {
 const htmlCache = new Map<string, string>()
 
 function getOrBuildHtml(msgId: string, content: string) {
+  if (streamingAssistantId.value === msgId) {
+    return renderMarkdownToHtml(content)
+  }
   if (!htmlCache.has(msgId)) {
     htmlCache.set(msgId, renderMarkdownToHtml(content))
   }
@@ -421,6 +419,20 @@ function markMsgEnter(id: string) {
 }
 
 const inputText = ref('')
+/** Stage text for empty assistant bubble during SSE */
+const streamPhaseLabel = ref('')
+const streamingAssistantId = ref<string | null>(null)
+
+let streamFlushTimer: ReturnType<typeof setTimeout> | null = null
+let streamAccum = ''
+
+function scheduleStreamFlush(assistantId: string) {
+  if (streamFlushTimer) return
+  streamFlushTimer = setTimeout(() => {
+    streamFlushTimer = null
+    chatStore.updateMessage(assistantId, { content: streamAccum })
+  }, 100)
+}
 
 async function handleSend() {
   const text = inputText.value.trim()
@@ -442,40 +454,74 @@ async function handleSend() {
   const history = chatStore.getHistoryForApi()
   const historyWithoutCurrent = history.slice(0, -1)
 
-  chatStore.isLoading = true
-  try {
-    const resp = await sendChatMessage({
-      gameId: gameId.value,
-      message: text,
-      messages: historyWithoutCurrent,
-    })
+  const assistantId = `ast_${Date.now()}`
+  streamingAssistantId.value = assistantId
+  streamPhaseLabel.value = CHAT_PHASE_LABEL_ZH.prepare
+  streamAccum = ''
 
-    const assistantMsg = {
-      id: resp.message?.id ?? `ast_${Date.now()}`,
-      role: 'assistant' as const,
-      content: resp.message?.content ?? resp.answer ?? '抱歉，无法生成回复',
-      createdAt: resp.message?.createdAt ?? new Date().toISOString(),
-      sources: resp.sources ?? [],
+  chatStore.addMessage({
+    id: assistantId,
+    role: 'assistant',
+    content: '',
+    createdAt: new Date().toISOString(),
+    sources: [],
+  })
+  await nextTick()
+  markMsgEnter(assistantId)
+
+  chatStore.isLoading = true
+
+  const applySse = (ev: ChatSseEvent) => {
+    if (ev.type === 'phase') {
+      const pid = ev.id as ChatSsePhaseId
+      if (pid in CHAT_PHASE_LABEL_ZH) {
+        streamPhaseLabel.value = CHAT_PHASE_LABEL_ZH[pid]
+      }
+    } else if (ev.type === 'delta' && ev.text) {
+      streamAccum += ev.text
+      scheduleStreamFlush(assistantId)
+    } else if (ev.type === 'sources') {
+      chatStore.updateMessage(assistantId, {
+        sources: ev.sources as SourceRef[],
+      })
+    } else if (ev.type === 'error') {
+      throw new Error(ev.message || '流式回答失败')
     }
-    chatStore.addMessage(assistantMsg)
-    await nextTick()
-    markMsgEnter(assistantMsg.id)
+  }
+
+  try {
+    await streamChatMessage(
+      {
+        gameId: gameId.value,
+        message: text,
+        messages: historyWithoutCurrent,
+      },
+      applySse,
+    )
+    if (streamFlushTimer) {
+      clearTimeout(streamFlushTimer)
+      streamFlushTimer = null
+    }
+    chatStore.updateMessage(assistantId, {
+      content: streamAccum.trim() || '抱歉，无法生成回复',
+    })
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : '请求失败，请重试'
     const isRateLimit = /今日提问次数/.test(errMsg) || /429/.test(errMsg)
-    const errId = `err_${Date.now()}`
-    chatStore.addMessage({
-      id: errId,
-      role: 'assistant',
+    chatStore.updateMessage(assistantId, {
       content: isRateLimit
         ? '今日提问次数已达上限，请明日再试。'
         : '请求出错，请稍后重试。',
-      createdAt: new Date().toISOString(),
       sources: [],
     })
-    await nextTick()
-    markMsgEnter(errId)
   } finally {
+    if (streamFlushTimer) {
+      clearTimeout(streamFlushTimer)
+      streamFlushTimer = null
+    }
+    streamingAssistantId.value = null
+    streamPhaseLabel.value = ''
+    streamAccum = ''
     chatStore.isLoading = false
   }
 }
@@ -747,6 +793,16 @@ function confirmClear() {
   font-size: 30rpx;
   line-height: 1.55;
   color: #fff;
+}
+
+.bubble__streaming-placeholder {
+  min-height: 36rpx;
+}
+
+.bubble__phase-text {
+  font-size: 26rpx;
+  color: #a8a29e;
+  line-height: 1.55;
 }
 
 .typing-dots {

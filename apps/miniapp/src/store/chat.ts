@@ -92,12 +92,23 @@ export const useChatStore = defineStore('chat', () => {
     }))
   }
 
+  /** Patch one message (e.g. streaming assistant content). */
+  function updateMessage(id: string, patch: Partial<ChatMessage>) {
+    const i = messages.value.findIndex((m) => m.id === id)
+    if (i < 0) return
+    messages.value[i] = { ...messages.value[i], ...patch } as ChatMessage
+    if (currentGameId.value) {
+      saveHistory(currentGameId.value, messages.value)
+    }
+  }
+
   return {
     currentGameId,
     messages,
     isLoading,
     enterGame,
     addMessage,
+    updateMessage,
     clearMessages,
     getHistoryForApi,
   }

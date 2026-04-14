@@ -32,7 +32,7 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| *(no API keys in `.env`)* | **Provider keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (v2, field **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat`, etc. Configure credentials (Gemini or OpenRouter) in the web app at **`/models`**. |
+| *(no API keys in `.env`)* | **Provider keys and models are not configured in this service.** The **`apps/web`** BFF sends header **`X-Boardrule-Ai-Config`** (v2, field **`slots`**) on `POST /extract`, `POST /build-index/start`, `POST /chat/stream`, etc. Configure credentials (Gemini or OpenRouter) in the web app at **`/models`**. |
 | `DATABASE_URL` | **Required** `postgresql://` — **PostgresSaver** for LangGraph checkpoints and **pgvector** for new index vectors (same DSN). Same Postgres as **`apps/web`** (**Supabase** local or hosted); see **QUICKSTART.md**. |
 | `LANGCHAIN_TRACING_V2` | Set to `true` to send traces to LangSmith. |
 | `LANGCHAIN_API_KEY` | LangSmith API key when tracing is enabled. |
@@ -169,7 +169,7 @@ This is **in addition to** the FastAPI server (`uvicorn api.main:app`, port **80
 | `GET` | `/build-index/jobs/{job_id}` | 异步建索引任务状态：`pending` / `processing` / `completed` / `failed`，成功时含 `manifest`。 |
 | `GET` | `/index/{game_id}/manifest` | 返回已建索引的 manifest，无则 `manifest: null`。 |
 | `GET` | `/index/{game_id}/smoke-retrieve` | 开发烟测：query 参数 `q`，走 hybrid + rerank，返回带 `pages` / `source_file` 等 metadata 的片段。 |
-| `POST` | `/chat` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）。需已为该 `game_id` 建立向量索引；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + Gemini）。 |
+| `POST` | `/chat/stream` | Phase 3：JSON `game_id`, `message`, 可选 `messages`（仅历史轮次）；响应 **`text/event-stream`**（SSE：`phase` / `delta` / `sources` / `done`）。需已为该 `game_id` 建立向量索引；LlamaIndex `RetrieverQueryEngine`（hybrid + rerank + 流式生成）。 |
 
 Request/response models live in `api/routers/extract.py`, `api/routers/index.py`, and `api/routers/chat.py`.
 
