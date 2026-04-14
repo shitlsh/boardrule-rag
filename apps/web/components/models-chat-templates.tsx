@@ -434,16 +434,27 @@ export function ModelsChatTemplates() {
                         type="number"
                         min={1}
                         value={chatCfg.chat.maxTokens ?? ""}
-                        onChange={(e) =>
-                          setChatCfg((c) => ({
-                            ...c,
-                            chat: {
-                              ...c.chat,
-                              maxTokens: Math.max(1, Math.trunc(Number(e.target.value)) || 16384),
-                              temperature: c.chat.temperature ?? gateway.chatOptions.temperature,
-                            },
-                          }))
-                        }
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setChatCfg((c) => {
+                            const { maxTokens: _drop, ...chatRest } = c.chat;
+                            if (raw.trim() === "") {
+                              return { ...c, chat: chatRest };
+                            }
+                            const n = Math.trunc(Number(raw));
+                            if (!Number.isFinite(n) || n < 1) {
+                              return c;
+                            }
+                            return {
+                              ...c,
+                              chat: {
+                                ...c.chat,
+                                maxTokens: n,
+                                temperature: c.chat.temperature ?? gateway.chatOptions.temperature,
+                              },
+                            };
+                          });
+                        }}
                       />
                     </Field>
                   </div>

@@ -332,12 +332,19 @@ export function ModelsExtractionTemplates() {
             placeholder={`默认 ${EXTRACTION_SLOT_MAX_OUTPUT_DEFAULT.toLocaleString()}`}
             onChange={(e) => {
               const t = e.target.value.trim();
-              const next: SlotBinding = {
+              const merged: SlotBinding = {
+                ...(binding ?? { credentialId: cid, model }),
                 credentialId: cid,
                 model,
-                ...(t === "" ? {} : { maxOutputTokens: Math.max(1, Math.trunc(Number(t)) || 1) }),
               };
-              onChange(binding ? { ...binding, ...next } : next);
+              if (t === "") {
+                delete merged.maxOutputTokens;
+              } else {
+                const n = Math.trunc(Number(t));
+                if (!Number.isFinite(n) || n < 1) return;
+                merged.maxOutputTokens = n;
+              }
+              onChange(merged);
             }}
           />
         </Field>

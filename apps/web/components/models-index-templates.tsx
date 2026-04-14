@@ -145,6 +145,28 @@ export function ModelsIndexTemplates() {
     }));
   };
 
+  /** Clear numeric keys when input is emptied; plain `patchRag({})` does not delete existing keys. */
+  const patchRagNumeric = (
+    key: "similarityTopK" | "rerankTopN" | "chunkSize" | "chunkOverlap",
+    raw: string,
+    min: number,
+  ) => {
+    setIdxCfg((c) => {
+      const ro = { ...(c.ragOptions ?? {}) };
+      const t = raw.trim();
+      if (t === "") {
+        delete ro[key];
+      } else {
+        const n = Math.trunc(Number(t));
+        if (!Number.isFinite(n) || n < min) {
+          return c;
+        }
+        ro[key] = n;
+      }
+      return { ...c, ragOptions: ro };
+    });
+  };
+
   const createProfile = async () => {
     try {
       if (!gateway) {
@@ -442,10 +464,7 @@ export function ModelsIndexTemplates() {
                           placeholder={String(INDEX_RAG_DEFAULTS.similarityTopK)}
                           className="tabular-nums"
                           value={ro.similarityTopK ?? ""}
-                          onChange={(e) => {
-                            const t = e.target.value.trim();
-                            patchRag(t === "" ? {} : { similarityTopK: Math.trunc(Number(t)) || undefined });
-                          }}
+                          onChange={(e) => patchRagNumeric("similarityTopK", e.target.value, 1)}
                         />
                       </Field>
                       <Field>
@@ -460,10 +479,7 @@ export function ModelsIndexTemplates() {
                           placeholder={String(INDEX_RAG_DEFAULTS.rerankTopN)}
                           className="tabular-nums"
                           value={ro.rerankTopN ?? ""}
-                          onChange={(e) => {
-                            const t = e.target.value.trim();
-                            patchRag(t === "" ? {} : { rerankTopN: Math.trunc(Number(t)) || undefined });
-                          }}
+                          onChange={(e) => patchRagNumeric("rerankTopN", e.target.value, 1)}
                         />
                       </Field>
                     </div>
@@ -484,10 +500,7 @@ export function ModelsIndexTemplates() {
                           placeholder={String(INDEX_RAG_DEFAULTS.chunkSize)}
                           className="tabular-nums"
                           value={ro.chunkSize ?? ""}
-                          onChange={(e) => {
-                            const t = e.target.value.trim();
-                            patchRag(t === "" ? {} : { chunkSize: Math.trunc(Number(t)) || undefined });
-                          }}
+                          onChange={(e) => patchRagNumeric("chunkSize", e.target.value, 1)}
                         />
                       </Field>
                       <Field>
@@ -502,10 +515,7 @@ export function ModelsIndexTemplates() {
                           placeholder={String(INDEX_RAG_DEFAULTS.chunkOverlap)}
                           className="tabular-nums"
                           value={ro.chunkOverlap ?? ""}
-                          onChange={(e) => {
-                            const t = e.target.value.trim();
-                            patchRag(t === "" ? {} : { chunkOverlap: Math.trunc(Number(t)) || undefined });
-                          }}
+                          onChange={(e) => patchRagNumeric("chunkOverlap", e.target.value, 0)}
                         />
                       </Field>
                     </div>
