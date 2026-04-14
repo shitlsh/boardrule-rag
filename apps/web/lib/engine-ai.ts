@@ -20,6 +20,12 @@ export type RuleEngineAiHeaderOptions = {
  */
 export async function getEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Promise<Record<string, string>> {
   const stored = await getAiGatewayStored();
+  const chat = await getActiveChatProfileConfig();
+  if (!chat) {
+    throw new Error(
+      "请先在「模型管理 → 聊天模型」创建并选择全局生效的聊天模版（不再使用网关内 Chat 槽）。",
+    );
+  }
   const mode = opts?.mode ?? "default";
   if (mode === "extraction") {
     const id = opts?.extractionProfileId?.trim() ?? "";
@@ -30,13 +36,11 @@ export async function getEngineAiHeaders(opts?: RuleEngineAiHeaderOptions): Prom
     if (!profile) {
       throw new Error("提取配置模版不存在或内容无效");
     }
-    const chat = await getActiveChatProfileConfig();
     const payload = buildEngineAiPayloadFromExtractionProfile(stored, profile, chat);
     return {
       [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),
     };
   }
-  const chat = await getActiveChatProfileConfig();
   const payload = await buildEngineAiPayloadForChatAndIndex(stored, chat);
   return {
     [BOARDRULE_AI_CONFIG_HEADER]: JSON.stringify(payload),

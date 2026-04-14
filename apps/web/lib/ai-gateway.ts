@@ -24,7 +24,37 @@ import {
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
 
+/** Credential cleanup / validation: all keys we still store in JSON (non-embed always null). */
 const SLOTS: SlotKey[] = ["flash", "pro", "embed", "chat"];
+
+function stripNonEmbedGatewaySlots(
+  sb: AiGatewayStored["slotBindings"],
+): AiGatewayStored["slotBindings"] {
+  return {
+    flash: null,
+    pro: null,
+    embed: sb.embed ?? null,
+    chat: null,
+  };
+}
+
+function rawHasLegacyGatewaySlots(raw: string): boolean {
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    const sb = o.slotBindings as Record<string, unknown> | undefined;
+    if (!sb || typeof sb !== "object") return false;
+    for (const k of ["flash", "pro", "chat"] as const) {
+      const v = sb[k];
+      if (!v || typeof v !== "object") continue;
+      const c = (v as { credentialId?: unknown }).credentialId;
+      const m = (v as { model?: unknown }).model;
+      if (typeof c === "string" && c.trim() && typeof m === "string" && m.trim()) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 const DEFAULT_CHAT = { temperature: 0.2, maxTokens: 8192 };
 
@@ -164,11 +194,11 @@ function parseStored(raw: string): AiGatewayStored {
     const merged: AiGatewayStored = {
       version: 1,
       credentials,
-      slotBindings,
+      slotBindings: stripNonEmbedGatewaySlots(slotBindings),
       chatOptions,
       ragOptions,
     };
-    return migrateChatBindingFromLegacyOptions(merged);
+    return merged;
   } catch {
     return emptyStored();
   }
@@ -193,29 +223,6 @@ function normalizeBinding(v: unknown): SlotBinding | null {
     if (mt > 0) out.maxTokens = mt;
   }
   return out;
-}
-
-/**
- * Legacy stores had chat params only under `chatOptions`. Copy into `slotBindings.chat`
- * when missing so the slot panel can show a single source of truth.
- */
-function migrateChatBindingFromLegacyOptions(stored: AiGatewayStored): AiGatewayStored {
-  const ch = stored.slotBindings.chat;
-  if (!ch) return stored;
-  const needTemp = ch.temperature === undefined;
-  const needMt = ch.maxTokens === undefined;
-  if (!needTemp && !needMt) return stored;
-  return {
-    ...stored,
-    slotBindings: {
-      ...stored.slotBindings,
-      chat: {
-        ...ch,
-        ...(needTemp ? { temperature: stored.chatOptions.temperature } : {}),
-        ...(needMt ? { maxTokens: stored.chatOptions.maxTokens } : {}),
-      },
-    },
-  };
 }
 
 export function aliasKey(alias: string): string {
@@ -256,10 +263,10 @@ export function toPublic(stored: AiGatewayStored): AiGatewayPublic {
     version: 1,
     credentials,
     slotBindings: {
-      flash: stored.slotBindings.flash ?? null,
-      pro: stored.slotBindings.pro ?? null,
+      flash: null,
+      pro: null,
       embed: stored.slotBindings.embed ?? null,
-      chat: stored.slotBindings.chat ?? null,
+      chat: null,
     },
     chatOptions: { ...stored.chatOptions },
     ragOptions: { ...(stored.ragOptions ?? {}) },
@@ -270,7 +277,16 @@ export async function getAiGatewayStored(): Promise<AiGatewayStored> {
   const row = await prisma.appSettings.findUnique({ where: { id: "default" } });
   const raw = row?.aiGatewayJson;
   if (raw === undefined || raw === null || raw === "") return emptyStored();
-  return parseStored(raw);
+  const stripNeeded = rawHasLegacyGatewaySlots(raw);
+  const stored = parseStored(raw);
+  if (stripNeeded) {
+    await getAppSettings();
+    await prisma.appSettings.update({
+      where: { id: "default" },
+      data: { aiGatewayJson: JSON.stringify(stored) },
+    });
+  }
+  return stored;
 }
 
 export async function getAiGatewayPublic(): Promise<AiGatewayPublic> {
@@ -372,14 +388,16 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
   const credIds = new Set(credentials.map((c) => c.id));
   let slotBindings = { ...cur.slotBindings };
   if (patch.slotBindings !== undefined) {
-    slotBindings = { ...slotBindings, ...patch.slotBindings };
-    for (const s of SLOTS) {
-      const b = slotBindings[s];
-      if (b && b.model.trim() && b.credentialId) {
-        if (!credIds.has(b.credentialId)) {
-          throw new Error(`槽位 ${s} 引用的凭证不存在`);
-        }
-      }
+    const p = patch.slotBindings;
+    if (p.flash !== undefined || p.pro !== undefined || p.chat !== undefined) {
+      throw new Error("网关已不再保存 Flash / Pro / Chat 槽，请使用「提取模型」与「聊天模型」模版");
+    }
+    if (p.embed !== undefined) {
+      slotBindings = { ...slotBindings, embed: p.embed };
+    }
+    const b = slotBindings.embed;
+    if (b && b.model.trim() && b.credentialId && !credIds.has(b.credentialId)) {
+      throw new Error("Embed 槽位引用的凭证不存在");
     }
   }
 
@@ -412,16 +430,14 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
   const stored: AiGatewayStored = {
     version: 1,
     credentials,
-    slotBindings,
+    slotBindings: stripNonEmbedGatewaySlots(slotBindings),
     chatOptions,
     ragOptions,
   };
 
-  for (const s of SLOTS) {
-    const b = stored.slotBindings[s];
-    if (b?.credentialId && !credIds.has(b.credentialId)) {
-      throw new Error(`槽位 ${s} 仍引用已删除的凭证`);
-    }
+  const emb = stored.slotBindings.embed;
+  if (emb?.credentialId && !credIds.has(emb.credentialId)) {
+    throw new Error("Embed 槽位仍引用已删除的凭证");
   }
 
   await getAppSettings();
@@ -475,74 +491,6 @@ function resolveSlot(
     throw new Error(`AI 槽位未配置: ${slot}`);
   }
   return resolveSlotBinding(stored, b, `槽位 ${slot}`);
-}
-
-/** Resolved payload for rule_engine (v2). Throws if any slot incomplete. */
-export function buildEngineAiPayload(stored: AiGatewayStored): EngineAiPayloadV2 {
-  const flash = resolveSlot(stored, "flash");
-  const pro = resolveSlot(stored, "pro");
-  const embed = resolveSlot(stored, "embed");
-  const chat = resolveSlot(stored, "chat");
-  const flashB = stored.slotBindings.flash;
-  const proB = stored.slotBindings.pro;
-  const chatB = stored.slotBindings.chat;
-  const temperature = chatB?.temperature ?? stored.chatOptions.temperature;
-  const maxTokens = chatB?.maxTokens ?? stored.chatOptions.maxTokens;
-  const ro = stored.ragOptions;
-  const hasRag =
-    ro &&
-    ((ro.rerankModel && ro.rerankModel.trim()) ||
-      (typeof ro.chunkSize === "number" && Number.isFinite(ro.chunkSize)) ||
-      (typeof ro.chunkOverlap === "number" && Number.isFinite(ro.chunkOverlap)) ||
-      ro.bm25TokenProfile ||
-      (typeof ro.similarityTopK === "number" && Number.isFinite(ro.similarityTopK)) ||
-      (typeof ro.rerankTopN === "number" && Number.isFinite(ro.rerankTopN)) ||
-      ro.retrievalMode ||
-      typeof ro.useRerank === "boolean");
-  return {
-    version: 2,
-    slots: {
-      flash: {
-        provider: flash.vendor,
-        apiKey: flash.apiKey,
-        model: flash.model,
-        ...(flashB?.maxOutputTokens != null && flashB.maxOutputTokens > 0
-          ? { maxOutputTokens: Math.trunc(flashB.maxOutputTokens) }
-          : {}),
-        ...(flash.vendor === "qwen"
-          ? { dashscopeCompatibleBase: flash.dashscopeCompatibleBase }
-          : {}),
-      },
-      pro: {
-        provider: pro.vendor,
-        apiKey: pro.apiKey,
-        model: pro.model,
-        ...(proB?.maxOutputTokens != null && proB.maxOutputTokens > 0
-          ? { maxOutputTokens: Math.trunc(proB.maxOutputTokens) }
-          : {}),
-        ...(pro.vendor === "qwen" ? { dashscopeCompatibleBase: pro.dashscopeCompatibleBase } : {}),
-      },
-      embed: {
-        provider: embed.vendor,
-        apiKey: embed.apiKey,
-        model: embed.model,
-        ...(embed.vendor === "qwen"
-          ? { dashscopeCompatibleBase: embed.dashscopeCompatibleBase }
-          : {}),
-      },
-      chat: {
-        provider: chat.vendor,
-        apiKey: chat.apiKey,
-        model: chat.model,
-        temperature,
-        maxTokens,
-        ...(chat.vendor === "qwen"
-          ? { dashscopeCompatibleBase: chat.dashscopeCompatibleBase }
-          : {}),
-      },
-    },
-    ...(hasRag ? { ragOptions: ro } : {}),
-  };
 }
 
 function engineFlashProFromBinding(
@@ -606,29 +554,15 @@ function engineEmbedSlot(stored: AiGatewayStored): EngineAiPayloadV2["slots"]["e
   };
 }
 
-/** Chat slot: active CHAT profile wins; else legacy `slotBindings.chat` (for migration). */
+/** Chat slot from the active CHAT profile only (no gateway `slotBindings.chat`). */
 function buildChatSlotForPayload(
   stored: AiGatewayStored,
-  chatProfile: ChatProfileConfigParsed | null,
+  chatProfile: ChatProfileConfigParsed,
 ): EngineAiPayloadV2["slots"]["chat"] {
-  if (chatProfile) {
-    return engineChatFromBinding(stored, chatProfile.chat, {
-      temperature: stored.chatOptions.temperature,
-      maxTokens: stored.chatOptions.maxTokens,
-    });
-  }
-  const chat = resolveSlot(stored, "chat");
-  const chatB = stored.slotBindings.chat;
-  const temperature = chatB?.temperature ?? stored.chatOptions.temperature;
-  const maxTokens = chatB?.maxTokens ?? stored.chatOptions.maxTokens;
-  return {
-    provider: chat.vendor,
-    apiKey: chat.apiKey,
-    model: chat.model,
-    temperature,
-    maxTokens,
-    ...(chat.vendor === "qwen" ? { dashscopeCompatibleBase: chat.dashscopeCompatibleBase } : {}),
-  };
+  return engineChatFromBinding(stored, chatProfile.chat, {
+    temperature: stored.chatOptions.temperature,
+    maxTokens: stored.chatOptions.maxTokens,
+  });
 }
 
 /**
@@ -637,7 +571,7 @@ function buildChatSlotForPayload(
  */
 export async function buildEngineAiPayloadForChatAndIndex(
   stored: AiGatewayStored,
-  chatProfile: ChatProfileConfigParsed | null,
+  chatProfile: ChatProfileConfigParsed,
 ): Promise<EngineAiPayloadV3> {
   const ext = await getFirstExtractionProfileConfig();
   if (!ext) {
@@ -655,7 +589,7 @@ export async function buildEngineAiPayloadForChatAndIndex(
 export function buildEngineAiPayloadFromExtractionProfile(
   stored: AiGatewayStored,
   profile: ExtractionProfileConfigParsed,
-  chatProfile: ChatProfileConfigParsed | null,
+  chatProfile: ChatProfileConfigParsed,
 ): EngineAiPayloadV3 {
   const sb = profile.slotBindings;
   const flashBinding = sb.flashToc ?? sb.flashQuickstart;
@@ -721,6 +655,11 @@ export function buildEngineAiPayloadFromExtractionProfile(
 export async function getEngineAiPayloadOrThrow(): Promise<EngineAiPayloadV3> {
   const stored = await getAiGatewayStored();
   const chat = await getActiveChatProfileConfig();
+  if (!chat) {
+    throw new Error(
+      "请先在「模型管理 → 聊天模型」创建并选择全局生效的聊天模版（不再使用网关内 Chat 槽）。",
+    );
+  }
   return buildEngineAiPayloadForChatAndIndex(stored, chat);
 }
 
@@ -989,13 +928,14 @@ export type SlotBindingSave =
   | (Omit<SlotBinding, "maxOutputTokens"> & { maxOutputTokens?: number | null })
   | null;
 
-/** Set one slot binding (auto-save). Both parts required when binding is set. */
+/** Set the embed slot only (Flash/Pro/Chat live in runtime profiles, not gateway JSON). */
 export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): Promise<AiGatewayPublic> {
-  if (!SLOTS.includes(slot)) throw new Error("无效槽位");
+  if (slot !== "embed") {
+    throw new Error("网关仅持久化 Embed 槽；对话在「聊天模型」、提取在「提取模型」中配置。");
+  }
   const cur = await getAiGatewayStored();
   const credIds = new Set(cur.credentials.map((c) => c.id));
   let nextBinding: SlotBinding | null = null;
-  let chatOptions = cur.chatOptions;
   if (binding !== null) {
     const cid = binding.credentialId.trim();
     const model = binding.model.trim();
@@ -1005,49 +945,13 @@ export async function setSlotBinding(slot: SlotKey, binding: SlotBindingSave): P
     if (credRow?.enabled === false) {
       throw new Error("凭证已停用，请先在模型管理中启用");
     }
-    const base: SlotBinding = { credentialId: cid, model };
-
-    if (slot === "flash" || slot === "pro") {
-      const raw = binding.maxOutputTokens as number | null | undefined;
-      const hasKey = Object.prototype.hasOwnProperty.call(binding as object, "maxOutputTokens");
-      const prevSlot = cur.slotBindings[slot];
-      if (hasKey && raw === null) {
-        // omit field — use rule-engine default (env / 32768)
-      } else if (hasKey && raw !== undefined && raw !== null) {
-        const m = Math.trunc(Number(raw));
-        if (!Number.isFinite(m) || m < 1) throw new Error("maxOutputTokens 须为正整数");
-        base.maxOutputTokens = m;
-      } else if (
-        !hasKey &&
-        prevSlot?.credentialId === cid &&
-        prevSlot.model === model &&
-        prevSlot.maxOutputTokens != null &&
-        prevSlot.maxOutputTokens > 0
-      ) {
-        base.maxOutputTokens = prevSlot.maxOutputTokens;
-      }
-    }
-
-    if (slot === "chat") {
-      const t =
-        binding.temperature !== undefined && Number.isFinite(binding.temperature)
-          ? binding.temperature
-          : cur.chatOptions.temperature;
-      const mtRaw = binding.maxTokens;
-      const mt =
-        mtRaw !== undefined && mtRaw !== null
-          ? Math.trunc(Number(mtRaw))
-          : cur.chatOptions.maxTokens;
-      if (!Number.isFinite(mt) || mt < 1) throw new Error("maxTokens 无效");
-      base.temperature = t;
-      base.maxTokens = mt;
-      chatOptions = { temperature: t, maxTokens: mt };
-    }
-
-    nextBinding = base;
+    nextBinding = { credentialId: cid, model };
   }
-  const slotBindings = { ...cur.slotBindings, [slot]: nextBinding };
-  return persistStored({ ...cur, slotBindings, chatOptions });
+  const slotBindings = stripNonEmbedGatewaySlots({
+    ...cur.slotBindings,
+    embed: nextBinding,
+  });
+  return persistStored({ ...cur, slotBindings });
 }
 
 /** PATCH body for RAG options: use `null` on a key to clear it (fall back to rule engine env). */

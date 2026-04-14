@@ -11,7 +11,7 @@ type Body = {
 
 /**
  * Set the global active CHAT profile (`AppSettings.activeChatProfileId`).
- * Pass `null` to use only `/models` defaults (no named chat template).
+ * Must reference an existing CHAT profile (no "gateway chat slot" fallback).
  */
 export async function PUT(req: Request) {
   const denied = await assertStaffSession();
@@ -26,11 +26,10 @@ export async function PUT(req: Request) {
 
   const raw = body.activeChatProfileId;
   if (raw === null || raw === undefined || raw === "") {
-    await prisma.appSettings.update({
-      where: { id: "default" },
-      data: { activeChatProfileId: null },
-    });
-    return NextResponse.json({ activeChatProfileId: null });
+    return NextResponse.json(
+      { message: "必须选择一套聊天模版作为全局生效配置（不再使用网关内 Chat 槽）" },
+      { status: 400 },
+    );
   }
 
   const id = typeof raw === "string" ? raw.trim() : "";

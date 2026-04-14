@@ -7,7 +7,8 @@ import { assertAdminSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
-const ALLOWED = new Set<SlotKey>(["flash", "pro", "embed", "chat"]);
+/** Gateway persists only the embed slot; chat/flash/pro live in runtime profiles. */
+const ALLOWED = new Set<SlotKey>(["embed"]);
 
 type RouteParams = { params: Promise<{ slot: string }> };
 
@@ -59,30 +60,6 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       );
     }
     const binding: SlotBindingSave = { credentialId, model };
-    if (slot === "flash" || slot === "pro") {
-      if (Object.prototype.hasOwnProperty.call(o, "maxOutputTokens")) {
-        const m = o.maxOutputTokens;
-        if (m === null) {
-          binding.maxOutputTokens = null;
-        } else if (typeof m === "number" && Number.isFinite(m)) {
-          binding.maxOutputTokens = Math.trunc(m);
-        } else if (typeof m === "string" && m.trim() !== "") {
-          const n = Number(m);
-          if (!Number.isFinite(n)) {
-            return NextResponse.json({ message: "maxOutputTokens 无效" }, { status: 400 });
-          }
-          binding.maxOutputTokens = Math.trunc(n);
-        }
-      }
-    }
-    if (slot === "chat") {
-      if (typeof o.temperature === "number" && Number.isFinite(o.temperature)) {
-        binding.temperature = o.temperature;
-      }
-      if (typeof o.maxTokens === "number" && Number.isFinite(o.maxTokens)) {
-        binding.maxTokens = Math.trunc(o.maxTokens);
-      }
-    }
 
     const data = await setSlotBinding(slot, binding);
     return NextResponse.json(data);

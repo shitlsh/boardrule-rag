@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { migrateLegacyChatRagFromRuntimeProfiles } from "@/lib/ai-gateway";
+import { ensureDefaultActiveChatProfileId } from "@/lib/ai-runtime-profiles";
 import { prisma } from "@/lib/prisma";
 import { assertStaffSession } from "@/lib/request-auth";
 import {
@@ -19,6 +20,7 @@ export async function GET() {
   } catch {
     /* non-fatal: list still useful */
   }
+  await ensureDefaultActiveChatProfileId();
 
   const [profiles, settings] = await Promise.all([
     prisma.aiRuntimeProfile.findMany({

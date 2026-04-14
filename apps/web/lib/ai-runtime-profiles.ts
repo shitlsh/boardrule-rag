@@ -71,3 +71,35 @@ export async function setAppActiveChatProfileId(id: string | null): Promise<void
     data: { activeChatProfileId: id },
   });
 }
+
+/**
+ * When unset or pointing at a deleted/non-CHAT row, assign the latest CHAT profile if any exist.
+ */
+export async function ensureDefaultActiveChatProfileId(): Promise<void> {
+  const row = await prisma.appSettings.findUnique({
+    where: { id: "default" },
+    select: { activeChatProfileId: true },
+  });
+  const current = row?.activeChatProfileId?.trim();
+  if (current) {
+    const exists = await prisma.aiRuntimeProfile.findUnique({
+      where: { id: current },
+      select: { id: true, kind: true },
+    });
+    if (exists?.kind === "CHAT") return;
+    await prisma.appSettings.update({
+      where: { id: "default" },
+      data: { activeChatProfileId: null },
+    });
+  }
+  const first = await prisma.aiRuntimeProfile.findFirst({
+    where: { kind: "CHAT" },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  if (!first) return;
+  await prisma.appSettings.update({
+    where: { id: "default" },
+    data: { activeChatProfileId: first.id },
+  });
+}

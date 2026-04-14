@@ -222,7 +222,7 @@ export function ModelsChatTemplates() {
     await loadAll();
   };
 
-  const setActiveChat = async (id: string | null) => {
+  const setActiveChat = async (id: string) => {
     const res = await fetch("/api/ai-runtime-profiles/active-chat", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -234,7 +234,7 @@ export function ModelsChatTemplates() {
       return;
     }
     setActiveChatProfileId(j.activeChatProfileId ?? null);
-    toast.success(id ? "已切换全局聊天模版" : "已恢复为网关内存储的默认聊天槽（若已配置）");
+    toast.success("已切换全局聊天模版");
   };
 
   const creds = gateway?.credentials.filter((c) => c.enabled) ?? [];
@@ -264,27 +264,34 @@ export function ModelsChatTemplates() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">全局：当前聊天生效模版</CardTitle>
-          <CardDescription>影响站内 RAG 对话合成；未选择时使用网关中已保存的聊天槽（若有）。</CardDescription>
+          <CardDescription>
+            影响站内 RAG 对话与引擎请求头；必须选择一套 CHAT 模版（不再使用网关内全局 Chat 槽）。
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
             <Label className="mb-2 block text-sm">聊天模版</Label>
-            <Select
-              value={activeChatProfileId ?? "__default__"}
-              onValueChange={(v) => void setActiveChat(v === "__default__" ? null : v)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__default__">兼容模式（网关内聊天槽）</SelectItem>
-                {profileList.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {profileList.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                暂无聊天模版，请先新建或从左侧列表创建后再选择全局生效。
+              </p>
+            ) : (
+              <Select
+                value={activeChatProfileId ?? profileList[0]!.id}
+                onValueChange={(v) => void setActiveChat(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择模版" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profileList.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
