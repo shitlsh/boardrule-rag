@@ -146,6 +146,19 @@ export function ModelsIndexTemplates() {
   };
 
   /** Clear numeric keys when input is emptied; plain `patchRag({})` does not delete existing keys. */
+  const patchRagRerankModel = (raw: string) => {
+    setIdxCfg((c) => {
+      const ro = { ...(c.ragOptions ?? {}) };
+      const t = raw.trim();
+      if (t === "") {
+        delete ro.rerankModel;
+      } else {
+        ro.rerankModel = t;
+      }
+      return { ...c, ragOptions: ro };
+    });
+  };
+
   const patchRagNumeric = (
     key: "similarityTopK" | "rerankTopN" | "chunkSize" | "chunkOverlap",
     raw: string,
@@ -196,6 +209,7 @@ export function ModelsIndexTemplates() {
         ragOptions: {
           similarityTopK: 8,
           rerankTopN: 5,
+          rerankModel: INDEX_RAG_DEFAULTS.rerankModel,
           chunkSize: 1024,
           chunkOverlap: 128,
           retrievalMode: "hybrid",
@@ -483,6 +497,22 @@ export function ModelsIndexTemplates() {
                         />
                       </Field>
                     </div>
+                    <Field>
+                      <FieldLabel>rerankModel（本地交叉编码器）</FieldLabel>
+                      <FieldDescription>
+                        Hugging Face / SentenceTransformers 模型名，首次使用时会下载到引擎侧缓存。留空则使用引擎默认{" "}
+                        <code className="text-xs">{INDEX_RAG_DEFAULTS.rerankModel}</code>（环境变量{" "}
+                        <code className="text-xs">RERANK_MODEL</code>
+                        ）。与上方「启用交叉编码器重排」配合；仅影响检索精排，不参与向量嵌入。
+                      </FieldDescription>
+                      <Input
+                        placeholder={INDEX_RAG_DEFAULTS.rerankModel}
+                        className="font-mono text-sm"
+                        value={ro.rerankModel ?? ""}
+                        onChange={(e) => patchRagRerankModel(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </Field>
                   </div>
 
                   <div className="space-y-3">

@@ -621,8 +621,10 @@ export function ModelsExtractionTemplates() {
                       </div>
                       <p className="text-foreground text-sm font-medium">HTTP 超时（毫秒）</p>
                       <p className="text-muted-foreground text-xs leading-relaxed">
-                        Gemini 空环境时为 {EXTRACTION_RUNTIME_DEFAULTS.geminiHttpTimeoutMs.toLocaleString()} ms；填{" "}
-                        <span className="tabular-nums">0</span> 表示由客户端不限制（见引擎逻辑）。
+                        作用于提取管线内对应供应商的 HTTP/SDK 调用（见下方各字段说明）。Gemini 空环境时为{" "}
+                        {EXTRACTION_RUNTIME_DEFAULTS.geminiHttpTimeoutMs.toLocaleString()} ms；填{" "}
+                        <span className="tabular-nums">0</span> 表示由客户端不限制（见引擎逻辑）。Bedrock 填{" "}
+                        <span className="tabular-nums">0</span> 时引擎使用 120s 读超时。
                       </p>
                       <div className="grid gap-4 sm:grid-cols-2">
                         {(
@@ -641,6 +643,11 @@ export function ModelsExtractionTemplates() {
                               "openrouterHttpTimeoutMs",
                               "OpenRouter",
                               `默认 ${EXTRACTION_RUNTIME_DEFAULTS.openrouterHttpTimeoutMs.toLocaleString()} ms（空环境）`,
+                            ],
+                            [
+                              "bedrockHttpTimeoutMs",
+                              "Amazon Bedrock（Converse）",
+                              `默认 ${EXTRACTION_RUNTIME_DEFAULTS.bedrockHttpTimeoutMs.toLocaleString()} ms（未配置时 boto 读超时 120s）· 仅提取侧 Converse`,
                             ],
                           ] as const
                         ).map(([field, title, hint]) => (
