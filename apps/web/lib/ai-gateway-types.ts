@@ -205,12 +205,20 @@ export type EngineAiSlotsV3 = EngineAiPayloadV2["slots"] & {
   rerank?: EngineRerankSlot;
 };
 
+/** Rulebook RAG chat: prior-turn truncation + condense-skip heuristic (from CHAT profile; always sent resolved). */
+export type ChatRagRuntime = {
+  maxPriorTurns: number;
+  skipCondenseMinChars: number;
+};
+
 /** v3: optional fine-grained slots + extraction runtime (backward compatible when extras omitted). */
 export type EngineAiPayloadV3 = {
   version: 3;
   slots: EngineAiSlotsV3;
   ragOptions?: RagOptionsStored;
   extractionRuntime?: ExtractionRuntimeOverrides;
+  /** RAG chat tuning from active CHAT template (defaults 3 / 15). */
+  chatRag?: ChatRagRuntime;
 };
 
 export type EngineAiPayload = EngineAiPayloadV2 | EngineAiPayloadV3;

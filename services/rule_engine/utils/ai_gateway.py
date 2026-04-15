@@ -156,6 +156,15 @@ class BoardruleAiConfigV2(BaseModel):
     rag_options: RagOptions | None = Field(None, alias="ragOptions")
 
 
+class ChatRagRuntime(BaseModel):
+    """RAG rulebook chat: prior-turn cap + condense-skip heuristic (from CHAT template / BFF)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    max_prior_turns: int = Field(3, alias="maxPriorTurns", ge=1, le=20)
+    skip_condense_min_chars: int = Field(15, alias="skipCondenseMinChars", ge=1, le=500)
+
+
 class BoardruleAiConfigV3(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -163,6 +172,7 @@ class BoardruleAiConfigV3(BaseModel):
     slots: SlotsBundleV3
     rag_options: RagOptions | None = Field(None, alias="ragOptions")
     extraction_runtime: ExtractionRuntimeOverrides | None = Field(None, alias="extractionRuntime")
+    chat_rag: ChatRagRuntime | None = Field(None, alias="chatRag")
 
 
 BoardruleAiConfig = Union[BoardruleAiConfigV2, BoardruleAiConfigV3]
@@ -192,6 +202,17 @@ def get_extraction_runtime() -> ExtractionRuntimeOverrides | None:
     if isinstance(c, BoardruleAiConfigV3) and c.extraction_runtime is not None:
         return c.extraction_runtime
     return None
+
+
+def get_chat_rag_options() -> tuple[int, int]:
+    """Return ``(max_prior_turns, skip_condense_min_chars)``; defaults ``(3, 15)`` when omitted."""
+    c = _CTX.get()
+    if c is None:
+        return (3, 15)
+    if isinstance(c, BoardruleAiConfigV3) and c.chat_rag is not None:
+        cr = c.chat_rag
+        return (cr.max_prior_turns, cr.skip_condense_min_chars)
+    return (3, 15)
 
 
 def _parse_json_obj(data: dict[str, Any]) -> BoardruleAiConfig:

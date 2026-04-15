@@ -83,10 +83,21 @@ export const extractionProfileConfigSchema = z
   })
   .strict();
 
+/** RAG rulebook chat: condense history cap + heuristic skip threshold (defaults applied in BFF when omitted). */
+export const ragChatOptionsSchema = z
+  .object({
+    /** How many full user+assistant rounds of prior messages to keep (server truncates). Default 3. */
+    maxPriorTurns: z.number().int().min(1).max(20).optional(),
+    /** Min chars on current user message to allow skipping condense when no temporal cues. Default 15. */
+    skipCondenseMinChars: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+
 /** Chat templates: conversation slot only. */
 export const chatProfileConfigSchema = z
   .object({
     chat: slotBindingSchema,
+    ragChat: ragChatOptionsSchema.optional(),
   })
   .strict();
 

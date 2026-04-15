@@ -26,13 +26,67 @@ from pydantic import BaseModel, Field
 from api.deps import require_boardrule_ai
 from ingestion.index_builder import game_index_dir
 from ingestion.rulebook_query import build_rulebook_query_engine, get_chat_llm
-from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime, get_slots
+from utils.ai_gateway import (
+    BoardruleAiConfig,
+    boardrule_ai_runtime,
+    get_chat_rag_options,
+    get_slots,
+)
 
 router = APIRouter(tags=["chat"])
 
 logger = logging.getLogger("boardrule.chat")
 
 # Replaces LlamaIndex default English condense template ("Given a conversation...").
+# 仅时间/顺序指代子串（不含「这/那/他」等代词），用于保守地禁止跳过 condense。
+_CONDENSE_TEMPORAL_ORDER_SUBSTRINGS_CN: tuple[str, ...] = (
+    "刚才",
+    "之前",
+    "前面",
+    "上面",
+    "下面",
+    "下一",
+    "上一",
+    "继续",
+    "再",
+)
+
+
+def _message_has_temporal_order_trigger(message: str) -> bool:
+    s = message.strip()
+    return any(needle in s for needle in _CONDENSE_TEMPORAL_ORDER_SUBSTRINGS_CN)
+
+
+def _truncate_prior_messages(msgs: list[ChatMessageIn], max_turns: int) -> list[ChatMessageIn]:
+    """Keep at most ``max_turns`` full user+assistant rounds from the end of ``msgs``."""
+    max_msgs = max_turns * 2
+    if not msgs or max_msgs < 1:
+        return list(msgs)
+    if len(msgs) <= max_msgs:
+        return list(msgs)
+    tail = msgs[-max_msgs:]
+    i = 0
+    while i < len(tail) and tail[i].role == "assistant":
+        i += 1
+    return tail[i:]
+
+
+def _should_skip_condense_heuristic(
+    current_message: str,
+    prior_after_trunc: list[ChatMessageIn],
+    min_chars: int,
+) -> bool:
+    """Fast path: long standalone question with no temporal/order cue and non-empty prior history."""
+    if not prior_after_trunc:
+        return False
+    s = current_message.strip()
+    if len(s) <= min_chars:
+        return False
+    if _message_has_temporal_order_trigger(current_message):
+        return False
+    return True
+
+
 _RULEBOOK_CONDENSE_PROMPT = PromptTemplate(
     "根据下面的对话历史与玩家最新一句话，改写为一句**独立、完整**的中文问题，"
     "用于在规则书中检索；保留游戏语境与所有指代，只输出这一句问题本身，不要解释。\n\n"
@@ -102,10 +156,18 @@ def _serialize_sources(nodes: list[Any]) -> list[SourceRef]:
 
 def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
     """Core generator: phases + token deltas + sources + done / error."""
+    max_prior_turns, skip_min_chars = get_chat_rag_options()
+    prior_msgs_in = len(body.messages)
+    prior_truncated = _truncate_prior_messages(body.messages, max_prior_turns)
+    after_trunc = len(prior_truncated)
     logger.info(
-        "chat stream start game_id=%s prior_turns=%d message_chars=%d",
+        "chat stream start game_id=%s prior_msgs_in=%d prior_after_trunc=%d max_prior_turns=%d "
+        "skip_condense_min_chars=%d message_chars=%d",
         body.game_id,
-        len(body.messages),
+        prior_msgs_in,
+        after_trunc,
+        max_prior_turns,
+        skip_min_chars,
         len(body.message),
     )
     t0 = time.perf_counter()
@@ -140,26 +202,40 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
 
     try:
         condense_ms = 0.0
-        if body.messages:
+        condensed_question = body.message
+        condense_skipped = False
+        if prior_truncated:
             yield _sse_bytes({"type": "phase", "id": "clarify"})
             t_condense_begin = time.perf_counter()
-            history: list[ChatMessage] = []
-            for m in body.messages:
-                role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
-                history.append(ChatMessage(role=role, content=m.content))
-            chat_engine = CondenseQuestionChatEngine.from_defaults(
-                query_engine=query_engine,
-                chat_history=history,
-                llm=llm,
-                condense_question_prompt=_RULEBOOK_CONDENSE_PROMPT,
-            )
-            condensed_question = chat_engine._condense_question(
-                chat_engine.chat_history,
-                body.message,
-            )
-            condense_ms = (time.perf_counter() - t_condense_begin) * 1000.0
-        else:
-            condensed_question = body.message
+            if _should_skip_condense_heuristic(body.message, prior_truncated, skip_min_chars):
+                condensed_question = body.message
+                condense_ms = 0.0
+                condense_skipped = True
+                logger.info(
+                    "chat condense skipped (heuristic) game_id=%s prior_msgs_in=%d prior_after_trunc=%d "
+                    "max_prior_turns=%d skip_condense_min_chars=%d",
+                    body.game_id,
+                    prior_msgs_in,
+                    after_trunc,
+                    max_prior_turns,
+                    skip_min_chars,
+                )
+            else:
+                history: list[ChatMessage] = []
+                for m in prior_truncated:
+                    role = MessageRole.USER if m.role == "user" else MessageRole.ASSISTANT
+                    history.append(ChatMessage(role=role, content=m.content))
+                chat_engine = CondenseQuestionChatEngine.from_defaults(
+                    query_engine=query_engine,
+                    chat_history=history,
+                    llm=llm,
+                    condense_question_prompt=_RULEBOOK_CONDENSE_PROMPT,
+                )
+                condensed_question = chat_engine._condense_question(
+                    chat_engine.chat_history,
+                    body.message,
+                )
+                condense_ms = (time.perf_counter() - t_condense_begin) * 1000.0
 
         yield _sse_bytes({"type": "phase", "id": "search"})
         t_retrieve_begin = time.perf_counter()
@@ -176,13 +252,17 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
             total_ms = (time.perf_counter() - t0) * 1000.0
             logger.warning(
                 "chat stream no streaming synthesis game_id=%s total_ms=%.1f "
-                "setup_ms=%.1f condense_ms=%.1f retrieve_ms=%.1f synth_prep_ms=%.1f",
+                "setup_ms=%.1f condense_ms=%.1f retrieve_ms=%.1f synth_prep_ms=%.1f "
+                "condense_skipped=%s prior_msgs_in=%d prior_after_trunc=%d",
                 body.game_id,
                 total_ms,
                 setup_ms,
                 condense_ms,
                 retrieve_ms,
                 synth_prep_ms,
+                condense_skipped,
+                prior_msgs_in,
+                after_trunc,
             )
             yield _sse_bytes(
                 {
@@ -218,7 +298,8 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
         logger.info(
             "chat stream ok game_id=%s total_ms=%.1f setup_ms=%.1f condense_ms=%.1f "
             "retrieve_ms=%.1f synth_prep_ms=%.1f stream_ms=%.1f post_ms=%.1f "
-            "sources=%d delta_chunks=%d delta_chars=%d",
+            "sources=%d delta_chunks=%d delta_chars=%d condense_skipped=%s "
+            "prior_msgs_in=%d prior_after_trunc=%d max_prior_turns=%d skip_condense_min_chars=%d",
             body.game_id,
             total_ms,
             setup_ms,
@@ -230,6 +311,11 @@ def _chat_stream_impl(body: ChatRequest) -> Iterator[bytes]:
             len(nodes),
             delta_chunks,
             delta_chars,
+            condense_skipped,
+            prior_msgs_in,
+            after_trunc,
+            max_prior_turns,
+            skip_min_chars,
         )
     except Exception:
         total_ms = (time.perf_counter() - t0) * 1000.0

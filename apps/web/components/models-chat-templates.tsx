@@ -33,6 +33,7 @@ type ProfileRow = {
 
 const emptyChatConfig = (): ChatProfileConfigParsed => ({
   chat: { credentialId: "", model: "" },
+  ragChat: { maxPriorTurns: 3, skipCondenseMinChars: 15 },
 });
 
 function parseChat(raw: string): ChatProfileConfigParsed {
@@ -162,6 +163,7 @@ export function ModelsChatTemplates() {
           temperature: gateway.chatOptions.temperature ?? 0.2,
           maxTokens: gateway.chatOptions.maxTokens ?? 16384,
         },
+        ragChat: { maxPriorTurns: 3, skipCondenseMinChars: 15 },
       };
       const res = await fetch("/api/ai-runtime-profiles", {
         method: "POST",
@@ -453,6 +455,60 @@ export function ModelsChatTemplates() {
                                 maxTokens: n,
                                 temperature: c.chat.temperature ?? gateway.chatOptions.temperature,
                               },
+                            };
+                          });
+                        }}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="border-border space-y-3 rounded-lg border p-4">
+                  <div className="font-medium">RAG 多轮对话（规则引擎）</div>
+                  <p className="text-muted-foreground text-sm">
+                    控制送入 condense 的历史轮数与「无时间/顺序指代时跳过 condense」的启发式；默认 3 轮、15
+                    字，减轻延迟。
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>RAG 多轮对话最多保留轮数</FieldLabel>
+                      <FieldDescription>仅保留最近若干轮用户+助手对白后再做 condense（1–20）。</FieldDescription>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={chatCfg.ragChat?.maxPriorTurns ?? 3}
+                        onChange={(e) => {
+                          const n = Math.trunc(Number(e.target.value));
+                          if (!Number.isFinite(n)) return;
+                          setChatCfg((c) => {
+                            const rc = c.ragChat ?? { maxPriorTurns: 3, skipCondenseMinChars: 15 };
+                            return {
+                              ...c,
+                              ragChat: { ...rc, maxPriorTurns: Math.min(20, Math.max(1, n)) },
+                            };
+                          });
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>跳过 condense 的最小字数（启发式）</FieldLabel>
+                      <FieldDescription>
+                        当前句超过该长度、且不含「刚才/上面/继续」等时间顺序词时，可跳过 condense（1–500）。
+                      </FieldDescription>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={chatCfg.ragChat?.skipCondenseMinChars ?? 15}
+                        onChange={(e) => {
+                          const n = Math.trunc(Number(e.target.value));
+                          if (!Number.isFinite(n)) return;
+                          setChatCfg((c) => {
+                            const rc = c.ragChat ?? { maxPriorTurns: 3, skipCondenseMinChars: 15 };
+                            return {
+                              ...c,
+                              ragChat: { ...rc, skipCondenseMinChars: Math.min(500, Math.max(1, n)) },
                             };
                           });
                         }}

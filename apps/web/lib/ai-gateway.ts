@@ -602,11 +602,18 @@ export function buildEngineAiPayloadFromExtractionProfile(
   const ro = indexProfile.ragOptions;
   const hasRag = hasRagOptionsContent(ro);
 
+  const rc = chatProfile.ragChat;
+  const chatRag = {
+    maxPriorTurns: rc?.maxPriorTurns ?? 3,
+    skipCondenseMinChars: rc?.skipCondenseMinChars ?? 15,
+  };
+
   return {
     version: 3,
     slots: slotsV3,
     ...(hasRag && ro ? { ragOptions: ro } : {}),
     ...(hasRuntime ? { extractionRuntime } : {}),
+    chatRag,
   };
 }
 
