@@ -15,7 +15,7 @@ _CTX: ContextVar["BoardruleAiConfig | None"] = ContextVar("boardrule_ai_config",
 class FlashProSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock", "claude"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     max_output_tokens: int | None = Field(None, alias="maxOutputTokens")
@@ -29,7 +29,7 @@ class FlashProSlot(BaseModel):
 class EmbedSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock", "claude"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
@@ -42,7 +42,7 @@ class EmbedSlot(BaseModel):
 class ChatSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen", "bedrock"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock", "claude"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     temperature: float = 0.2
@@ -115,6 +115,7 @@ class ExtractionRuntimeOverrides(BaseModel):
     dashscope_http_timeout_ms: int | None = Field(None, alias="dashscopeHttpTimeoutMs")
     openrouter_http_timeout_ms: int | None = Field(None, alias="openrouterHttpTimeoutMs")
     bedrock_http_timeout_ms: int | None = Field(None, alias="bedrockHttpTimeoutMs")
+    claude_http_timeout_ms: int | None = Field(None, alias="claudeHttpTimeoutMs")
     llm_max_continuation_rounds: int | None = Field(None, alias="llmMaxContinuationRounds", ge=0, le=32)
     force_full_pipeline_default: bool | None = Field(None, alias="forceFullPipelineDefault")
 

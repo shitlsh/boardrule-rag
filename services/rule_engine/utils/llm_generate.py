@@ -283,6 +283,11 @@ def _build_provider(slot: FlashProSlot, temperature: float, max_tokens: int) -> 
 
         return _BedrockProvider()
 
+    if slot.provider == "claude":
+        from utils.providers.anthropic_provider import AnthropicProvider
+
+        return AnthropicProvider(api_key=slot.api_key, model=slot.model)
+
     # Default: Gemini
     gen_config = types.GenerateContentConfig(
         temperature=temperature, max_output_tokens=max_tokens
