@@ -142,7 +142,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         {
           code: "STALE_PAGE_JOB" as const,
           message:
-            "分页会话已失效（常见于规则引擎重启：内存中的分页任务 ID 不再有效）。已清空本游戏的分页缓存，请重新在上方提交「确认并分页」，然后再启动提取。",
+            "分页会话已失效（例如已重新分页导致 ID 变更、规则引擎上该游戏的 PNG / page_job.json 缺失或与当前 ID 不一致）。已清空本游戏的分页缓存，请重新在上方提交「确认并分页」，然后再启动提取。",
         },
         { status: 409 },
       );
