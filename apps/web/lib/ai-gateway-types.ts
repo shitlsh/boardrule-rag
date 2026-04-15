@@ -1,6 +1,6 @@
-export type AiVendor = "gemini" | "openrouter" | "qwen" | "bedrock";
+export type AiVendor = "gemini" | "openrouter" | "qwen" | "bedrock" | "claude";
 
-export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen", "bedrock"];
+export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen", "bedrock", "claude"];
 
 /** How to authenticate to AWS Bedrock for this credential. */
 export type BedrockAuthMode = "iam" | "api_key";
@@ -167,6 +167,7 @@ export type ExtractionRuntimeOverrides = {
   dashscopeHttpTimeoutMs?: number | null;
   openrouterHttpTimeoutMs?: number | null;
   bedrockHttpTimeoutMs?: number | null;
+  claudeHttpTimeoutMs?: number | null;
   llmMaxContinuationRounds?: number;
   /** Default suggestion for full pipeline; BFF may OR with per-request `forceFullPipeline`. */
   forceFullPipelineDefault?: boolean;

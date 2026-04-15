@@ -195,6 +195,29 @@ function lookupBedrock(registry: VendorRegistry, modelName: string): DifyModelMe
   return null;
 }
 
+function lookupClaude(registry: VendorRegistry, modelName: string): DifyModelMetadataEntry | null {
+  // Try direct match first (exact id or case-insensitive)
+  const direct = lookupOpenRouterOrQwen(registry, modelName);
+  if (direct) return direct;
+
+  // Claude model ids often contain version suffixes (e.g. claude-3-5-sonnet-20241022)
+  // Try longest prefix match against registry keys.
+  const n = modelName.trim().toLowerCase();
+  let bestKey: string | null = null;
+  let bestLen = -1;
+  for (const k of Object.keys(registry)) {
+    const kl = k.toLowerCase();
+    if (n === kl) return registry[k];
+    if (n.startsWith(`${kl}-`) || n.startsWith(`${kl}.`) || n.startsWith(`${kl}_`)) {
+      if (kl.length > bestLen) {
+        bestLen = kl.length;
+        bestKey = k;
+      }
+    }
+  }
+  return bestKey ? registry[bestKey] : null;
+}
+
 function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | null {
   const registry = byVendor[vendor];
   if (!registry || Object.keys(registry).length === 0) return null;
@@ -207,6 +230,9 @@ function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | n
   if (vendor === "bedrock") {
     return lookupBedrock(registry, modelName);
   }
+  if (vendor === "claude") {
+    return lookupClaude(registry, modelName);
+  }
   return lookupOpenRouterOrQwen(registry, modelName);
 }
 
@@ -214,7 +240,7 @@ export function enrichModelsWithDifyMetadata(
   vendor: AiVendor,
   models: GeminiModelOption[],
 ): GeminiModelOption[] {
-  if (vendor !== "qwen" && vendor !== "gemini" && vendor !== "openrouter" && vendor !== "bedrock") {
+  if (vendor !== "qwen" && vendor !== "gemini" && vendor !== "openrouter" && vendor !== "bedrock" && vendor !== "claude") {
     return models;
   }
 

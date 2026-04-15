@@ -55,6 +55,7 @@ const VENDOR_LABEL: Record<AiVendor, string> = {
   openrouter: "OpenRouter",
   qwen: "阿里云百炼（Qwen）",
   bedrock: "Amazon Bedrock",
+  claude: "Anthropic Claude",
 };
 
 /** Short label for the closed select trigger (avoids overflow in narrow layouts). */
@@ -63,6 +64,7 @@ const VENDOR_TRIGGER_LABEL: Record<AiVendor, string> = {
   openrouter: "OpenRouter",
   qwen: "Qwen",
   bedrock: "Bedrock",
+  claude: "Claude",
 };
 
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
@@ -309,6 +311,18 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                             </span>
                           </span>
                         </SelectItem>
+                        <SelectItem
+                          value="claude"
+                          textValue="Anthropic Claude API"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">Anthropic Claude</span>
+                            <span className="text-muted-foreground text-xs">
+                              Anthropic 官方 API Key（直连 api.anthropic.com）
+                            </span>
+                          </span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
@@ -404,7 +418,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                               ? "粘贴 OpenRouter 控制台中的 API Key"
                               : vendor === "qwen"
                                 ? "粘贴阿里云百炼（DashScope）API Key"
-                                : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                                : vendor === "claude"
+                                  ? "粘贴 Anthropic 控制台中的 API Key（sk-ant-…）"
+                                  : "粘贴 Google AI Studio 或兼容渠道的密钥"
                         }
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}

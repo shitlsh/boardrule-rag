@@ -1,5 +1,5 @@
 /**
- * Server-only: list models for a saved credential (Gemini, OpenRouter, Qwen/DashScope, or Bedrock).
+ * Server-only: list models for a saved credential (Gemini, OpenRouter, Qwen/DashScope, Bedrock, or Claude).
  * Used by /api/ai/models and slot binding validation.
  */
 
@@ -11,6 +11,7 @@ import {
   getStoredCredential,
 } from "@/lib/ai-gateway";
 import { fetchBedrockModelsForStoredCredential } from "@/lib/bedrock-models-list";
+import { fetchClaudeModelsForSlot, fetchClaudeModelsFromApi } from "@/lib/claude-models-list";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import type { GeminiModelOption } from "@/lib/gemini-model-types";
 import { enrichModelMetadata } from "@/lib/model-metadata-enrich";
@@ -60,6 +61,10 @@ export async function fetchModelsForCredential(
       models = slot
         ? await fetchQwenModelsForSlot(apiKey, slot, base)
         : await fetchQwenModelsFromApi(apiKey, base);
+    } else if (vendor === "claude") {
+      models = slot
+        ? await fetchClaudeModelsForSlot(apiKey, slot)
+        : await fetchClaudeModelsFromApi(apiKey);
     } else {
       models = slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
     }

@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   if (o.vendor !== undefined) {
     if (typeof o.vendor !== "string" || !isAiVendor(o.vendor)) {
       return NextResponse.json(
-        { message: "vendor 必须为 gemini、openrouter、qwen 或 bedrock" },
+        { message: "vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude" },
         { status: 400 },
       );
     }

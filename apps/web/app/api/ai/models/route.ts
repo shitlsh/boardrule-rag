@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
 import { getAiGatewayStored, getCredentialVendor } from "@/lib/ai-gateway";
+import { fetchClaudeModelsForSlot, fetchClaudeModelsFromApi } from "@/lib/claude-models-list";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
 import { fetchModelsForCredential } from "@/lib/models-for-credential";
 import {
@@ -28,7 +29,7 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
 }
 
 function parseVendor(raw: unknown): AiVendor | "invalid" {
-  if (raw === "gemini" || raw === "openrouter" || raw === "qwen" || raw === "bedrock") return raw;
+  if (raw === "gemini" || raw === "openrouter" || raw === "qwen" || raw === "bedrock" || raw === "claude") return raw;
   return "invalid";
 }
 
@@ -49,6 +50,11 @@ async function listModelsByKey(
     return slot
       ? await fetchQwenModelsForSlot(apiKey, slot, base)
       : await fetchQwenModelsFromApi(apiKey, base);
+  }
+  if (vendor === "claude") {
+    return slot
+      ? await fetchClaudeModelsForSlot(apiKey, slot)
+      : await fetchClaudeModelsFromApi(apiKey);
   }
   return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
 }
@@ -160,7 +166,7 @@ export async function POST(req: Request) {
     const v = vendorPreview;
     if (v === "invalid") {
       return NextResponse.json(
-        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen | bedrock" },
+        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen | bedrock | claude" },
         { status: 400 },
       );
     }

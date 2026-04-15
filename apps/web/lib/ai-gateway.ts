@@ -248,7 +248,7 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     const next: AiCredentialStored[] = [];
     for (const p of patch.credentials) {
       if (!isAiVendor(p.vendor)) {
-        throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
+        throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
       }
       const alias = p.alias.trim();
       if (!alias) throw new Error("别名不能为空");
@@ -662,7 +662,7 @@ export async function addCredential(params: {
   bedrockSessionToken?: string;
 }): Promise<AiGatewayPublic> {
   if (!isAiVendor(params.vendor)) {
-    throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
+    throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
   }
   const alias = params.alias.trim();
   if (!alias) throw new Error("别名不能为空");
@@ -779,7 +779,7 @@ export async function updateCredential(params: {
   let vendor: AiVendor = prev.vendor;
   if (params.vendor !== undefined) {
     if (!isAiVendor(params.vendor)) {
-      throw new Error("vendor 必须为 gemini、openrouter、qwen 或 bedrock");
+      throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
     }
     vendor = params.vendor;
   }

@@ -101,6 +101,7 @@ export function GeminiModelPicker({
     if (orphanSaved) return "已保存的模型不在当前列表中";
     if (vendor === "openrouter") return "请选择模型（OpenRouter 为 vendor/model 形式）";
     if (vendor === "qwen") return "请选择模型（百炼为 qwen-* 等 ID）";
+    if (vendor === "claude") return "请选择模型（Claude 为 claude-* ID）";
     return "请选择模型";
   })();
 
