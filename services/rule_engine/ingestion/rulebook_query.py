@@ -244,8 +244,12 @@ def build_rulebook_query_engine(game_id: str, *, streaming: bool = False) -> Ret
         streaming=streaming,
     )
 
+    # ``from_args`` always runs ``llm = llm or Settings.llm`` before using a custom
+    # ``response_synthesizer``; omitting ``llm`` touches ``Settings.llm`` and forces
+    # the default OpenAI client (requires OPENAI_API_KEY). Pass our chat LLM explicitly.
     return RetrieverQueryEngine.from_args(
         retriever=retriever,
+        llm=llm,
         node_postprocessors=node_postprocessors,
         response_synthesizer=response_synthesizer,
     )
