@@ -17,6 +17,8 @@ export const EXTRACTION_RUNTIME_DEFAULTS = {
   bedrockHttpTimeoutMs: 120_000,
   /** Anthropic Messages API timeout (ms); engine default 120s when unset (`utils/anthropic_client.py`). */
   claudeHttpTimeoutMs: 120_000,
+  /** Jina Cloud API timeout (ms); engine default 120s when unset (`ingestion/jina_rerank.py`). */
+  jinaHttpTimeoutMs: 120_000,
 } as const;
 
 /** When env and profile omit `VISION_MAX_MERGE_PAGES`, engine uses `min(48, max(12, visionBatchPages * 4))`. */

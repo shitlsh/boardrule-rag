@@ -1,7 +1,7 @@
 /** Server-only: fetch & normalize OpenRouter models for the model picker (same shape as Gemini options). */
 
 import type { SlotKey } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 type OpenRouterModelRaw = {
   id?: string;
@@ -62,7 +62,7 @@ function inferVisionHint(m: OpenRouterModelRaw, canGen: boolean): boolean {
   return false;
 }
 
-function parseOne(m: OpenRouterModelRaw): GeminiModelOption | null {
+function parseOne(m: OpenRouterModelRaw): AiModelOption | null {
   const id = typeof m.id === "string" ? m.id.trim() : "";
   if (!id) return null;
   const name = typeof m.name === "string" ? m.name.trim() : "";
@@ -88,7 +88,7 @@ function parseOne(m: OpenRouterModelRaw): GeminiModelOption | null {
   };
 }
 
-export async function fetchOpenRouterModelsFromApi(apiKey: string): Promise<GeminiModelOption[]> {
+export async function fetchOpenRouterModelsFromApi(apiKey: string): Promise<AiModelOption[]> {
   const res = await fetch("https://openrouter.ai/api/v1/models", {
     method: "GET",
     headers: {
@@ -102,7 +102,7 @@ export async function fetchOpenRouterModelsFromApi(apiKey: string): Promise<Gemi
   }
   const data = JSON.parse(text) as OpenRouterListResponse;
   const raw = data.data ?? [];
-  const out: GeminiModelOption[] = [];
+  const out: AiModelOption[] = [];
   for (const m of raw) {
     const p = parseOne(m);
     if (p) out.push(p);
@@ -110,15 +110,15 @@ export async function fetchOpenRouterModelsFromApi(apiKey: string): Promise<Gemi
   return out;
 }
 
-function isEmbedOnly(m: GeminiModelOption): boolean {
+function isEmbedOnly(m: AiModelOption): boolean {
   return m.capabilities.embedContent && !m.capabilities.generateContent;
 }
 
 /** Same slot rules as Gemini list. */
 export function filterOpenRouterModelsForSlot(
-  models: GeminiModelOption[],
+  models: AiModelOption[],
   slot: SlotKey,
-): GeminiModelOption[] {
+): AiModelOption[] {
   switch (slot) {
     case "embed":
       return models.filter((m) => m.capabilities.embedContent);
@@ -145,7 +145,7 @@ function relaxedOpenRouterEmbedId(id: string): boolean {
 export async function fetchOpenRouterModelsForSlot(
   apiKey: string,
   slot: SlotKey,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const all = await fetchOpenRouterModelsFromApi(apiKey);
   const filtered = filterOpenRouterModelsForSlot(all, slot);
   if (slot === "embed" && filtered.length === 0 && all.length > 0) {

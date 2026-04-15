@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,7 +29,7 @@ class FlashProSlot(BaseModel):
 class EmbedSlot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: Literal["gemini", "openrouter", "qwen", "bedrock", "claude"]
+    provider: Literal["gemini", "openrouter", "qwen", "bedrock", "claude", "jina"]
     api_key: str = Field(..., alias="apiKey")
     model: str
     dashscope_compatible_base: str | None = Field(None, alias="dashscopeCompatibleBase")
@@ -37,6 +37,31 @@ class EmbedSlot(BaseModel):
     bedrock_auth_mode: Literal["iam", "api_key"] | None = Field(None, alias="bedrockAuthMode")
     aws_access_key_id: str | None = Field(None, alias="awsAccessKeyId")
     aws_session_token: str | None = Field(None, alias="awsSessionToken")
+
+
+class RerankSlotLocal(BaseModel):
+    """Local cross-encoder (Hugging Face id); no remote API key."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    backend: Literal["local"] = "local"
+    model: str
+
+
+class RerankSlotJina(BaseModel):
+    """Jina Cloud rerank API."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    backend: Literal["jina"] = "jina"
+    api_key: str = Field(..., alias="apiKey")
+    model: str
+
+
+RerankSlot = Annotated[
+    Union[RerankSlotLocal, RerankSlotJina],
+    Field(discriminator="backend"),
+]
 
 
 class ChatSlot(BaseModel):
@@ -61,6 +86,7 @@ class SlotsBundle(BaseModel):
     pro: FlashProSlot
     embed: EmbedSlot
     chat: ChatSlot
+    rerank: RerankSlot | None = None
 
 
 class SlotsBundleV3(BaseModel):
@@ -72,6 +98,7 @@ class SlotsBundleV3(BaseModel):
     pro: FlashProSlot
     embed: EmbedSlot
     chat: ChatSlot
+    rerank: RerankSlot | None = None
     flash_toc: FlashProSlot | None = Field(None, alias="flashToc")
     flash_quickstart: FlashProSlot | None = Field(None, alias="flashQuickstart")
     pro_extract: FlashProSlot | None = Field(None, alias="proExtract")
@@ -116,6 +143,7 @@ class ExtractionRuntimeOverrides(BaseModel):
     openrouter_http_timeout_ms: int | None = Field(None, alias="openrouterHttpTimeoutMs")
     bedrock_http_timeout_ms: int | None = Field(None, alias="bedrockHttpTimeoutMs")
     claude_http_timeout_ms: int | None = Field(None, alias="claudeHttpTimeoutMs")
+    jina_http_timeout_ms: int | None = Field(None, alias="jinaHttpTimeoutMs")
     llm_max_continuation_rounds: int | None = Field(None, alias="llmMaxContinuationRounds", ge=0, le=32)
     force_full_pipeline_default: bool | None = Field(None, alias="forceFullPipelineDefault")
 
@@ -149,6 +177,11 @@ def get_config() -> BoardruleAiConfig:
 
 def get_slots() -> SlotsBundle | SlotsBundleV3:
     return get_config().slots
+
+
+def get_rerank_slot() -> RerankSlotLocal | RerankSlotJina | None:
+    """Optional index rerank slot; ``None`` means use legacy ``rag_options.rerank_model`` / env."""
+    return get_slots().rerank
 
 
 def get_extraction_runtime() -> ExtractionRuntimeOverrides | None:

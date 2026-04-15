@@ -25,10 +25,13 @@ from ingestion.node_builders import (
     merged_markdown_to_documents,
     sanitize_invisible_unicode_for_rules_markdown,
 )
+from ingestion.jina_rerank import JinaRerankPostprocessor
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
-from utils.ai_gateway import get_slots
+from utils.ai_gateway import RerankSlotJina, RerankSlotLocal, get_rerank_slot, get_slots
 from utils.dashscope_client import resolve_dashscope_api_base
 from utils.openrouter_client import OPENROUTER_API_BASE
+
+JINA_API_BASE = "https://api.jina.ai/v1"
 from utils.paths import service_root
 
 _MANIFEST_NAME = "manifest.json"
@@ -417,11 +420,36 @@ def _require_query_embedding_matches_manifest(manifest: dict[str, Any]) -> None:
         )
 
 
-def _rerank_model_name() -> str:
+def _effective_local_rerank_hf_name() -> str:
+    """HF cross-encoder id for local rerank (slot, then ragOptions, then env)."""
+    s = get_rerank_slot()
+    if isinstance(s, RerankSlotLocal):
+        return s.model.strip()
     ro = _try_rag_options()
     if ro is not None and ro.rerank_model and str(ro.rerank_model).strip():
         return str(ro.rerank_model).strip()
     return os.environ.get("RERANK_MODEL", _DEFAULT_RERANK_MODEL)
+
+
+def _rerank_model_name() -> str:
+    """Backward-compatible name for manifest / local SentenceTransformer id."""
+    return _effective_local_rerank_hf_name()
+
+
+def _manifest_rerank_backend() -> Literal["local", "jina"]:
+    s = get_rerank_slot()
+    if isinstance(s, RerankSlotJina):
+        return "jina"
+    return "local"
+
+
+def _manifest_rerank_model_id() -> str:
+    s = get_rerank_slot()
+    if isinstance(s, RerankSlotJina):
+        return s.model.strip()
+    if isinstance(s, RerankSlotLocal):
+        return s.model.strip()
+    return _effective_local_rerank_hf_name()
 
 
 def _embedding_dim() -> int:
@@ -516,8 +544,14 @@ def build_embedding_model() -> GoogleGenAIEmbedding | OpenAIEmbedding | BedrockE
     different providers safe.
     """
     slot = get_slots().embed
-    if slot.provider == "openrouter":
+    if slot.provider == "jina":
         embed_model: GoogleGenAIEmbedding | OpenAIEmbedding | BedrockEmbedding = OpenAIEmbedding(
+            model=slot.model,
+            api_key=slot.api_key,
+            api_base=JINA_API_BASE,
+        )
+    elif slot.provider == "openrouter":
+        embed_model = OpenAIEmbedding(
             model=slot.model,
             api_key=slot.api_key,
             api_base=OPENROUTER_API_BASE,
@@ -725,7 +759,8 @@ def build_and_persist_index(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "embedding_model": _embedding_model_name(),
         "embedding_dim": embed_dim,
-        "rerank_model": _rerank_model_name(),
+        "rerank_backend": _manifest_rerank_backend(),
+        "rerank_model": _manifest_rerank_model_id(),
         "node_count": len(nodes),
         "vector_backend": vector_backend,
         "pg_table": pg_table,
@@ -869,8 +904,14 @@ def load_hybrid_reranked_nodes(
     if not cfg.use_rerank:
         return merged[:rrn]
 
+    rs = get_rerank_slot()
+    if isinstance(rs, RerankSlotJina):
+        jr = JinaRerankPostprocessor(api_key=rs.api_key, model=rs.model, top_n=rrn)
+        return jr.postprocess_nodes(merged, query_bundle=bundle)
+
+    hf = _effective_local_rerank_hf_name()
     rerank = get_cached_sentence_transformer_rerank(
-        model=_rerank_model_name(),
+        model=hf,
         top_n=rrn,
     )
     return rerank.postprocess_nodes(merged, query_bundle=bundle)

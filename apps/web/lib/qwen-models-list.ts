@@ -5,7 +5,7 @@ import {
   DASHSCOPE_COMPATIBLE_BASE_DEFAULT,
   normalizeDashscopeCompatibleBase,
 } from "@/lib/dashscope-endpoint";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 type OpenAIListModelsResponse = {
   data?: Array<{
@@ -29,7 +29,7 @@ function inferVisionHint(id: string): boolean {
   return s.includes("vl") || s.includes("vision") || s.includes("omni");
 }
 
-function toOption(id: string): GeminiModelOption {
+function toOption(id: string): AiModelOption {
   const embed = isEmbeddingModelId(id);
   const canGen = !embed;
   const canEmbed = embed;
@@ -74,9 +74,9 @@ const DASHSCOPE_EMBED_SLOT_EXTRA: string[] = [
   "multimodal-embedding-v1",
 ];
 
-function parseOpenAIList(data: OpenAIListModelsResponse): GeminiModelOption[] {
+function parseOpenAIList(data: OpenAIListModelsResponse): AiModelOption[] {
   const raw = data.data ?? [];
-  const out: GeminiModelOption[] = [];
+  const out: AiModelOption[] = [];
   for (const m of raw) {
     const id = typeof m.id === "string" ? m.id.trim() : "";
     if (id) out.push(toOption(id));
@@ -87,7 +87,7 @@ function parseOpenAIList(data: OpenAIListModelsResponse): GeminiModelOption[] {
 export async function fetchQwenModelsFromApi(
   apiKey: string,
   compatibleBase?: string,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const base = normalizeDashscopeCompatibleBase(compatibleBase ?? DASHSCOPE_COMPATIBLE_BASE_DEFAULT);
   const url = `${base}/models`;
   const res = await fetch(url, {
@@ -114,11 +114,11 @@ export async function fetchQwenModelsFromApi(
   return parsed.length > 0 ? parsed : FALLBACK_IDS.map(toOption);
 }
 
-function isEmbedOnly(m: GeminiModelOption): boolean {
+function isEmbedOnly(m: AiModelOption): boolean {
   return m.capabilities.embedContent && !m.capabilities.generateContent;
 }
 
-export function filterQwenModelsForSlot(models: GeminiModelOption[], slot: SlotKey): GeminiModelOption[] {
+export function filterQwenModelsForSlot(models: AiModelOption[], slot: SlotKey): AiModelOption[] {
   switch (slot) {
     case "embed":
       return models.filter((m) => m.capabilities.embedContent);
@@ -135,7 +135,7 @@ export async function fetchQwenModelsForSlot(
   apiKey: string,
   slot: SlotKey,
   compatibleBase?: string,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const all = await fetchQwenModelsFromApi(apiKey, compatibleBase);
   let out = filterQwenModelsForSlot(all, slot);
   if (slot === "embed" && out.length === 0) {

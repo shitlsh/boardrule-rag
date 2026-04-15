@@ -17,11 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GeminiModelPicker } from "@/components/gemini-model-picker";
+import { SlotModelPicker } from "@/components/slot-model-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiGatewayPublic, RagOptionsStored } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import {
   type IndexProfileConfigParsed,
   indexProfileConfigSchema,
@@ -42,6 +42,7 @@ function parseIndex(raw: string): IndexProfileConfigParsed {
 
 const emptyIndex = (): IndexProfileConfigParsed => ({
   embed: { credentialId: "", model: "" },
+  rerank: { backend: "local", model: INDEX_RAG_DEFAULTS.rerankModel },
   ragOptions: {},
 });
 
@@ -56,7 +57,7 @@ export function ModelsIndexTemplates() {
   const [editDescription, setEditDescription] = useState("");
   const [idxCfg, setIdxCfg] = useState<IndexProfileConfigParsed>(emptyIndex);
   const [saving, setSaving] = useState(false);
-  const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
+  const [modelLists, setModelLists] = useState<Record<string, AiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
 
   const profileList = profiles.filter((p) => p.kind === "INDEX");
@@ -120,7 +121,7 @@ export function ModelsIndexTemplates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credentialId, slot: "embed" }),
       });
-      const json = (await res.json()) as { models?: GeminiModelOption[]; message?: string };
+      const json = (await res.json()) as { models?: AiModelOption[]; message?: string };
       if (!res.ok) throw new Error(json.message || "拉取模型失败");
       setModelLists((prev) => ({ ...prev, [k]: json.models ?? [] }));
     } catch (e) {
@@ -130,11 +131,39 @@ export function ModelsIndexTemplates() {
     }
   }, []);
 
+  const fetchRerankModels = useCallback(async (credentialId: string) => {
+    if (!credentialId) return;
+    const key = `${credentialId}:rerank`;
+    setLoadingModels((m) => ({ ...m, [key]: true }));
+    try {
+      const res = await fetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credentialId, slot: "rerank" }),
+      });
+      const json = (await res.json()) as { models?: AiModelOption[]; message?: string };
+      if (!res.ok) throw new Error(json.message || "拉取重排模型失败");
+      setModelLists((prev) => ({ ...prev, [key]: json.models ?? [] }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "拉取重排模型失败");
+    } finally {
+      setLoadingModels((m) => ({ ...m, [key]: false }));
+    }
+  }, []);
+
   useEffect(() => {
     if (!gateway || !selected || selected.kind !== "INDEX") return;
     const cid = idxCfg.embed?.credentialId?.trim();
     if (cid) void fetchModels(cid);
   }, [gateway, selected, idxCfg.embed?.credentialId, fetchModels]);
+
+  useEffect(() => {
+    if (!gateway || !selected || selected.kind !== "INDEX") return;
+    const r = idxCfg.rerank;
+    if (r?.backend === "jina" && r.credentialId?.trim()) {
+      void fetchRerankModels(r.credentialId.trim());
+    }
+  }, [gateway, selected, idxCfg.rerank, fetchRerankModels]);
 
   const ro = idxCfg.ragOptions ?? {};
 
@@ -143,20 +172,6 @@ export function ModelsIndexTemplates() {
       ...c,
       ragOptions: { ...(c.ragOptions ?? {}), ...patch },
     }));
-  };
-
-  /** Clear numeric keys when input is emptied; plain `patchRag({})` does not delete existing keys. */
-  const patchRagRerankModel = (raw: string) => {
-    setIdxCfg((c) => {
-      const ro = { ...(c.ragOptions ?? {}) };
-      const t = raw.trim();
-      if (t === "") {
-        delete ro.rerankModel;
-      } else {
-        ro.rerankModel = t;
-      }
-      return { ...c, ragOptions: ro };
-    });
   };
 
   const patchRagNumeric = (
@@ -206,10 +221,10 @@ export function ModelsIndexTemplates() {
       }
       const configJson: IndexProfileConfigParsed = {
         embed: { credentialId, model },
+        rerank: { backend: "local", model: INDEX_RAG_DEFAULTS.rerankModel },
         ragOptions: {
           similarityTopK: 8,
           rerankTopN: 5,
-          rerankModel: INDEX_RAG_DEFAULTS.rerankModel,
           chunkSize: 1024,
           chunkOverlap: 128,
           retrievalMode: "hybrid",
@@ -291,10 +306,17 @@ export function ModelsIndexTemplates() {
   };
 
   const creds = gateway?.credentials.filter((c) => c.enabled) ?? [];
+  const embedCreds = creds.filter((c) => c.vendor !== "claude");
+  const jinaCreds = creds.filter((c) => c.vendor === "jina");
   const cid = idxCfg.embed?.credentialId ?? "";
   const model = idxCfg.embed?.model ?? "";
   const k = `${cid}:embed`;
   const models = modelLists[k] ?? [];
+
+  const rr = idxCfg.rerank ?? { backend: "local" as const, model: INDEX_RAG_DEFAULTS.rerankModel };
+  const rCid = rr.backend === "jina" ? rr.credentialId : "";
+  const rk = `${rCid}:rerank`;
+  const rModels = modelLists[rk] ?? [];
 
   if (loading || !gateway) {
     return (
@@ -426,7 +448,7 @@ export function ModelsIndexTemplates() {
                           <SelectValue placeholder="选择凭证" />
                         </SelectTrigger>
                         <SelectContent>
-                          {creds.map((c) => (
+                          {embedCreds.map((c) => (
                             <SelectItem key={c.id} value={c.id}>
                               {c.alias} ({c.vendor})
                             </SelectItem>
@@ -436,7 +458,7 @@ export function ModelsIndexTemplates() {
                     </Field>
                     <Field>
                       <FieldLabel>嵌入模型</FieldLabel>
-                      <GeminiModelPicker
+                      <SlotModelPicker
                         slot="embed"
                         vendor={cid ? (gateway.credentials.find((c) => c.id === cid)?.vendor ?? "gemini") : "gemini"}
                         models={models}
@@ -452,6 +474,106 @@ export function ModelsIndexTemplates() {
                       />
                     </Field>
                   </div>
+                </div>
+
+                <div className="border-border space-y-3 rounded-lg border p-4">
+                  <div className="font-medium">Rerank 槽位</div>
+                  <Field>
+                    <FieldLabel>重排方式</FieldLabel>
+                    <Select
+                      value={rr.backend}
+                      onValueChange={(v) => {
+                        if (v === "local") {
+                          setIdxCfg((c) => {
+                            const prev = c.rerank?.backend === "local" ? c.rerank.model : INDEX_RAG_DEFAULTS.rerankModel;
+                            return {
+                              ...c,
+                              rerank: { backend: "local", model: prev },
+                            };
+                          });
+                        } else {
+                          setIdxCfg((c) => ({
+                            ...c,
+                            rerank: { backend: "jina", credentialId: "", model: "" },
+                          }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="local">本地（SentenceTransformers 交叉编码器）</SelectItem>
+                        <SelectItem value="jina">Jina Cloud（远程 API）</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {rr.backend === "local" ? (
+                    <Field>
+                      <FieldLabel>本地模型（HF 仓库名）</FieldLabel>
+                      <FieldDescription>
+                        首次使用会在规则引擎侧下载权重。默认{" "}
+                        <code className="text-xs">{INDEX_RAG_DEFAULTS.rerankModel}</code>
+                      </FieldDescription>
+                      <Input
+                        className="font-mono text-sm"
+                        value={rr.backend === "local" ? rr.model : INDEX_RAG_DEFAULTS.rerankModel}
+                        onChange={(e) =>
+                          setIdxCfg((c) => ({
+                            ...c,
+                            rerank: { backend: "local", model: e.target.value },
+                          }))
+                        }
+                        autoComplete="off"
+                      />
+                    </Field>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Jina 凭证</FieldLabel>
+                        <Select
+                          value={rr.backend === "jina" ? rr.credentialId : ""}
+                          onValueChange={(v) => {
+                            setIdxCfg((c) => {
+                              const prev = c.rerank?.backend === "jina" ? c.rerank : null;
+                              const keepModel = prev && prev.credentialId === v ? prev.model : "";
+                              return { ...c, rerank: { backend: "jina", credentialId: v, model: keepModel } };
+                            });
+                            void fetchRerankModels(v);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择 Jina 凭证" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {jinaCreds.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.alias}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel>重排模型</FieldLabel>
+                        <SlotModelPicker
+                          slot="rerank"
+                          vendor="jina"
+                          models={rModels}
+                          value={rr.backend === "jina" ? rr.model : ""}
+                          onChange={(v) =>
+                            setIdxCfg((c) =>
+                              c.rerank?.backend === "jina"
+                                ? { ...c, rerank: { backend: "jina", credentialId: c.rerank.credentialId, model: v } }
+                                : c,
+                            )
+                          }
+                          loading={Boolean(loadingModels[rk])}
+                          disabled={!rCid}
+                        />
+                      </Field>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-border space-y-6 rounded-lg border p-4">
@@ -497,22 +619,10 @@ export function ModelsIndexTemplates() {
                         />
                       </Field>
                     </div>
-                    <Field>
-                      <FieldLabel>rerankModel（本地交叉编码器）</FieldLabel>
-                      <FieldDescription>
-                        Hugging Face / SentenceTransformers 模型名，首次使用时会下载到引擎侧缓存。留空则使用引擎默认{" "}
-                        <code className="text-xs">{INDEX_RAG_DEFAULTS.rerankModel}</code>（环境变量{" "}
-                        <code className="text-xs">RERANK_MODEL</code>
-                        ）。与上方「启用交叉编码器重排」配合；仅影响检索精排，不参与向量嵌入。
-                      </FieldDescription>
-                      <Input
-                        placeholder={INDEX_RAG_DEFAULTS.rerankModel}
-                        className="font-mono text-sm"
-                        value={ro.rerankModel ?? ""}
-                        onChange={(e) => patchRagRerankModel(e.target.value)}
-                        autoComplete="off"
-                      />
-                    </Field>
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      交叉编码器模型与本地 / Jina 方式在上方「Rerank 槽位」配置。若配置来自旧版{" "}
+                      <code className="text-xs">ragOptions.rerankModel</code>，保存时会并入槽位。
+                    </p>
                   </div>
 
                   <div className="space-y-3">

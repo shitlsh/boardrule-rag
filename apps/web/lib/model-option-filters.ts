@@ -1,4 +1,4 @@
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 /** Options for which synthetic tags are considered (embed 槽位不展示 VISION 筛选). */
 export type ModelTagFilterOptions = {
@@ -6,7 +6,7 @@ export type ModelTagFilterOptions = {
 };
 
 export function modelVisionEffective(
-  m: GeminiModelOption,
+  m: AiModelOption,
   opts: ModelTagFilterOptions,
 ): boolean {
   if (!opts.showVisionFilter) return false;
@@ -14,7 +14,7 @@ export function modelVisionEffective(
 }
 
 /** Stable tag ids for a row: vision, mode:*, has_context, has_output_cap. */
-export function getModelTagIds(m: GeminiModelOption, opts: ModelTagFilterOptions): string[] {
+export function getModelTagIds(m: AiModelOption, opts: ModelTagFilterOptions): string[] {
   const keys: string[] = [];
   if (modelVisionEffective(m, opts)) keys.push("vision");
   const mode = m.modelMode?.trim().toLowerCase();
@@ -33,7 +33,7 @@ function tagSortKey(id: string): number {
 }
 
 /** Tag ids that appear on at least one model in the list (for filter chips). */
-export function listAvailableTagIds(models: GeminiModelOption[], opts: ModelTagFilterOptions): string[] {
+export function listAvailableTagIds(models: AiModelOption[], opts: ModelTagFilterOptions): string[] {
   const s = new Set<string>();
   for (const m of models) {
     for (const k of getModelTagIds(m, opts)) s.add(k);
@@ -47,10 +47,10 @@ export function listAvailableTagIds(models: GeminiModelOption[], opts: ModelTagF
 
 /** AND: model must have every selected tag. Empty selection → no extra filtering. */
 export function filterModelsByTagIds(
-  models: GeminiModelOption[],
+  models: AiModelOption[],
   selectedIds: string[],
   opts: ModelTagFilterOptions,
-): GeminiModelOption[] {
+): AiModelOption[] {
   if (selectedIds.length === 0) return models;
   return models.filter((m) => {
     const keys = new Set(getModelTagIds(m, opts));

@@ -1,7 +1,7 @@
 /** Server-only: fetch & normalize Gemini models from Google Generative Language API. */
 
 import type { SlotKey } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 type GoogleModel = {
   name?: string;
@@ -60,7 +60,7 @@ function isLikelyDeprecated(m: GoogleModel): boolean {
   return /\bdeprecated\b/.test(n) || /\bdeprecated\b/.test(d) || /\blegacy\b/.test(n);
 }
 
-function parseOne(m: GoogleModel): GeminiModelOption | null {
+function parseOne(m: GoogleModel): AiModelOption | null {
   const name = typeof m.name === "string" ? m.name.trim() : "";
   if (!name) return null;
   const rawMethods = m.supportedGenerationMethods ?? m.supported_generation_methods ?? [];
@@ -87,9 +87,9 @@ function parseOne(m: GoogleModel): GeminiModelOption | null {
 }
 
 /** Drop deprecated / empty; keep anything that has at least one capability we care about. */
-function parseAllRaw(data: GoogleListModelsResponse): GeminiModelOption[] {
+function parseAllRaw(data: GoogleListModelsResponse): AiModelOption[] {
   const raw = data.models ?? [];
-  const out: GeminiModelOption[] = [];
+  const out: AiModelOption[] = [];
   for (const m of raw) {
     if (isLikelyDeprecated(m)) continue;
     const p = parseOne(m);
@@ -100,14 +100,14 @@ function parseAllRaw(data: GoogleListModelsResponse): GeminiModelOption[] {
   return out;
 }
 
-function isEmbedOnly(m: GeminiModelOption): boolean {
+function isEmbedOnly(m: AiModelOption): boolean {
   return m.capabilities.embedContent && !m.capabilities.generateContent;
 }
 
 /**
  * Filter by configured slot: embed → embed-capable only; flash/pro/chat → generation, exclude embed-only.
  */
-export function filterModelsForSlot(models: GeminiModelOption[], slot: SlotKey): GeminiModelOption[] {
+export function filterModelsForSlot(models: AiModelOption[], slot: SlotKey): AiModelOption[] {
   switch (slot) {
     case "embed":
       return models.filter((m) => m.capabilities.embedContent);
@@ -120,7 +120,7 @@ export function filterModelsForSlot(models: GeminiModelOption[], slot: SlotKey):
   }
 }
 
-export async function fetchGeminiModelsFromGoogle(apiKey: string): Promise<GeminiModelOption[]> {
+export async function fetchGeminiModelsFromGoogle(apiKey: string): Promise<AiModelOption[]> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey.trim())}`;
   const res = await fetch(url, { method: "GET", next: { revalidate: 0 } });
   const text = await res.text();
@@ -134,7 +134,7 @@ export async function fetchGeminiModelsFromGoogle(apiKey: string): Promise<Gemin
 export async function fetchGeminiModelsForSlot(
   apiKey: string,
   slot: SlotKey,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const all = await fetchGeminiModelsFromGoogle(apiKey);
   return filterModelsForSlot(all, slot);
 }

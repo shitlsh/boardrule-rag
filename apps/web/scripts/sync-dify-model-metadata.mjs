@@ -1,6 +1,6 @@
 /**
- * Fetches Dify official-plugin YAMLs (tongyi, gemini, openrouter, bedrock: llm + text_embedding)
- * and writes lib/data/dify-model-metadata.json for runtime model metadata enrichment.
+ * Fetches Dify official-plugin YAMLs and writes lib/data/dify-model-metadata.json
+ * for runtime model metadata enrichment.
  *
  * https://github.com/langgenius/dify-official-plugins
  *
@@ -18,14 +18,17 @@ const OUT = join(__dirname, "../lib/data/dify-model-metadata.json");
 
 const API_ROOT = "https://api.github.com/repos/langgenius/dify-official-plugins/contents";
 
-const PLUGINS = [
-  { vendor: "qwen", base: "models/tongyi/models" },
-  { vendor: "gemini", base: "models/gemini/models" },
-  { vendor: "openrouter", base: "models/openrouter/models" },
-  { vendor: "bedrock", base: "models/bedrock/models" },
+/** JSON output key → GitHub path + subdirs under that path (each subdir = one category). */
+const PLUGIN_SPECS = [
+  { key: "qwen", base: "models/tongyi/models", subdirs: ["llm", "text_embedding"] },
+  { key: "gemini", base: "models/gemini/models", subdirs: ["llm", "text_embedding"] },
+  { key: "openrouter", base: "models/openrouter/models", subdirs: ["llm", "text_embedding"] },
+  { key: "bedrock", base: "models/bedrock/models", subdirs: ["llm", "text_embedding"] },
+  /** Anthropic plugin folder; app vendor id is `claude`. */
+  { key: "claude", base: "models/anthropic/models", subdirs: ["llm", "text_embedding"] },
+  /** Jina: embed + rerank only (no `llm` subdir in upstream). */
+  { key: "jina", base: "models/jina/models", subdirs: ["text_embedding", "rerank"] },
 ];
-
-const SUBDIRS = ["llm", "text_embedding"];
 
 async function fetchJson(url) {
   const res = await fetch(url, {
@@ -107,7 +110,14 @@ function extractEntry(doc, category) {
 async function collectFromDir(contentPath) {
   const parts = contentPath.split("/");
   const subdir = parts[parts.length - 1] ?? "";
-  const category = subdir === "llm" ? "llm" : subdir === "text_embedding" ? "text_embedding" : subdir;
+  const category =
+    subdir === "llm"
+      ? "llm"
+      : subdir === "text_embedding"
+        ? "text_embedding"
+        : subdir === "rerank"
+          ? "rerank"
+          : subdir;
   const url = `${API_ROOT}/${contentPath}?ref=main`;
   /** @type {{ name: string; type: string; download_url: string | null }[]} */
   const listing = await fetchJson(url);
@@ -132,25 +142,41 @@ async function collectFromDir(contentPath) {
 
 async function main() {
   /** @type {Record<string, Record<string, object>>} */
-  const byVendor = { qwen: {}, gemini: {}, openrouter: {}, bedrock: {} };
+  const byVendor = {
+    qwen: {},
+    gemini: {},
+    openrouter: {},
+    bedrock: {},
+    claude: {},
+    jina: {},
+  };
 
-  for (const { vendor, base } of PLUGINS) {
+  for (const spec of PLUGIN_SPECS) {
     const merged = [];
-    for (const sub of SUBDIRS) {
-      const path = `${base}/${sub}`;
+    for (const sub of spec.subdirs) {
+      const path = `${spec.base}/${sub}`;
       process.stderr.write(`Fetching ${path}...\n`);
-      merged.push(...(await collectFromDir(path)));
+      try {
+        merged.push(...(await collectFromDir(path)));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(`[${spec.key}] skip ${path}: ${msg}`);
+      }
     }
-    const bucket = byVendor[vendor];
+    const bucket = byVendor[spec.key];
+    if (!bucket) {
+      console.warn(`[${spec.key}] unknown output key, skipping`);
+      continue;
+    }
     for (const e of merged) {
       const id = e.model;
       if (bucket[id]) {
-        console.warn(`[${vendor}] duplicate model key, keeping first: ${id}`);
+        console.warn(`[${spec.key}] duplicate model key, keeping first: ${id}`);
         continue;
       }
       bucket[id] = e;
     }
-    console.log(`[${vendor}] ${Object.keys(bucket).length} models`);
+    console.log(`[${spec.key}] ${Object.keys(bucket).length} models`);
   }
 
   mkdirSync(dirname(OUT), { recursive: true });

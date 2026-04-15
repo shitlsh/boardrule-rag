@@ -16,11 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GeminiModelPicker } from "@/components/gemini-model-picker";
+import { SlotModelPicker } from "@/components/slot-model-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiGatewayPublic } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import { type ChatProfileConfigParsed, chatProfileConfigSchema } from "@/lib/ai-runtime-profile-schema";
 
 type ProfileRow = {
@@ -50,7 +50,7 @@ export function ModelsChatTemplates() {
   const [editDescription, setEditDescription] = useState("");
   const [chatCfg, setChatCfg] = useState<ChatProfileConfigParsed>(emptyChatConfig);
   const [saving, setSaving] = useState(false);
-  const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
+  const [modelLists, setModelLists] = useState<Record<string, AiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
 
   const profileList = profiles.filter((p) => p.kind === "CHAT");
@@ -114,7 +114,7 @@ export function ModelsChatTemplates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credentialId, slot: "chat" }),
       });
-      const json = (await res.json()) as { models?: GeminiModelOption[]; message?: string };
+      const json = (await res.json()) as { models?: AiModelOption[]; message?: string };
       if (!res.ok) throw new Error(json.message || "拉取模型失败");
       setModelLists((prev) => ({ ...prev, [k]: json.models ?? [] }));
     } catch (e) {
@@ -389,7 +389,7 @@ export function ModelsChatTemplates() {
                     </Field>
                     <Field>
                       <FieldLabel>模型</FieldLabel>
-                      <GeminiModelPicker
+                      <SlotModelPicker
                         slot="chat"
                         vendor={cid ? (gateway.credentials.find((c) => c.id === cid)?.vendor ?? "gemini") : "gemini"}
                         models={models}

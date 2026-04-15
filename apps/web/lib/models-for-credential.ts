@@ -13,18 +13,19 @@ import {
 import { fetchBedrockModelsForStoredCredential } from "@/lib/bedrock-models-list";
 import { fetchClaudeModelsForSlot, fetchClaudeModelsFromApi } from "@/lib/claude-models-list";
 import { fetchGeminiModelsForSlot, fetchGeminiModelsFromGoogle } from "@/lib/gemini-models-list";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import { enrichModelMetadata } from "@/lib/model-metadata-enrich";
 import {
   fetchOpenRouterModelsForSlot,
   fetchOpenRouterModelsFromApi,
 } from "@/lib/openrouter-models-list";
 import { fetchQwenModelsForSlot, fetchQwenModelsFromApi } from "@/lib/qwen-models-list";
+import { listJinaModelsForSlot } from "@/lib/jina-models-list";
 
 function applyCredentialModelFilters(
   cred: NonNullable<ReturnType<typeof getStoredCredential>>,
-  models: GeminiModelOption[],
-): GeminiModelOption[] {
+  models: AiModelOption[],
+): AiModelOption[] {
   const hidden = new Set(cred.hiddenModelIds ?? []);
   if (hidden.size === 0) return models;
   return models.filter((m) => !hidden.has(m.name));
@@ -41,13 +42,13 @@ export async function fetchModelsForCredential(
   credentialId: string,
   slot: SlotKey | null,
   options?: FetchModelsForCredentialOptions,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const cred = getStoredCredential(stored, credentialId);
   if (!cred || cred.enabled === false) {
     return [];
   }
   const vendor = getCredentialVendor(stored, credentialId);
-  let models: GeminiModelOption[];
+  let models: AiModelOption[];
   if (vendor === "bedrock") {
     models = await fetchBedrockModelsForStoredCredential(stored, credentialId, slot);
   } else {
@@ -65,6 +66,12 @@ export async function fetchModelsForCredential(
       models = slot
         ? await fetchClaudeModelsForSlot(apiKey, slot)
         : await fetchClaudeModelsFromApi(apiKey);
+    } else if (vendor === "jina") {
+      if (slot === "embed" || slot === "rerank") {
+        models = listJinaModelsForSlot(slot);
+      } else {
+        models = [];
+      }
     } else {
       models = slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
     }
@@ -81,6 +88,6 @@ export async function fetchModelsForCredentialSlot(
   stored: AiGatewayStored,
   credentialId: string,
   slot: SlotKey,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   return fetchModelsForCredential(stored, credentialId, slot);
 }

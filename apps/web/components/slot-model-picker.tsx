@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ModelTagFilterChips } from "@/components/model-tag-filter-chips";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import type { AiVendor, SlotKey } from "@/lib/ai-gateway-types";
 import {
   filterModelsByTagIds,
@@ -47,7 +47,7 @@ function truncateDesc(s: string, max = 140): string {
  * cmdk 默认 filter 基于 command-score，偏拉丁字母；中英文混合与「包含关键词」更适合用子串匹配。
  * 返回 0 表示隐藏，(0,1] 表示保留（此处匹配即 1）。
  */
-const geminiModelFilter = (itemValue: string, search: string, keywords?: string[]) => {
+const modelComboboxFilter = (itemValue: string, search: string, keywords?: string[]) => {
   const q = search.trim().toLowerCase();
   if (!q) return 1;
   const blob = [itemValue, ...(keywords ?? [])].join("\n").toLowerCase();
@@ -61,14 +61,14 @@ type Props = {
   slot: SlotKey;
   /** Credential vendor — affects placeholder and helper copy. */
   vendor?: AiVendor;
-  models: GeminiModelOption[];
+  models: AiModelOption[];
   value: string;
   onChange: (v: string) => void;
   loading?: boolean;
   disabled?: boolean;
 };
 
-export function GeminiModelPicker({
+export function SlotModelPicker({
   slot,
   vendor = "gemini",
   models,
@@ -102,6 +102,7 @@ export function GeminiModelPicker({
     if (vendor === "openrouter") return "请选择模型（OpenRouter 为 vendor/model 形式）";
     if (vendor === "qwen") return "请选择模型（百炼为 qwen-* 等 ID）";
     if (vendor === "claude") return "请选择模型（Claude 为 claude-* ID）";
+    if (vendor === "jina") return "请选择模型（Jina Cloud API 模型 ID）";
     return "请选择模型";
   })();
 
@@ -142,7 +143,7 @@ export function GeminiModelPicker({
           align="start"
         >
           <Command
-            filter={geminiModelFilter}
+            filter={modelComboboxFilter}
             className="rounded-md [&_[data-slot=command-input-wrapper]]:border-b [&_[data-slot=command-input-wrapper]]:border-border"
             label="搜索模型"
           >

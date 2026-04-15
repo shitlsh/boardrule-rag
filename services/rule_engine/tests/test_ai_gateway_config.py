@@ -1,6 +1,12 @@
 """X-Boardrule-Ai-Config JSON (v2) parsing."""
 
-from utils.ai_gateway import BoardruleAiConfigV2, BoardruleAiConfigV3, parse_boardrule_ai_header
+from utils.ai_gateway import (
+    BoardruleAiConfigV2,
+    BoardruleAiConfigV3,
+    boardrule_ai_runtime,
+    get_rerank_slot,
+    parse_boardrule_ai_header,
+)
 
 
 def test_boardrule_ai_config_v2_slots() -> None:
@@ -147,3 +153,52 @@ def test_boardrule_ai_config_v3_bedrock_iam_and_runtime() -> None:
     assert cfg.slots.chat.aws_access_key_id == "AKIATEST"
     assert cfg.extraction_runtime is not None
     assert cfg.extraction_runtime.bedrock_http_timeout_ms == 90000
+
+
+def test_boardrule_ai_config_v3_rerank_local_slot() -> None:
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {"provider": "gemini", "apiKey": "k", "model": "f"},
+        "pro": {"provider": "gemini", "apiKey": "k", "model": "p"},
+        "embed": {"provider": "gemini", "apiKey": "k", "model": "e"},
+        "chat": {"provider": "gemini", "apiKey": "k", "model": "c", "temperature": 0.2, "maxTokens": 8192},
+        "rerank": {"backend": "local", "model": "BAAI/bge-reranker-base"}
+      }
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    assert isinstance(cfg, BoardruleAiConfigV3)
+    assert cfg.slots.rerank is not None
+    assert cfg.slots.rerank.backend == "local"
+    assert cfg.slots.rerank.model == "BAAI/bge-reranker-base"
+    with boardrule_ai_runtime(cfg):
+        slot = get_rerank_slot()
+        assert slot is not None and slot.backend == "local"
+        assert slot.model == "BAAI/bge-reranker-base"
+
+
+def test_boardrule_ai_config_v3_rerank_jina_slot() -> None:
+    raw = """
+    {
+      "version": 3,
+      "slots": {
+        "flash": {"provider": "gemini", "apiKey": "k", "model": "f"},
+        "pro": {"provider": "gemini", "apiKey": "k", "model": "p"},
+        "embed": {"provider": "jina", "apiKey": "jk", "model": "jina-embeddings-v3"},
+        "chat": {"provider": "gemini", "apiKey": "k", "model": "c", "temperature": 0.2, "maxTokens": 8192},
+        "rerank": {"backend": "jina", "apiKey": "jk", "model": "jina-reranker-v2-base-multilingual"}
+      }
+    }
+    """
+    cfg = parse_boardrule_ai_header(raw)
+    assert isinstance(cfg, BoardruleAiConfigV3)
+    assert cfg.slots.rerank is not None
+    assert cfg.slots.rerank.backend == "jina"
+    assert cfg.slots.rerank.api_key == "jk"
+    assert cfg.slots.rerank.model == "jina-reranker-v2-base-multilingual"
+    with boardrule_ai_runtime(cfg):
+        slot = get_rerank_slot()
+        assert slot is not None and slot.backend == "jina"
+        assert slot.api_key == "jk"

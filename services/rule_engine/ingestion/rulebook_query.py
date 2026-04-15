@@ -19,7 +19,7 @@ from ingestion.bm25_retriever import BoardruleBM25Retriever
 from ingestion.hybrid_retriever import HybridFusionRetriever
 from ingestion.node_builders import format_header_path_for_prompt
 from ingestion.index_builder import (
-    _rerank_model_name,
+    _effective_local_rerank_hf_name,
     build_embedding_model,
     game_index_dir,
     load_manifest,
@@ -27,8 +27,9 @@ from ingestion.index_builder import (
     retrieval_config_from_manifest,
 )
 from ingestion.index_storage_remote import ensure_game_index_local
+from ingestion.jina_rerank import JinaRerankPostprocessor
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
-from utils.ai_gateway import get_slots
+from utils.ai_gateway import RerankSlotJina, get_rerank_slot, get_slots
 from utils.dashscope_client import resolve_dashscope_api_base
 
 _BM25_SUBDIR = "bm25"
@@ -229,10 +230,18 @@ def build_rulebook_query_engine(game_id: str, *, streaming: bool = False) -> Ret
 
     page_pp = PageMetadataPrefixPostprocessor()
     if cfg.use_rerank:
-        rerank = get_cached_sentence_transformer_rerank(
-            model=_rerank_model_name(),
-            top_n=cfg.rerank_top_n,
-        )
+        rs = get_rerank_slot()
+        if isinstance(rs, RerankSlotJina):
+            rerank: BaseNodePostprocessor = JinaRerankPostprocessor(
+                api_key=rs.api_key,
+                model=rs.model,
+                top_n=cfg.rerank_top_n,
+            )
+        else:
+            rerank = get_cached_sentence_transformer_rerank(
+                model=_effective_local_rerank_hf_name(),
+                top_n=cfg.rerank_top_n,
+            )
         node_postprocessors: list[BaseNodePostprocessor] = [rerank, page_pp]
     else:
         node_postprocessors = [TruncateNodesPostprocessor(top_n=cfg.rerank_top_n), page_pp]

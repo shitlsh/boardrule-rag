@@ -15,6 +15,7 @@ import {
   fetchBedrockFoundationModels,
   filterBedrockModelsForSlot,
 } from "@/lib/bedrock-models-list";
+import { listJinaModelsForSlot } from "@/lib/jina-models-list";
 import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
@@ -29,7 +30,16 @@ function parseSlot(raw: unknown): SlotKey | null | "invalid" {
 }
 
 function parseVendor(raw: unknown): AiVendor | "invalid" {
-  if (raw === "gemini" || raw === "openrouter" || raw === "qwen" || raw === "bedrock" || raw === "claude") return raw;
+  if (
+    raw === "gemini" ||
+    raw === "openrouter" ||
+    raw === "qwen" ||
+    raw === "bedrock" ||
+    raw === "claude" ||
+    raw === "jina"
+  ) {
+    return raw;
+  }
   return "invalid";
 }
 
@@ -55,6 +65,11 @@ async function listModelsByKey(
     return slot
       ? await fetchClaudeModelsForSlot(apiKey, slot)
       : await fetchClaudeModelsFromApi(apiKey);
+  }
+  if (vendor === "jina") {
+    if (slot === "embed") return listJinaModelsForSlot("embed");
+    if (slot === "rerank") return listJinaModelsForSlot("rerank");
+    return [...listJinaModelsForSlot("embed"), ...listJinaModelsForSlot("rerank")];
   }
   return slot ? await fetchGeminiModelsForSlot(apiKey, slot) : await fetchGeminiModelsFromGoogle(apiKey);
 }
@@ -116,7 +131,7 @@ export async function GET(req: Request) {
 
   const slot = parseSlot(searchParams.get("slot"));
   if (slot === "invalid") {
-    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
+    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat | rerank）" }, { status: 400 });
   }
 
   try {
@@ -151,7 +166,7 @@ export async function POST(req: Request) {
   const slot = parseSlot(o.slot);
 
   if (slot === "invalid") {
-    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat）" }, { status: 400 });
+    return NextResponse.json({ message: "slot 无效（flash | pro | embed | chat | rerank）" }, { status: 400 });
   }
 
   let vendor: AiVendor;
@@ -166,7 +181,7 @@ export async function POST(req: Request) {
     const v = vendorPreview;
     if (v === "invalid") {
       return NextResponse.json(
-        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen | bedrock | claude" },
+        { message: "使用 apiKey 时须同时提供 vendor: gemini | openrouter | qwen | bedrock | claude | jina" },
         { status: 400 },
       );
     }

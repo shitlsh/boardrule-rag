@@ -1,7 +1,7 @@
 /** Server-only: fetch & normalize Claude models from Anthropic GET /v1/models. */
 
 import type { SlotKey } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 const ANTHROPIC_API_BASE = "https://api.anthropic.com";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -38,7 +38,7 @@ function isGenerationModel(id: string): boolean {
   return !isEmbedModel(id);
 }
 
-function normalizeClaudeModel(m: AnthropicModel): GeminiModelOption | null {
+function normalizeClaudeModel(m: AnthropicModel): AiModelOption | null {
   const id = (m.id ?? "").trim();
   if (!id) return null;
   const displayName = (m.display_name ?? id).trim();
@@ -58,7 +58,7 @@ function normalizeClaudeModel(m: AnthropicModel): GeminiModelOption | null {
   };
 }
 
-export async function fetchClaudeModelsFromApi(apiKey: string): Promise<GeminiModelOption[]> {
+export async function fetchClaudeModelsFromApi(apiKey: string): Promise<AiModelOption[]> {
   const res = await fetch(`${ANTHROPIC_API_BASE}/v1/models`, {
     headers: {
       "x-api-key": apiKey,
@@ -79,9 +79,9 @@ export async function fetchClaudeModelsFromApi(apiKey: string): Promise<GeminiMo
 
 /** Filter Claude models by slot capability. */
 export function filterClaudeModelsForSlot(
-  models: GeminiModelOption[],
+  models: AiModelOption[],
   slot: SlotKey,
-): GeminiModelOption[] {
+): AiModelOption[] {
   if (slot === "embed") {
     return models.filter((m) => m.capabilities.embedContent);
   }
@@ -92,7 +92,7 @@ export function filterClaudeModelsForSlot(
 export async function fetchClaudeModelsForSlot(
   apiKey: string,
   slot: SlotKey,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const all = await fetchClaudeModelsFromApi(apiKey);
   return filterClaudeModelsForSlot(all, slot);
 }

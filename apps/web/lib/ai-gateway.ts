@@ -11,6 +11,7 @@ import type {
   BedrockAuthMode,
   EngineAiPayloadV2,
   EngineAiPayloadV3,
+  EngineRerankSlot,
   ExtractionRuntimeOverrides,
   RagOptionsStored,
   SlotBinding,
@@ -25,6 +26,7 @@ import {
   getActiveIndexProfileConfig,
   getFirstExtractionProfileConfig,
 } from "@/lib/ai-runtime-profiles";
+import { INDEX_RAG_DEFAULTS } from "@/lib/rule-engine-defaults";
 import { isAiVendor } from "@/lib/ai-gateway-types";
 import {
   assertValidDashscopeCompatibleBase,
@@ -248,7 +250,7 @@ export async function updateAiGatewayFromPatch(patch: AiGatewayPatchBody): Promi
     const next: AiCredentialStored[] = [];
     for (const p of patch.credentials) {
       if (!isAiVendor(p.vendor)) {
-        throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
+        throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock、claude 或 jina");
       }
       const alias = p.alias.trim();
       if (!alias) throw new Error("别名不能为空");
@@ -492,6 +494,22 @@ function engineEmbedFromBinding(
   };
 }
 
+function engineRerankFromIndexProfile(stored: AiGatewayStored, index: IndexProfileConfigParsed): EngineRerankSlot {
+  const r = index.rerank;
+  if (r?.backend === "jina") {
+    const key = getCredentialApiKey(stored, r.credentialId);
+    return { backend: "jina", apiKey: key, model: r.model.trim() };
+  }
+  if (r?.backend === "local") {
+    return { backend: "local", model: r.model.trim() };
+  }
+  const legacy = index.ragOptions?.rerankModel?.trim();
+  if (legacy) {
+    return { backend: "local", model: legacy };
+  }
+  return { backend: "local", model: INDEX_RAG_DEFAULTS.rerankModel };
+}
+
 /** Chat slot from the active CHAT profile only (no gateway `slotBindings.chat`). */
 function buildChatSlotForPayload(
   stored: AiGatewayStored,
@@ -553,6 +571,7 @@ export function buildEngineAiPayloadFromExtractionProfile(
     ),
     embed: engineEmbedFromBinding(stored, indexProfile.embed, "索引模版 Embed"),
     chat: buildChatSlotForPayload(stored, chatProfile),
+    rerank: engineRerankFromIndexProfile(stored, indexProfile),
   };
 
   if (sb.flashToc) {
@@ -662,7 +681,7 @@ export async function addCredential(params: {
   bedrockSessionToken?: string;
 }): Promise<AiGatewayPublic> {
   if (!isAiVendor(params.vendor)) {
-    throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
+    throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock、claude 或 jina");
   }
   const alias = params.alias.trim();
   if (!alias) throw new Error("别名不能为空");
@@ -779,7 +798,7 @@ export async function updateCredential(params: {
   let vendor: AiVendor = prev.vendor;
   if (params.vendor !== undefined) {
     if (!isAiVendor(params.vendor)) {
-      throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock 或 claude");
+      throw new Error("vendor 必须为 gemini、openrouter、qwen、bedrock、claude 或 jina");
     }
     vendor = params.vendor;
   }

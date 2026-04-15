@@ -32,7 +32,7 @@ import {
 import { ModelTagFilterChips } from "@/components/model-tag-filter-chips";
 import { QwenEndpointPicker } from "@/components/qwen-endpoint-picker";
 import type { AiCredentialPublic, AiGatewayPublic, AiVendor, BedrockAuthMode } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import {
   filterModelsByTagIds,
   listAvailableTagIds,
@@ -56,6 +56,7 @@ const VENDOR_LABEL: Record<AiVendor, string> = {
   qwen: "阿里云百炼（Qwen）",
   bedrock: "Amazon Bedrock",
   claude: "Anthropic Claude",
+  jina: "Jina AI",
 };
 
 /** Short label for the closed select trigger (avoids overflow in narrow layouts). */
@@ -65,6 +66,7 @@ const VENDOR_TRIGGER_LABEL: Record<AiVendor, string> = {
   qwen: "Qwen",
   bedrock: "Bedrock",
   claude: "Claude",
+  jina: "Jina",
 };
 
 export function ModelCredentialsPanel({ data, onUpdated }: Props) {
@@ -323,6 +325,18 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                             </span>
                           </span>
                         </SelectItem>
+                        <SelectItem
+                          value="jina"
+                          textValue="Jina AI Cloud"
+                          className="items-start whitespace-normal py-2.5 pl-8 pr-2 [&>span]:whitespace-normal"
+                        >
+                          <span className="flex flex-col gap-1 text-left leading-snug">
+                            <span className="font-medium">Jina AI</span>
+                            <span className="text-muted-foreground text-xs">
+                              api.jina.ai — 用于索引嵌入与远程重排（见索引模版）
+                            </span>
+                          </span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
@@ -420,7 +434,9 @@ export function ModelCredentialsPanel({ data, onUpdated }: Props) {
                                 ? "粘贴阿里云百炼（DashScope）API Key"
                                 : vendor === "claude"
                                   ? "粘贴 Anthropic 控制台中的 API Key（sk-ant-…）"
-                                  : "粘贴 Google AI Studio 或兼容渠道的密钥"
+                                  : vendor === "jina"
+                                    ? "粘贴 Jina Cloud（api.jina.ai）API Key"
+                                    : "粘贴 Google AI Studio 或兼容渠道的密钥"
                         }
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
@@ -555,7 +571,7 @@ function CredentialSlotModelsCollapsible({
   disabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [models, setModels] = useState<GeminiModelOption[] | null>(null);
+  const [models, setModels] = useState<AiModelOption[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [patching, setPatching] = useState<string | "bulk" | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -633,7 +649,7 @@ function CredentialSlotModelsCollapsible({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ credentialId: credential.id, includeHidden: true }),
         });
-        const json = (await res.json()) as { models?: GeminiModelOption[]; message?: string };
+        const json = (await res.json()) as { models?: AiModelOption[]; message?: string };
         if (!res.ok) throw new Error(json.message || "拉取模型列表失败");
         if (!cancelled) setModels(json.models ?? []);
       } catch (e) {

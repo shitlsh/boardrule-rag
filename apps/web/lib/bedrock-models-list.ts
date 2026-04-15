@@ -9,7 +9,7 @@ import {
   isBedrockIamPayload,
   parseBedrockIamPayload,
 } from "@/lib/bedrock-credential";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 /** Subset of AWS ListFoundationModels modelSummaries items. */
 type BedrockModelSummary = {
@@ -82,7 +82,7 @@ export function canonicalBedrockConverseModelId(modelId: string): string {
   return t;
 }
 
-function parseOne(m: BedrockModelSummary): GeminiModelOption | null {
+function parseOne(m: BedrockModelSummary): AiModelOption | null {
   const id = typeof m.modelId === "string" ? m.modelId.trim() : "";
   if (!id) return null;
   const displayName = (m.modelName ?? "").trim() || id;
@@ -110,11 +110,11 @@ function parseOne(m: BedrockModelSummary): GeminiModelOption | null {
 }
 
 function finalizeBedrockRow(
-  base: GeminiModelOption,
+  base: AiModelOption,
   canonical: string,
   variants: string[],
   modelNameRaw: string,
-): GeminiModelOption {
+): AiModelOption {
   const baseName = (modelNameRaw ?? "").trim() || canonical;
   let displayName: string;
   if (variants.length > 1) {
@@ -138,10 +138,10 @@ function finalizeBedrockRow(
   };
 }
 
-function normalizeSummaries(rows: BedrockModelSummary[]): GeminiModelOption[] {
+function normalizeSummaries(rows: BedrockModelSummary[]): AiModelOption[] {
   const groups = new Map<
     string,
-    { base: GeminiModelOption; variants: string[]; modelName: string }
+    { base: AiModelOption; variants: string[]; modelName: string }
   >();
   for (const m of rows) {
     const rawId = typeof m.modelId === "string" ? m.modelId.trim() : "";
@@ -162,7 +162,7 @@ function normalizeSummaries(rows: BedrockModelSummary[]): GeminiModelOption[] {
       if (!g.modelName && modelName) g.modelName = modelName;
     }
   }
-  const out: GeminiModelOption[] = [];
+  const out: AiModelOption[] = [];
   for (const [canonical, { base, variants, modelName }] of groups.entries()) {
     out.push(finalizeBedrockRow(base, canonical, variants, modelName));
   }
@@ -179,7 +179,7 @@ export type BedrockListAuth =
     }
   | { authMode: "api_key"; region: string; bearerToken: string };
 
-export async function fetchBedrockFoundationModels(auth: BedrockListAuth): Promise<GeminiModelOption[]> {
+export async function fetchBedrockFoundationModels(auth: BedrockListAuth): Promise<AiModelOption[]> {
   const rows =
     auth.authMode === "iam"
       ? await listSummariesIam({
@@ -192,14 +192,14 @@ export async function fetchBedrockFoundationModels(auth: BedrockListAuth): Promi
   return normalizeSummaries(rows);
 }
 
-function isEmbedOnlyOption(m: GeminiModelOption): boolean {
+function isEmbedOnlyOption(m: AiModelOption): boolean {
   return m.capabilities.embedContent && !m.capabilities.generateContent;
 }
 
 export function filterBedrockModelsForSlot(
-  models: GeminiModelOption[],
+  models: AiModelOption[],
   slot: SlotKey,
-): GeminiModelOption[] {
+): AiModelOption[] {
   switch (slot) {
     case "embed":
       return models.filter((m) => m.capabilities.embedContent);
@@ -215,7 +215,7 @@ export function filterBedrockModelsForSlot(
 export async function fetchBedrockModelsForSlot(
   auth: BedrockListAuth,
   slot: SlotKey,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const all = await fetchBedrockFoundationModels(auth);
   return filterBedrockModelsForSlot(all, slot);
 }
@@ -225,7 +225,7 @@ export async function fetchBedrockModelsForStoredCredential(
   stored: AiGatewayStored,
   credentialId: string,
   slot: SlotKey | null,
-): Promise<GeminiModelOption[]> {
+): Promise<AiModelOption[]> {
   const cred = getStoredCredential(stored, credentialId);
   if (!cred || cred.vendor !== "bedrock" || cred.enabled === false) {
     return [];

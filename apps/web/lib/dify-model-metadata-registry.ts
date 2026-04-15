@@ -1,16 +1,17 @@
 /**
- * Enrich model rows using vendored metadata from Dify official plugins (tongyi / gemini / openrouter / bedrock).
+ * Enrich model rows using vendored YAML-derived metadata (mirrored from upstream plugin repos; filenames
+ * use `dify-*` historically). Vendors: tongyi, gemini, openrouter, bedrock, claude, jina, …
  * Generated JSON: lib/data/dify-model-metadata.json — see scripts/sync-dify-model-metadata.mjs.
  */
 
 import type { AiVendor } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 
 import difyModelMetadata from "./data/dify-model-metadata.json";
 
 export type DifyModelMetadataEntry = {
   model: string;
-  category: "llm" | "text_embedding";
+  category: "llm" | "text_embedding" | "rerank";
   modelType: string;
   mode?: string;
   contextSize?: number;
@@ -23,7 +24,8 @@ type VendorRegistry = Record<string, DifyModelMetadataEntry>;
 
 const byVendor = difyModelMetadata as unknown as Record<AiVendor, VendorRegistry | undefined>;
 
-function geminiShort(id: string): string {
+/** Google GenAI resource ids often use a `models/` prefix; registry keys may omit it. */
+function stripLeadingModelsNamespace(id: string): string {
   return id.trim().replace(/^models\//, "");
 }
 
@@ -114,13 +116,13 @@ function lookupQwen(registry: VendorRegistry, modelName: string): DifyModelMetad
 }
 
 function lookupGemini(registry: VendorRegistry, modelName: string): DifyModelMetadataEntry | null {
-  const short = geminiShort(modelName);
+  const short = stripLeadingModelsNamespace(modelName);
   for (const k of Object.keys(registry)) {
-    if (geminiShort(k) === short) return registry[k];
+    if (stripLeadingModelsNamespace(k) === short) return registry[k];
   }
   const nls = short.toLowerCase();
   for (const k of Object.keys(registry)) {
-    if (geminiShort(k).toLowerCase() === nls) return registry[k];
+    if (stripLeadingModelsNamespace(k).toLowerCase() === nls) return registry[k];
   }
   return null;
 }
@@ -233,14 +235,24 @@ function lookup(vendor: AiVendor, modelName: string): DifyModelMetadataEntry | n
   if (vendor === "claude") {
     return lookupClaude(registry, modelName);
   }
+  if (vendor === "jina") {
+    return lookupOpenRouterOrQwen(registry, modelName);
+  }
   return lookupOpenRouterOrQwen(registry, modelName);
 }
 
 export function enrichModelsWithDifyMetadata(
   vendor: AiVendor,
-  models: GeminiModelOption[],
-): GeminiModelOption[] {
-  if (vendor !== "qwen" && vendor !== "gemini" && vendor !== "openrouter" && vendor !== "bedrock" && vendor !== "claude") {
+  models: AiModelOption[],
+): AiModelOption[] {
+  if (
+    vendor !== "qwen" &&
+    vendor !== "gemini" &&
+    vendor !== "openrouter" &&
+    vendor !== "bedrock" &&
+    vendor !== "claude" &&
+    vendor !== "jina"
+  ) {
     return models;
   }
 

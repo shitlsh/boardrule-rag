@@ -17,11 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GeminiModelPicker } from "@/components/gemini-model-picker";
+import { SlotModelPicker } from "@/components/slot-model-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiGatewayPublic, SlotBinding } from "@/lib/ai-gateway-types";
-import type { GeminiModelOption } from "@/lib/gemini-model-types";
+import type { AiModelOption } from "@/lib/ai-model-option";
 import {
   type ExtractionProfileConfigParsed,
   type ExtractionRuntimeOverridesParsed,
@@ -58,7 +58,7 @@ export function ModelsExtractionTemplates() {
   const [editDescription, setEditDescription] = useState("");
   const [extractionCfg, setExtractionCfg] = useState<ExtractionProfileConfigParsed>(emptyExtractionConfig);
   const [saving, setSaving] = useState(false);
-  const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
+  const [modelLists, setModelLists] = useState<Record<string, AiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
   /**
    * Tracks which `"${credentialId}:${slot}"` keys have already been fetched
@@ -126,7 +126,7 @@ export function ModelsExtractionTemplates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credentialId, slot }),
       });
-      const json = (await res.json()) as { models?: GeminiModelOption[]; message?: string };
+      const json = (await res.json()) as { models?: AiModelOption[]; message?: string };
       if (!res.ok) throw new Error(json.message || "拉取模型失败");
       setModelLists((prev) => ({ ...prev, [k]: json.models ?? [] }));
     } catch (e) {
@@ -276,7 +276,7 @@ export function ModelsExtractionTemplates() {
           </Field>
           <Field>
             <FieldLabel>模型</FieldLabel>
-            <GeminiModelPicker
+            <SlotModelPicker
               slot={slot}
               vendor={
                 cid ? (gateway?.credentials.find((c) => c.id === cid)?.vendor ?? "gemini") : "gemini"

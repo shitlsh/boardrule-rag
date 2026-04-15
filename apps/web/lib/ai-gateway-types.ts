@@ -1,6 +1,13 @@
-export type AiVendor = "gemini" | "openrouter" | "qwen" | "bedrock" | "claude";
+export type AiVendor = "gemini" | "openrouter" | "qwen" | "bedrock" | "claude" | "jina";
 
-export const AI_VENDOR_IDS: readonly AiVendor[] = ["gemini", "openrouter", "qwen", "bedrock", "claude"];
+export const AI_VENDOR_IDS: readonly AiVendor[] = [
+  "gemini",
+  "openrouter",
+  "qwen",
+  "bedrock",
+  "claude",
+  "jina",
+];
 
 /** How to authenticate to AWS Bedrock for this credential. */
 export type BedrockAuthMode = "iam" | "api_key";
@@ -9,7 +16,7 @@ export function isAiVendor(v: string): v is AiVendor {
   return (AI_VENDOR_IDS as readonly string[]).includes(v);
 }
 
-export type SlotKey = "flash" | "pro" | "embed" | "chat";
+export type SlotKey = "flash" | "pro" | "embed" | "chat" | "rerank";
 
 export type AiCredentialStored = {
   id: string;
@@ -21,7 +28,7 @@ export type AiCredentialStored = {
   enabled?: boolean;
   /**
    * Model `name` values excluded from slot dropdowns for this credential (opt-out).
-   * Same strings as GeminiModelOption.name (e.g. models/gemini-2.0-flash, qwen-plus).
+   * Same strings as AiModelOption.name (e.g. models/gemini-2.0-flash, qwen-plus).
    */
   hiddenModelIds?: string[];
   /**
@@ -129,6 +136,20 @@ export type EngineSlotEmbed = {
   awsSessionToken?: string;
 };
 
+/** Index-only: local cross-encoder (HF id) or Jina remote rerank API. */
+export type EngineRerankSlotLocal = {
+  backend: "local";
+  model: string;
+};
+
+export type EngineRerankSlotJina = {
+  backend: "jina";
+  apiKey: string;
+  model: string;
+};
+
+export type EngineRerankSlot = EngineRerankSlotLocal | EngineRerankSlotJina;
+
 export type EngineSlotChat = {
   provider: AiVendor;
   apiKey: string;
@@ -168,6 +189,8 @@ export type ExtractionRuntimeOverrides = {
   openrouterHttpTimeoutMs?: number | null;
   bedrockHttpTimeoutMs?: number | null;
   claudeHttpTimeoutMs?: number | null;
+  /** Jina embeddings / rerank HTTP timeout (ms). */
+  jinaHttpTimeoutMs?: number | null;
   llmMaxContinuationRounds?: number;
   /** Default suggestion for full pipeline; BFF may OR with per-request `forceFullPipeline`. */
   forceFullPipelineDefault?: boolean;
@@ -178,6 +201,8 @@ export type EngineAiSlotsV3 = EngineAiPayloadV2["slots"] & {
   flashQuickstart?: EngineSlotFlashPro;
   proExtract?: EngineSlotFlashPro;
   proMerge?: EngineSlotFlashPro;
+  /** Index / RAG rerank: local HF cross-encoder or Jina HTTP rerank. Omitted = legacy ragOptions.rerankModel. */
+  rerank?: EngineRerankSlot;
 };
 
 /** v3: optional fine-grained slots + extraction runtime (backward compatible when extras omitted). */

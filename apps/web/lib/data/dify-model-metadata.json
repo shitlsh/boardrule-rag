@@ -4020,5 +4020,7 @@
       "contextSize": 512,
       "supportsVision": false
     }
-  }
+  },
+  "claude": {},
+  "jina": {}
 }

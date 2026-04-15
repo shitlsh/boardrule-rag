@@ -13,8 +13,28 @@ export const slotBindingSchema = z
 
 export type SlotBindingParsed = z.infer<typeof slotBindingSchema>;
 
+/** Index rerank: local HF cross-encoder or Jina API (separate from Embed slot). */
+export const indexRerankConfigSchema = z.discriminatedUnion("backend", [
+  z
+    .object({
+      backend: z.literal("local"),
+      model: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      backend: z.literal("jina"),
+      credentialId: z.string().min(1),
+      model: z.string().min(1),
+    })
+    .strict(),
+]);
+
+export type IndexRerankConfigParsed = z.infer<typeof indexRerankConfigSchema>;
+
 export const ragOptionsStoredSchema = z
   .object({
+    /** @deprecated Prefer `rerank` on index profile; kept for migration / engine fallback. */
     rerankModel: z.string().optional(),
     chunkSize: z.number().int().positive().optional(),
     chunkOverlap: z.number().int().min(0).optional(),
@@ -40,6 +60,7 @@ export const extractionRuntimeOverridesSchema = z
     openrouterHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     bedrockHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     claudeHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
+    jinaHttpTimeoutMs: z.union([z.number().int().min(0), z.null()]).optional(),
     llmMaxContinuationRounds: z.number().int().min(0).max(32).optional(),
     forceFullPipelineDefault: z.boolean().optional(),
   })
@@ -73,6 +94,8 @@ export const chatProfileConfigSchema = z
 export const indexProfileConfigSchema = z
   .object({
     embed: slotBindingSchema,
+    /** When omitted, parse step may derive from legacy `ragOptions.rerankModel`. */
+    rerank: indexRerankConfigSchema.optional(),
     ragOptions: ragOptionsStoredSchema.optional(),
   })
   .strict();
@@ -88,6 +111,22 @@ const legacyChatProfileWithRagSchema = z
 export type ExtractionProfileConfigParsed = z.infer<typeof extractionProfileConfigSchema>;
 export type ChatProfileConfigParsed = z.infer<typeof chatProfileConfigSchema>;
 export type IndexProfileConfigParsed = z.infer<typeof indexProfileConfigSchema>;
+
+function migrateIndexProfileRaw(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  const o = data as Record<string, unknown>;
+  const embed = o.embed;
+  if (!embed || typeof embed !== "object") return data;
+  if (o.rerank !== undefined) return data;
+  const ro = o.ragOptions;
+  if (!ro || typeof ro !== "object") return data;
+  const rm = (ro as Record<string, unknown>).rerankModel;
+  if (typeof rm !== "string" || !rm.trim()) return data;
+  return {
+    ...o,
+    rerank: { backend: "local", model: rm.trim() },
+  };
+}
 export type ExtractionRuntimeOverridesParsed = z.infer<typeof extractionRuntimeOverridesSchema>;
 
 export function parseExtractionProfileConfigJson(raw: string): ExtractionProfileConfigParsed {
@@ -139,7 +178,7 @@ export function parseIndexProfileConfigJson(raw: string): IndexProfileConfigPars
   } catch {
     throw new Error("配置 JSON 无效");
   }
-  return indexProfileConfigSchema.parse(data);
+  return indexProfileConfigSchema.parse(migrateIndexProfileRaw(data));
 }
 
 export function safeParseIndexProfileConfigJson(raw: string): IndexProfileConfigParsed | null {
