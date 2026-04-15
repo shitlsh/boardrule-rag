@@ -4,7 +4,15 @@
  *
  * https://github.com/langgenius/dify-official-plugins
  *
- * Usage (from apps/web): npm run sync:dify-model-metadata
+ * Usage (from apps/web):
+ *   npm run sync:dify-model-metadata
+ *   npm run sync:dify-model-metadata -- --gh-token=ghp_xxx
+ *   npm run sync:dify-model-metadata -- -t ghp_xxx
+ *   GITHUB_TOKEN=ghp_xxx npm run sync:dify-model-metadata
+ *   gh_token=ghp_xxx npm run sync:dify-model-metadata   (same; lowercase env)
+ *
+ * Unauthenticated requests to api.github.com hit low rate limits; use a classic PAT
+ * (repo read is enough) or fine-grained token with Contents read on public repos.
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -17,6 +25,41 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, "../lib/data/dify-model-metadata.json");
 
 const API_ROOT = "https://api.github.com/repos/langgenius/dify-official-plugins/contents";
+
+/** @returns {string} */
+function parseGithubTokenFromArgv() {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--gh-token" || a === "-t") {
+      const next = argv[i + 1];
+      if (next && !next.startsWith("-")) return next.trim();
+    }
+    if (a.startsWith("--gh-token=")) {
+      const v = a.slice("--gh-token=".length).trim();
+      if (v) return v;
+    }
+  }
+  return "";
+}
+
+function resolveGithubToken() {
+  return (
+    parseGithubTokenFromArgv() ||
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim() ||
+    process.env.gh_token?.trim() ||
+    ""
+  );
+}
+
+const GITHUB_TOKEN = resolveGithubToken();
+
+const githubApiHeaders = {
+  Accept: "application/vnd.github+json",
+  "User-Agent": "boardrule-rag-sync-dify-model-metadata",
+  ...(GITHUB_TOKEN ? { Authorization: `Bearer ${GITHUB_TOKEN}` } : {}),
+};
 
 /** JSON output key → GitHub path + subdirs under that path (each subdir = one category). */
 const PLUGIN_SPECS = [
@@ -32,10 +75,7 @@ const PLUGIN_SPECS = [
 
 async function fetchJson(url) {
   const res = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "boardrule-rag-sync-dify-model-metadata",
-    },
+    headers: githubApiHeaders,
   });
   if (!res.ok) {
     throw new Error(`GET ${url} -> ${res.status} ${await res.text()}`);
@@ -141,6 +181,14 @@ async function collectFromDir(contentPath) {
 }
 
 async function main() {
+  if (GITHUB_TOKEN) {
+    process.stderr.write("GitHub API: using token from env or --gh-token (authenticated, higher rate limit).\n");
+  } else {
+    process.stderr.write(
+      "GitHub API: unauthenticated (low rate limit). Set GITHUB_TOKEN / GH_TOKEN or pass --gh-token=…\n",
+    );
+  }
+
   /** @type {Record<string, Record<string, object>>} */
   const byVendor = {
     qwen: {},

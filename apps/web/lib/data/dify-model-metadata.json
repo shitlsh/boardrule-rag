@@ -4021,6 +4021,368 @@
       "supportsVision": false
     }
   },
-  "claude": {},
-  "jina": {}
+  "claude": {
+    "claude-3-5-haiku-20241022": {
+      "model": "claude-3-5-haiku-20241022",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": false,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "claude-3-5-sonnet-20240620": {
+      "model": "claude-3-5-sonnet-20240620",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-3-5-sonnet-20241022": {
+      "model": "claude-3-5-sonnet-20241022",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 8192,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-3-haiku-20240307": {
+      "model": "claude-3-haiku-20240307",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "claude-3-opus-20240229": {
+      "model": "claude-3-opus-20240229",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "claude-3-sonnet-20240229": {
+      "model": "claude-3-sonnet-20240229",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 4096,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call"
+      ]
+    },
+    "claude-haiku-4-5-20251001": {
+      "model": "claude-haiku-4-5-20251001",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-opus-4-1-20250805": {
+      "model": "claude-opus-4-1-20250805",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 32000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-opus-4-20250514": {
+      "model": "claude-opus-4-20250514",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 32000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-opus-4-5-20251101": {
+      "model": "claude-opus-4-5-20251101",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 200000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-opus-4-6": {
+      "model": "claude-opus-4-6",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-sonnet-4-20250514": {
+      "model": "claude-sonnet-4-20250514",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-sonnet-4-5-20250929": {
+      "model": "claude-sonnet-4-5-20250929",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-sonnet-4-5": {
+      "model": "claude-sonnet-4-5",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document"
+      ]
+    },
+    "claude-sonnet-4-6": {
+      "model": "claude-sonnet-4-6",
+      "category": "llm",
+      "modelType": "llm",
+      "mode": "chat",
+      "contextSize": 1000000,
+      "supportsVision": true,
+      "maxOutputTokens": 64000,
+      "features": [
+        "agent-thought",
+        "vision",
+        "tool-call",
+        "stream-tool-call",
+        "document",
+        "structured-output"
+      ]
+    }
+  },
+  "jina": {
+    "jina-clip-v1": {
+      "model": "jina-clip-v1",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "jina-clip-v2": {
+      "model": "jina-clip-v2",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "jina-embeddings-v2-base-de": {
+      "model": "jina-embeddings-v2-base-de",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-embeddings-v2-base-en": {
+      "model": "jina-embeddings-v2-base-en",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-embeddings-v2-base-zh": {
+      "model": "jina-embeddings-v2-base-zh",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-embeddings-v3": {
+      "model": "jina-embeddings-v3",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-embeddings-v4": {
+      "model": "jina-embeddings-v4",
+      "category": "text_embedding",
+      "modelType": "text-embedding",
+      "mode": "embedding",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "jina-colbert-v1-en": {
+      "model": "jina-colbert-v1-en",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-colbert-v2": {
+      "model": "jina-colbert-v2",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-reranker-m0": {
+      "model": "jina-reranker-m0",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": true,
+      "features": [
+        "vision"
+      ]
+    },
+    "jina-reranker-v1-base-en": {
+      "model": "jina-reranker-v1-base-en",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-reranker-v1-tiny-en": {
+      "model": "jina-reranker-v1-tiny-en",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-reranker-v1-turbo-en": {
+      "model": "jina-reranker-v1-turbo-en",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-reranker-v2-base-multilingual": {
+      "model": "jina-reranker-v2-base-multilingual",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 8192,
+      "supportsVision": false
+    },
+    "jina-reranker-v3": {
+      "model": "jina-reranker-v3",
+      "category": "rerank",
+      "modelType": "rerank",
+      "contextSize": 131000,
+      "supportsVision": false
+    }
+  }
 }

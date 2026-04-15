@@ -28,11 +28,16 @@ from ingestion.node_builders import (
 from ingestion.jina_rerank import JinaRerankPostprocessor
 from ingestion.rerank_cache import get_cached_sentence_transformer_rerank
 from utils.ai_gateway import RerankSlotJina, RerankSlotLocal, get_rerank_slot, get_slots
+from utils.retry import (
+    INDEX_EMBED_RATE_LIMIT_ATTEMPTS,
+    run_async_with_rate_limit_retry,
+    run_with_rate_limit_retry,
+)
 from utils.dashscope_client import resolve_dashscope_api_base
 from utils.openrouter_client import OPENROUTER_API_BASE
+from utils.paths import service_root
 
 JINA_API_BASE = "https://api.jina.ai/v1"
-from utils.paths import service_root
 
 _MANIFEST_NAME = "manifest.json"
 _VECTOR_SUBDIR = "vector_storage"
@@ -130,7 +135,10 @@ def _attach_embedding_batch_diagnostics(
                 provider,
                 model,
             )
-        out = orig_batch(texts, show_progress=show_progress, **kwargs)
+        out = run_with_rate_limit_retry(
+            lambda: orig_batch(texts, show_progress=show_progress, **kwargs),
+            attempts=INDEX_EMBED_RATE_LIMIT_ATTEMPTS,
+        )
         if len(out) != len(texts):
             _log_embedding_batch_mismatch(
                 sync=True,
@@ -164,7 +172,13 @@ def _attach_embedding_batch_diagnostics(
                     provider,
                     model,
                 )
-            out = await orig_abatch(texts, show_progress=show_progress, **kwargs)
+            async def _do_abatch() -> Any:
+                return await orig_abatch(texts, show_progress=show_progress, **kwargs)
+
+            out = await run_async_with_rate_limit_retry(
+                _do_abatch,
+                attempts=INDEX_EMBED_RATE_LIMIT_ATTEMPTS,
+            )
             if len(out) != len(texts):
                 _log_embedding_batch_mismatch(
                     sync=False,
@@ -459,6 +473,36 @@ def _embedding_dim() -> int:
     return int(raw)
 
 
+def _gemini_google_genai_embed_retry_kwargs() -> dict[str, Any]:
+    """
+    LlamaIndex ``GoogleGenAIEmbedding`` has its own tenacity retries (default 3×, 1–60s).
+    For free-tier Gemini RPM, bump inner retries + longer waits; override with env if needed.
+    """
+    raw_r = (os.environ.get("GEMINI_EMBED_RETRIES") or "12").strip()
+    raw_min = (os.environ.get("GEMINI_EMBED_RETRY_MIN_SECONDS") or "8").strip()
+    raw_max = (os.environ.get("GEMINI_EMBED_RETRY_MAX_SECONDS") or "120").strip()
+    try:
+        retries = int(raw_r)
+    except ValueError:
+        retries = 12
+    try:
+        retry_min = float(raw_min)
+    except ValueError:
+        retry_min = 8.0
+    try:
+        retry_max = float(raw_max)
+    except ValueError:
+        retry_max = 120.0
+    retries = max(1, min(32, retries))
+    retry_min = max(1.0, retry_min)
+    retry_max = max(retry_min, retry_max)
+    return {
+        "retries": retries,
+        "retry_min_seconds": retry_min,
+        "retry_max_seconds": retry_max,
+    }
+
+
 def _gemini_embed_batch_size() -> int:
     """
     LlamaIndex's ``BaseEmbedding.get_text_embedding_batch`` flushes in chunks of ``embed_batch_size``.
@@ -591,6 +635,7 @@ def build_embedding_model() -> GoogleGenAIEmbedding | OpenAIEmbedding | BedrockE
             model_name=slot.model,
             api_key=slot.api_key,
             embed_batch_size=_gemini_embed_batch_size(),
+            **_gemini_google_genai_embed_retry_kwargs(),
         )
     _attach_embedding_batch_diagnostics(embed_model, provider=slot.provider, model=slot.model)
     return embed_model

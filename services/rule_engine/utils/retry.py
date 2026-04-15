@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 from tenacity import (
@@ -35,6 +35,9 @@ log = logging.getLogger(__name__)
 # Outer retries wrapping each LLM call in the extraction graph.
 EXTRACTION_LLM_RETRY_ATTEMPTS = 5
 EXTRACTION_MERGE_SPLIT_RETRY_ATTEMPTS = 4
+
+# Indexing / embedding: outer batch retries (LlamaIndex embed also has inner retries).
+INDEX_EMBED_RATE_LIMIT_ATTEMPTS = 10
 
 # Exception types that represent programming errors — should never be retried.
 _NON_RETRYABLE: tuple[type[BaseException], ...] = (
@@ -147,6 +150,66 @@ def _make_before_sleep_rate_limit(max_sleep_s: float = 120.0):
             )
 
     return _before_sleep
+
+
+def rate_limit_sleep_seconds(
+    attempt_index: int,
+    exc: BaseException,
+    *,
+    base_rate_s: float = 8.0,
+    max_sleep_s: float = 120.0,
+) -> float:
+    """Same duration as ``sleep_before_retry_rate_limit`` but without sleeping (for async loops)."""
+    ra = retry_after_from_exception(exc)
+    if ra is not None and ra > 0:
+        return min(max_sleep_s, ra + random.random())
+    raw = base_rate_s * (2**attempt_index) + random.uniform(0, 1.0)
+    return min(max_sleep_s, raw)
+
+
+def run_with_rate_limit_retry(
+    fn: Callable[[], T],
+    *,
+    attempts: int | None = None,
+) -> T:
+    """
+    Run a sync callable with the same policy as :func:`make_rate_limit_retry` (429 / quota).
+
+    Used for index embedding batches where the LlamaIndex provider's own retries are too few/short
+    for free-tier Gemini RPM limits.
+    """
+    n = attempts if attempts is not None else INDEX_EMBED_RATE_LIMIT_ATTEMPTS
+    return make_rate_limit_retry(n)(fn)()
+
+
+async def run_async_with_rate_limit_retry(
+    coro_maker: Callable[[], Awaitable[T]],
+    *,
+    attempts: int | None = None,
+) -> T:
+    """Async equivalent of :func:`run_with_rate_limit_retry` (embedding batch async path)."""
+    import asyncio
+
+    n = attempts if attempts is not None else INDEX_EMBED_RATE_LIMIT_ATTEMPTS
+    last: BaseException | None = None
+    for attempt in range(n):
+        try:
+            return await coro_maker()
+        except BaseException as e:
+            last = e
+            if attempt + 1 >= n or not is_likely_rate_limit(e):
+                raise
+            delay = rate_limit_sleep_seconds(attempt, e)
+            log.warning(
+                "rate-limit backoff (async): sleeping %.1fs before retry %d/%d",
+                delay,
+                attempt + 2,
+                n,
+            )
+            await asyncio.sleep(delay)
+    if last:
+        raise last
+    raise RuntimeError("run_async_with_rate_limit_retry: empty loop")
 
 
 def make_rate_limit_retry(attempts: int = 5):
