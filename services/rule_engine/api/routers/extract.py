@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from api.deps import require_boardrule_ai
 from graphs.extraction_graph import run_extraction
 from graphs.state import ExtractionState
-from ingestion.page_jobs import get_job, register_job
+from ingestion.page_jobs import get_job_or_restore, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.exception_format import format_exception_for_job
@@ -619,7 +619,7 @@ async def start_extract(
                 status_code=400,
                 detail="`page_job_id` is required (call POST /extract/pages first to rasterize the rulebook)",
             )
-        pr = get_job(page_job_id)
+        pr = get_job_or_restore(game_id, page_job_id)
         if not pr:
             raise HTTPException(status_code=404, detail="Unknown page_job_id; prepare pages again")
 
