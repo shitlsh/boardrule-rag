@@ -69,6 +69,15 @@ export async function fetchModelsForCredential(
     } else if (vendor === "jina") {
       if (slot === "embed" || slot === "rerank") {
         models = listJinaModelsForSlot(slot);
+      } else if (slot === null) {
+        // Credential UI loads all models without slot; Jina has no remote list API — use embed + rerank ids.
+        const seen = new Set<string>();
+        models = [];
+        for (const m of [...listJinaModelsForSlot("embed"), ...listJinaModelsForSlot("rerank")]) {
+          if (seen.has(m.name)) continue;
+          seen.add(m.name);
+          models.push(m);
+        }
       } else {
         models = [];
       }

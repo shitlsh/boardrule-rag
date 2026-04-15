@@ -20,7 +20,7 @@ import { assertStaffSession } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 
-const SLOT_KEYS: readonly SlotKey[] = ["flash", "pro", "embed", "chat"];
+const SLOT_KEYS: readonly SlotKey[] = ["flash", "pro", "embed", "chat", "rerank"];
 
 function parseSlot(raw: unknown): SlotKey | null | "invalid" {
   if (raw == null || raw === "") return null;
@@ -116,7 +116,7 @@ async function listBedrockModelsFromBody(
 
 /**
  * List models for a credential (Gemini, OpenRouter, Qwen, or Bedrock) with optional slot filter.
- * - GET ?credentialId=…&slot=flash|pro|embed|chat — slot optional; when set, filters by capability.
+ * - GET ?credentialId=…&slot=flash|pro|embed|chat|rerank — slot optional; when set, filters by capability.
  * - POST JSON { credentialId } or { apiKey, vendor }, optional slot — same behavior.
  */
 export async function GET(req: Request) {
