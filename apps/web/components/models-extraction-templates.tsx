@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,6 +60,12 @@ export function ModelsExtractionTemplates() {
   const [saving, setSaving] = useState(false);
   const [modelLists, setModelLists] = useState<Record<string, GeminiModelOption[]>>({});
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
+  /**
+   * Tracks which `"${credentialId}:${slot}"` keys have already been fetched
+   * (or are in-flight) so the reactive effect doesn't re-fetch already-loaded
+   * models when an *unrelated* slot's credential changes.
+   */
+  const fetchedKeysRef = useRef<Set<string>>(new Set());
 
   const profileList = useMemo(() => profiles.filter((p) => p.kind === "EXTRACTION"), [profiles]);
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
@@ -111,6 +117,8 @@ export function ModelsExtractionTemplates() {
   const fetchModels = useCallback(async (credentialId: string, slot: "flash" | "pro") => {
     if (!credentialId) return;
     const k = `${credentialId}:${slot}`;
+    // Mark as in-flight immediately so concurrent effect runs don't double-fetch.
+    fetchedKeysRef.current.add(k);
     setLoadingModels((m) => ({ ...m, [k]: true }));
     try {
       const res = await fetch("/api/ai/models", {
@@ -122,6 +130,8 @@ export function ModelsExtractionTemplates() {
       if (!res.ok) throw new Error(json.message || "拉取模型失败");
       setModelLists((prev) => ({ ...prev, [k]: json.models ?? [] }));
     } catch (e) {
+      // Remove from fetched set so the user can retry by switching credentials.
+      fetchedKeysRef.current.delete(k);
       toast.error(e instanceof Error ? e.message : "拉取模型失败");
     } finally {
       setLoadingModels((m) => ({ ...m, [k]: false }));
@@ -149,8 +159,12 @@ export function ModelsExtractionTemplates() {
     const [ft, fq, pe, pm] = slotCredentialIdsKey.split("\x1f");
     const flashIds = new Set([ft, fq].filter(Boolean));
     const proIds = new Set([pe, pm].filter(Boolean));
-    for (const id of flashIds) void fetchModels(id, "flash");
-    for (const id of proIds) void fetchModels(id, "pro");
+    for (const id of flashIds) {
+      if (!fetchedKeysRef.current.has(`${id}:flash`)) void fetchModels(id, "flash");
+    }
+    for (const id of proIds) {
+      if (!fetchedKeysRef.current.has(`${id}:pro`)) void fetchModels(id, "pro");
+    }
   }, [gateway, selected?.id, selected?.kind, slotCredentialIdsKey, fetchModels]);
 
   const createProfile = async () => {
