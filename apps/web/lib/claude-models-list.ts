@@ -25,6 +25,8 @@ function isVisionModel(id: string): boolean {
   return /claude-3/i.test(id) || /claude-3\./i.test(id);
 }
 
+// Parameter reserved when Anthropic exposes embed models in /v1/models.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- arity matches call sites
 function isEmbedModel(_id: string): boolean {
   // Anthropic does not expose embedding models via /v1/models in the same list;
   // treat none as embed-only for now.

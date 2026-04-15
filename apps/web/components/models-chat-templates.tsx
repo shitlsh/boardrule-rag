@@ -437,9 +437,10 @@ export function ModelsChatTemplates() {
                         onChange={(e) => {
                           const raw = e.target.value;
                           setChatCfg((c) => {
-                            const { maxTokens: _drop, ...chatRest } = c.chat;
                             if (raw.trim() === "") {
-                              return { ...c, chat: chatRest };
+                              const chat = { ...c.chat };
+                              delete chat.maxTokens;
+                              return { ...c, chat };
                             }
                             const n = Math.trunc(Number(raw));
                             if (!Number.isFinite(n) || n < 1) {

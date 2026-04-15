@@ -27,7 +27,7 @@ from ingestion.page_jobs import get_job, register_job
 from ingestion.page_raster import import_ordered_images_to_dir, rasterize_pdf_to_dir
 from utils.ai_gateway import BoardruleAiConfig, boardrule_ai_runtime
 from utils.exception_format import format_exception_for_job
-from utils.paths import game_dir, game_extract_json, game_page_job_json, page_assets_root
+from utils.paths import game_dir, game_extract_json, game_page_job_json
 
 router = APIRouter(tags=["extract"])
 

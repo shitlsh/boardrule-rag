@@ -147,12 +147,7 @@ export function ModelsExtractionTemplates() {
       sb.proExtract?.credentialId?.trim() ?? "",
       sb.proMerge?.credentialId?.trim() ?? "",
     ].join("\x1f");
-  }, [
-    extractionCfg.slotBindings.flashToc?.credentialId,
-    extractionCfg.slotBindings.flashQuickstart?.credentialId,
-    extractionCfg.slotBindings.proExtract?.credentialId,
-    extractionCfg.slotBindings.proMerge?.credentialId,
-  ]);
+  }, [extractionCfg.slotBindings]);
 
   useEffect(() => {
     if (!gateway || !selected || selected.kind !== "EXTRACTION") return;
@@ -165,7 +160,7 @@ export function ModelsExtractionTemplates() {
     for (const id of proIds) {
       if (!fetchedKeysRef.current.has(`${id}:pro`)) void fetchModels(id, "pro");
     }
-  }, [gateway, selected?.id, selected?.kind, slotCredentialIdsKey, fetchModels]);
+  }, [gateway, selected, slotCredentialIdsKey, fetchModels]);
 
   const createProfile = async () => {
     try {

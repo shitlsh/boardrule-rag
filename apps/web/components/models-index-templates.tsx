@@ -134,7 +134,7 @@ export function ModelsIndexTemplates() {
     if (!gateway || !selected || selected.kind !== "INDEX") return;
     const cid = idxCfg.embed?.credentialId?.trim();
     if (cid) void fetchModels(cid);
-  }, [gateway, selected?.id, selected?.kind, idxCfg.embed?.credentialId, fetchModels]);
+  }, [gateway, selected, idxCfg.embed?.credentialId, fetchModels]);
 
   const ro = idxCfg.ragOptions ?? {};
 

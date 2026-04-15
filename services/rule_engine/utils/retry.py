@@ -21,7 +21,6 @@ from typing import TypeVar
 
 from tenacity import (
     RetryCallState,
-    retry,
     retry_base,
     retry_if_exception,
     stop_after_attempt,

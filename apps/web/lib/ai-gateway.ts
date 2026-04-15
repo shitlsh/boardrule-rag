@@ -805,7 +805,7 @@ export async function updateCredential(params: {
     }
   }
 
-  let bedrockRegion =
+  const bedrockRegion =
     params.bedrockRegion !== undefined
       ? params.bedrockRegion.trim()
       : (prev.bedrockRegion ?? "").trim();
