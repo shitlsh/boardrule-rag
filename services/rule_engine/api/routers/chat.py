@@ -292,9 +292,11 @@ async def chat_stream(
             if sync_err:
                 if chunks_sent == 0:
                     raise sync_err[0]
-                logger.exception(
+                # Not inside an except-handler: logger.exception() would log no traceback.
+                logger.error(
                     "chat stream worker failed after %d chunk(s); response may be incomplete",
                     chunks_sent,
+                    exc_info=sync_err[0],
                 )
         finally:
             t.join(timeout=600)
