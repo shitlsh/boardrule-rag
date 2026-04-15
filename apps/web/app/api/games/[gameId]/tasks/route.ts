@@ -28,7 +28,11 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const processing = tasks.filter((t) => t.status === "PROCESSING" && t.jobId);
   await Promise.all(
     processing.map((t) =>
-      t.type === "INDEX_BUILD" ? syncIndexBuildTask(t.id) : syncTaskFromRuleEngine(t.id),
+      t.type === "INDEX_BUILD"
+        ? syncIndexBuildTask(t.id)
+        : t.type === "PAGE_JOB"
+          ? Promise.resolve() // synchronous job; already terminal when stored
+          : syncTaskFromRuleEngine(t.id),
     ),
   );
 

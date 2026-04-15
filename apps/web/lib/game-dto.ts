@@ -199,7 +199,7 @@ export async function prismaGameToDetailDto(game: PrismaGame): Promise<Game> {
 export function prismaTaskToExtractionTask(t: PrismaTask): ExtractionTask {
   const p = parseProgressJson(t.progressJson);
   const label =
-    t.type === "EXTRACTION" ? "规则提取" : t.type === "INDEX_BUILD" ? "建立索引" : t.type;
+    t.type === "EXTRACTION" ? "规则提取" : t.type === "INDEX_BUILD" ? "建立索引" : t.type === "PAGE_JOB" ? "规则书分页" : t.type;
   const warnings = p?.warnings?.filter((s) => s && s.trim());
   return {
     id: t.id,
